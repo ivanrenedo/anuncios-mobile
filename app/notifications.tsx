@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingBottom: 10,
+   
     borderBottomWidth: 0.5,
     borderBottomColor: colors.outlineVariant + '4d',
     shadowColor: '#000',
