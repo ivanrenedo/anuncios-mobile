@@ -117,7 +117,7 @@ export default function NotificationsScreen() {
     <View style={styles.root}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
-        <View stule={[]}>
+        <View stule={[styles.headerTitle]}>
               <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
                 <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
@@ -229,6 +229,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 4,
+  },
+  headerTitle: {
+    display: flex,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
   backBtn: {
     padding: 4,
