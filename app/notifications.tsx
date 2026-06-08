@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     width: 72,
   },
   headerCenter: {
-    /* flexDirection: 'row', */
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
