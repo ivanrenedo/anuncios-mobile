@@ -42,6 +42,13 @@ export default function RootLayout() {
             animation: 'slide_from_right',
           }}
         />
+        <Stack.Screen
+          name="category/[slug]"
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="dark" />

@@ -6,31 +6,24 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import {
-  Shirt,
-  Cpu,
-  Car,
-  Home,
-  Handshake,
-} from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
-
-const categories = [
-  { label: 'Moda', Icon: Shirt, color: colors.primary, bg: colors.primaryContainer + '1a' },
-  { label: 'Tech', Icon: Cpu, color: colors.secondary, bg: colors.secondaryContainer + '1a' },
-  { label: 'Coches', Icon: Car, color: colors.tertiary, bg: colors.tertiaryContainer + '1a' },
-  { label: 'Hogar', Icon: Home, color: colors.primary, bg: colors.primaryContainer + '1a' },
-  { label: 'Servicios', Icon: Handshake, color: colors.secondary, bg: colors.secondaryContainer + '1a' },
-];
+import { CATEGORIES } from '@/constants/categories';
 
 export default function CategoryScroll() {
+  const router = useRouter();
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.container}>
-      {categories.map(({ label, Icon, color, bg }) => (
-        <TouchableOpacity key={label} style={styles.item} activeOpacity={0.7}>
+      {CATEGORIES.map(({ slug, label, Icon, color, bg }) => (
+        <TouchableOpacity
+          key={slug}
+          style={styles.item}
+          activeOpacity={0.7}
+          onPress={() => router.push(`/category/${slug}`)}>
           <View style={[styles.iconWrap, { backgroundColor: bg }]}>
             <Icon size={28} color={color} strokeWidth={1.5} />
           </View>
