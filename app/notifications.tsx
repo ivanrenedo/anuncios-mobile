@@ -247,10 +247,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 18,
-    color: colors.onSurface,
-    letterSpacing: -0.3,
+   
   },
   badge: {
     minWidth: 20,
