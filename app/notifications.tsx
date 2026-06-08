@@ -229,7 +229,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backBtn: {
-    padding: 4,
     borderRadius: 18,
     width: 72,
   },
