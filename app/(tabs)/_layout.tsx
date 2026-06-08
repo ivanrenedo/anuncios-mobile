@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Home, Heart, Plus, Shield, User, Compass } from 'lucide-react-native';
+import { Home, Heart, Plus, Search, User, Compass } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 
 export default function TabLayout() {
@@ -28,11 +28,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="saved"
+        name="explore"
         options={{
-          title: 'Guardados',
+          title: 'Explorar',
           tabBarIcon: ({ color, size, focused }) => (
-            <Heart
+            <Search
               size={size}
               color={color}
               fill={focused ? color : 'transparent'}
@@ -54,11 +54,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="safety"
+        name="saved"
         options={{
-          title: 'Seguro',
+          title: 'Guardados',
           tabBarIcon: ({ color, size, focused }) => (
-            <Shield
+            <Heart
               size={size}
               color={color}
               fill={focused ? color : 'transparent'}
