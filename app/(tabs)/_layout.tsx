@@ -35,7 +35,6 @@ export default function TabLayout() {
             <Search
               size={size}
               color={color}
-              fill={focused ? color : 'transparent'}
               strokeWidth={focused ? 0 : 1.5}
             />
           ),
