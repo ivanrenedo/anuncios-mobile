@@ -237,6 +237,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     borderRadius: 18,
+    paddingRight: 4
   },
   headerCenter: {
     flexDirection: 'row',
