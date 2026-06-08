@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     display: 'flex',
-     flexDirection: 'row',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
