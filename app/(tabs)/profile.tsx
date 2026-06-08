@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   Dimensions,
@@ -27,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
+import RipplePress from '@/components/RipplePress';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
@@ -202,9 +202,9 @@ export default function ProfileScreen() {
           {/* Top bar */}
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
             <View style={styles.topBarSpacer} />
-            <TouchableOpacity style={styles.topBarBtn} activeOpacity={0.8}>
+            <RipplePress style={styles.topBarBtn} borderRadius={18} rippleColor="rgba(255,255,255,0.2)">
               <Settings size={20} color="#ffffff" strokeWidth={1.5} />
-            </TouchableOpacity>
+            </RipplePress>
           </View>
         </View>
 
@@ -221,9 +221,9 @@ export default function ProfileScreen() {
               <BadgeCheck size={16} color="#ffffff" fill={colors.primary} strokeWidth={0} />
             </View>
           </View>
-          <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
+          <RipplePress style={styles.editBtn} borderRadius={20} rippleColor={colors.primary + '18'}>
             <Text style={styles.editBtnText}>Editar perfil</Text>
-          </TouchableOpacity>
+          </RipplePress>
         </View>
 
         {/* Name + location */}
@@ -256,11 +256,12 @@ export default function ProfileScreen() {
         {/* Tab selector */}
         <View style={styles.tabBar}>
           {TABS.map((tab, i) => (
-            <TouchableOpacity
+            <RipplePress
               key={tab}
               style={[styles.tab, activeTab === i && styles.tabActive]}
               onPress={() => setActiveTab(i)}
-              activeOpacity={0.8}>
+              borderRadius={9}
+              rippleColor={colors.primary + '18'}>
               <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>
                 {tab}
               </Text>
@@ -269,7 +270,7 @@ export default function ProfileScreen() {
                   <Text style={styles.tabBadgeText}>{activeListing.length}</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </RipplePress>
           ))}
         </View>
 
@@ -346,13 +347,14 @@ export default function ProfileScreen() {
               <Text style={styles.menuGroupTitle}>{group.title}</Text>
               <View style={styles.menuCard}>
                 {group.items.map((item, idx) => (
-                  <TouchableOpacity
+                  <RipplePress
                     key={item.label}
                     style={[
                       styles.menuRow,
                       idx < group.items.length - 1 && styles.menuRowBorder,
                     ]}
-                    activeOpacity={0.8}>
+                    borderRadius={0}
+                    rippleColor={colors.primary + '12'}>
                     <View
                       style={[
                         styles.menuIconWrap,
@@ -379,7 +381,7 @@ export default function ProfileScreen() {
                     {!(item as any).danger && (
                       <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
                     )}
-                  </TouchableOpacity>
+                  </RipplePress>
                 ))}
               </View>
             </View>

@@ -4,7 +4,7 @@ import {
   Text,
   Image,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   StyleSheet,
   Dimensions,
@@ -26,6 +26,7 @@ import {
   User,
 } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
+import RipplePress from '@/components/RipplePress';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -146,9 +147,9 @@ export default function ExploreScreen() {
       <View style={[styles.header, { paddingTop: insets.top, height: 100 + insets.top }]}>
         {/* Row 1: back + search + filter */}
         <View style={styles.searchRow}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} style={styles.backBtn}>
+          <RipplePress onPress={() => router.back()} style={styles.backBtn} borderRadius={18} rippleColor={colors.primary + '22'}>
             <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
-          </TouchableOpacity>
+          </RipplePress>
           <View style={styles.searchBox}>
             <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
             <TextInput
@@ -160,29 +161,30 @@ export default function ExploreScreen() {
               returnKeyType="search"
             />
             {query.length > 0 && (
-              <TouchableOpacity onPress={() => setQuery('')} activeOpacity={0.7}>
+              <RipplePress onPress={() => setQuery('')} borderRadius={10} rippleColor={colors.primary + '18'}>
                 <X size={14} color={colors.onSurfaceVariant} strokeWidth={2} />
-              </TouchableOpacity>
+              </RipplePress>
             )}
           </View>
-          <TouchableOpacity onPress={openFilter} activeOpacity={0.8} style={styles.filterBtn}>
+          <RipplePress onPress={openFilter} style={styles.filterBtn} borderRadius={12} rippleColor={colors.primary + '22'}>
             <SlidersHorizontal size={18} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          </RipplePress>
         </View>
         {/* Row 2: sort */}
         <View style={styles.sortRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortScroll}>
             {SORT_OPTIONS.map((opt, i) => (
-              <TouchableOpacity
+              <RipplePress
                 key={opt.value}
                 style={[styles.sortChip, sortIndex === i && styles.sortChipActive]}
                 onPress={() => setSortIndex(i)}
-                activeOpacity={0.8}>
+                borderRadius={20}
+                rippleColor={colors.primary + '18'}>
                 <Text style={[styles.sortChipText, sortIndex === i && styles.sortChipTextActive]}>
                   {opt.label}
                 </Text>
                 {sortIndex === i && <ChevronDown size={12} color={colors.primary} strokeWidth={2} />}
-              </TouchableOpacity>
+              </RipplePress>
             ))}
           </ScrollView>
         </View>
@@ -195,15 +197,16 @@ export default function ExploreScreen() {
         <View style={styles.section}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
             {CATEGORIES.map((cat) => (
-              <TouchableOpacity
+              <RipplePress
                 key={cat}
                 style={[styles.pill, activeCategory === cat && styles.pillActive]}
                 onPress={() => setActiveCategory(cat)}
-                activeOpacity={0.8}>
+                borderRadius={999}
+                rippleColor={activeCategory === cat ? 'rgba(255,255,255,0.2)' : colors.primary + '18'}>
                 <Text style={[styles.pillText, activeCategory === cat && styles.pillTextActive]}>
                   {cat}
                 </Text>
-              </TouchableOpacity>
+              </RipplePress>
             ))}
           </ScrollView>
         </View>
@@ -214,14 +217,15 @@ export default function ExploreScreen() {
             <Text style={styles.sectionTitle}>Búsquedas populares</Text>
             <View style={styles.trendingWrap}>
               {POPULAR.map((term) => (
-                <TouchableOpacity
+                <RipplePress
                   key={term}
                   style={styles.trendingChip}
                   onPress={() => setQuery(term)}
-                  activeOpacity={0.8}>
+                  borderRadius={8}
+                  rippleColor={colors.secondary + '18'}>
                   <TrendingUp size={13} color={colors.secondary} strokeWidth={1.5} />
                   <Text style={styles.trendingText}>{term}</Text>
-                </TouchableOpacity>
+                </RipplePress>
               ))}
             </View>
           </View>
@@ -237,24 +241,26 @@ export default function ExploreScreen() {
           {pairs.map((pair, rowIdx) => (
             <View key={rowIdx} style={styles.gridRow}>
               {pair.map((item) => (
-                <TouchableOpacity
+                <RipplePress
                   key={item.id}
                   style={styles.card}
-                  activeOpacity={0.92}
+                  borderRadius={16}
+                  rippleColor={colors.primary + '12'}
                   onPress={() => router.push('/product')}>
                   <View style={styles.cardImageWrap}>
                     <Image source={{ uri: item.image }} style={styles.cardImage} />
-                    <TouchableOpacity
+                    <RipplePress
                       style={styles.heartBtn}
-                      onPress={() => toggleLike(item.id)}
-                      activeOpacity={0.85}>
+                      borderRadius={14}
+                      rippleColor="rgba(255,255,255,0.25)"
+                      onPress={() => toggleLike(item.id)}>
                       <Heart
                         size={15}
                         color="#ffffff"
                         fill={liked[item.id] ? '#ffffff' : 'transparent'}
                         strokeWidth={1.5}
                       />
-                    </TouchableOpacity>
+                    </RipplePress>
                   </View>
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
@@ -271,7 +277,7 @@ export default function ExploreScreen() {
                       )}
                     </View>
                   </View>
-                </TouchableOpacity>
+                </RipplePress>
               ))}
               {pair.length === 1 && <View style={styles.cardPlaceholder} />}
             </View>
@@ -280,9 +286,9 @@ export default function ExploreScreen() {
 
         {/* Load more */}
         <View style={styles.loadMoreWrap}>
-          <TouchableOpacity style={styles.loadMoreBtn} activeOpacity={0.8}>
+          <RipplePress style={styles.loadMoreBtn} borderRadius={12} rippleColor={colors.primary + '18'}>
             <Text style={styles.loadMoreText}>Cargar más</Text>
-          </TouchableOpacity>
+          </RipplePress>
         </View>
       </ScrollView>
 
@@ -292,16 +298,16 @@ export default function ExploreScreen() {
           <Animated.View
             style={[styles.backdrop, { opacity: backdropAnim }]}
             pointerEvents="auto">
-            <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeFilter} activeOpacity={1} />
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={closeFilter} />
           </Animated.View>
 
           <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerAnim }] }]}>
             {/* Drawer header */}
             <View style={[styles.drawerHeader, { paddingTop: insets.top + 16 }]}>
               <Text style={styles.drawerTitle}>Filtros</Text>
-              <TouchableOpacity style={styles.drawerClose} onPress={closeFilter} activeOpacity={0.8}>
+              <RipplePress style={styles.drawerClose} onPress={closeFilter} borderRadius={20} rippleColor={colors.primary + '15'}>
                 <X size={20} color={colors.onSurface} strokeWidth={1.5} />
-              </TouchableOpacity>
+              </RipplePress>
             </View>
 
             <ScrollView style={styles.drawerBody} showsVerticalScrollIndicator={false}>
@@ -329,15 +335,16 @@ export default function ExploreScreen() {
                 <Text style={styles.filterGroupTitle}>Ubicación</Text>
                 <View style={styles.locationGrid}>
                   {LOCATIONS.map((loc, i) => (
-                    <TouchableOpacity
+                    <RipplePress
                       key={loc}
                       style={[styles.locationChip, locationIndex === i && styles.locationChipActive]}
                       onPress={() => setLocationIndex(i)}
-                      activeOpacity={0.8}>
+                      borderRadius={20}
+                      rippleColor={colors.primary + '18'}>
                       <Text style={[styles.locationChipText, locationIndex === i && styles.locationChipTextActive]}>
                         {loc}
                       </Text>
-                    </TouchableOpacity>
+                    </RipplePress>
                   ))}
                 </View>
               </View>
@@ -347,15 +354,16 @@ export default function ExploreScreen() {
                 <Text style={styles.filterGroupTitle}>Estado del producto</Text>
                 <View style={styles.conditionGrid}>
                   {CONDITIONS.map((cond) => (
-                    <TouchableOpacity
+                    <RipplePress
                       key={cond}
                       style={[styles.conditionChip, activeCondition === cond && styles.conditionChipActive]}
                       onPress={() => setActiveCondition(activeCondition === cond ? null : cond)}
-                      activeOpacity={0.8}>
+                      borderRadius={12}
+                      rippleColor={colors.primary + '18'}>
                       <Text style={[styles.conditionChipText, activeCondition === cond && styles.conditionChipTextActive]}>
                         {cond}
                       </Text>
-                    </TouchableOpacity>
+                    </RipplePress>
                   ))}
                 </View>
               </View>
@@ -381,15 +389,16 @@ export default function ExploreScreen() {
 
             {/* Drawer footer */}
             <View style={[styles.drawerFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-              <TouchableOpacity
+              <RipplePress
                 style={styles.clearBtn}
                 onPress={() => { setActiveCondition(null); setLocationIndex(0); setVerifiedOnly(false); }}
-                activeOpacity={0.8}>
+                borderRadius={12}
+                rippleColor={colors.primary + '15'}>
                 <Text style={styles.clearBtnText}>Limpiar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.applyBtn} onPress={closeFilter} activeOpacity={0.88}>
+              </RipplePress>
+              <RipplePress style={styles.applyBtn} onPress={closeFilter} borderRadius={12} rippleColor="rgba(255,255,255,0.2)">
                 <Text style={styles.applyBtnText}>Aplicar filtros</Text>
-              </TouchableOpacity>
+              </RipplePress>
             </View>
           </Animated.View>
         </>

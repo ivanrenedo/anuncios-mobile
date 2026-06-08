@@ -2,15 +2,12 @@ import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Platform,
   Animated,
 } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
 import PromoCarousel from '@/components/PromoCarousel';
 import CategoryScroll from '@/components/CategoryScroll';
@@ -18,13 +15,15 @@ import FeaturedSection from '@/components/FeaturedSection';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import SponsoredAd from '@/components/SponsoredAd';
 import RecentlyUploaded from '@/components/RecentlyUploaded';
+import NotificationsModal from '@/components/NotificationsModal';
+import RipplePress from '@/components/RipplePress';
 
 const HEADER_HEIGHT = 56;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const [notifVisible, setNotifVisible] = useState(false);
 
   const headerShadow = scrollY.interpolate({
     inputRange: [0, 20],
@@ -46,9 +45,13 @@ export default function HomeScreen() {
         ]}>
         <Text style={styles.headerTitle}>Market EG</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={.5} onPress={() => router.push('/notifications')}>
+          <RipplePress
+            style={styles.iconBtn}
+            borderRadius={18}
+            rippleColor={colors.primary + '22'}
+            onPress={() => setNotifVisible(true)}>
             <Bell size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          </RipplePress>
         </View>
       </Animated.View>
 
@@ -73,6 +76,8 @@ export default function HomeScreen() {
         <RecentlyUploaded />
         <View style={{ height: 16 }} />
       </Animated.ScrollView>
+
+      <NotificationsModal visible={notifVisible} onClose={() => setNotifVisible(false)} />
     </View>
   );
 }

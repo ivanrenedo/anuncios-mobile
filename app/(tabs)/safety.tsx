@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Shield, AlertTriangle, Phone, ChevronRight, Lock, Flag } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
+import RipplePress from '@/components/RipplePress';
 
 const items = [
   { icon: Lock, label: 'Verificación de identidad', desc: 'Confirma quién eres' },
@@ -32,7 +33,7 @@ export default function SafetyScreen() {
 
       <View style={styles.list}>
         {items.map(({ icon: Icon, label, desc }) => (
-          <TouchableOpacity key={label} style={styles.row} activeOpacity={0.8}>
+          <RipplePress key={label} style={styles.row} borderRadius={16} rippleColor={colors.primary + '18'}>
             <View style={styles.iconWrap}>
               <Icon size={22} color={colors.primary} strokeWidth={1.5} />
             </View>
@@ -41,7 +42,7 @@ export default function SafetyScreen() {
               <Text style={styles.rowDesc}>{desc}</Text>
             </View>
             <ChevronRight size={18} color={colors.outlineVariant} strokeWidth={1.5} />
-          </TouchableOpacity>
+          </RipplePress>
         ))}
       </View>
     </ScrollView>

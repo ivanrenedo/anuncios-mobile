@@ -3,16 +3,15 @@ import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Heart, BarChart2, Plus, Search, Bell, ShieldCheck } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
+import RipplePress from '@/components/RipplePress';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - 12) / 2;
@@ -82,15 +81,15 @@ export default function SavedScreen() {
       <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
         <Text style={styles.headerTitle}>Favoritos</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7} onPress={() => router.push('/(tabs)/explore')}>
+          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/(tabs)/explore')}>
             <Search size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7} onPress={() => router.push('/(tabs)/safety')}>
+          </RipplePress>
+          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/(tabs)/safety')}>
             <ShieldCheck size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7} onPress={() => router.push('/notifications')}>
+          </RipplePress>
+          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/notifications')}>
             <Bell size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
+          </RipplePress>
         </View>
       </View>
 
@@ -104,15 +103,16 @@ export default function SavedScreen() {
         <View style={styles.chipsSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
             {CATEGORIES.map((cat) => (
-              <TouchableOpacity
+              <RipplePress
                 key={cat}
                 style={[styles.chip, activeCategory === cat && styles.chipActive]}
                 onPress={() => setActiveCategory(cat)}
-                activeOpacity={0.8}>
+                borderRadius={8}
+                rippleColor={activeCategory === cat ? 'rgba(255,255,255,0.2)' : colors.primary + '18'}>
                 <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>
                   {cat}
                 </Text>
-              </TouchableOpacity>
+              </RipplePress>
             ))}
           </ScrollView>
         </View>
@@ -138,13 +138,14 @@ export default function SavedScreen() {
                     onPress={() => router.push('/product')}
                   />
                 ) : (
-                  <TouchableOpacity
+                  <RipplePress
                     style={styles.addCard}
-                    activeOpacity={0.8}
+                    borderRadius={16}
+                    rippleColor={colors.primary + '15'}
                     onPress={() => router.push('/(tabs)/explore')}>
                     <Plus size={32} color={colors.outlineVariant} strokeWidth={1} />
                     <Text style={styles.addCardText}>Añadir más{'\n'}favoritos</Text>
-                  </TouchableOpacity>
+                  </RipplePress>
                 )}
               </View>
             ))}
@@ -194,17 +195,17 @@ function ProductCard({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.92} onPress={onPress}>
+    <RipplePress style={styles.card} borderRadius={16} rippleColor={colors.primary + '12'} onPress={onPress}>
       <View style={styles.cardImageWrap}>
         <Image source={{ uri: item.image }} style={styles.cardImage} />
-        <TouchableOpacity style={styles.heartBtn} onPress={onLike} activeOpacity={0.8}>
+        <RipplePress style={styles.heartBtn} borderRadius={16} rippleColor={colors.error + '22'} onPress={onLike}>
           <Heart
             size={16}
             color={liked ? colors.error : '#ffffff'}
             fill={liked ? colors.error : 'transparent'}
             strokeWidth={1.5}
           />
-        </TouchableOpacity>
+        </RipplePress>
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
@@ -214,7 +215,7 @@ function ProductCard({
           <Text style={styles.cardSellerName} numberOfLines={1}>{item.seller}</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </RipplePress>
   );
 }
 
