@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerTitle: {
-    display: flex,
+    display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
