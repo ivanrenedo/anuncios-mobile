@@ -13,61 +13,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.onSurfaceVariant + '99',
         tabBarLabelStyle: styles.tabLabel,
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Inicio',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Home
-              size={size}
-              color={color}
-              fill={focused ? color : 'transparent'}
-              strokeWidth={focused ? 0 : 1.5}
-            />
-          ),
-        }}
-      />
-    
-      <Tabs.Screen
-        name="post"
-        options={{
-          title: 'Vender',
-          tabBarIcon: () => (
-            <View style={styles.postButton}>
-              <Plus size={28} color="#ffffff" strokeWidth={2.5} />
-            </View>
-          ),
-          tabBarLabel: () => null,
-        }}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: 'Guardados',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Heart
-              size={size}
-              color={color}
-              fill={focused ? color : 'transparent'}
-              strokeWidth={focused ? 0 : 1.5}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Perfil',
-          tabBarIcon: ({ color, size, focused }) => (
-            <User
-              size={size}
-              color={color}
-              fill={focused ? color : 'transparent'}
-              strokeWidth={focused ? 0 : 1.5}
-            />
-          ),
-        }}
-      />
+   
     </Tabs>
   );
 }
