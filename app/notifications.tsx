@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     position: 'relative',
     display: 'flex',
-    flexDirection: 'row',
+    flexDirection: 'row'
   },
   backBtn: {
     padding: 4,
