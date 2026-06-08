@@ -215,8 +215,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 50,
     backgroundColor: colors.surface + 'e6',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+   
     /* justifyContent: 'space-between', */
     paddingHorizontal: 12,
     paddingBottom: 10,
