@@ -210,7 +210,9 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-   
+    top: 0,
+    
+    right: 0,
     zIndex: 50,
     backgroundColor: colors.surface + 'e6',
     flexDirection: 'row',
