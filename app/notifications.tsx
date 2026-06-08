@@ -236,7 +236,6 @@ const styles = StyleSheet.create({
   headerCenter: {
     flexDirection: 'row',
     justifyContent: 'flex-end'
-      left: 0,
     alignItems: 'center',
     gap: 8,
   },
