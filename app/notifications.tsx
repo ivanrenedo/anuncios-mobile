@@ -231,6 +231,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerTitle: {
+    display: 'flex',
+    flexDirection: 'row',
+    right: 0,
   },
   backBtn: {
     padding: 4,
