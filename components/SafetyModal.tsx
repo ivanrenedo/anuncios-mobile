@@ -1,21 +1,30 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Animated,
   Dimensions,
-  Platform,
   Linking,
 } from 'react-native';
 import { ShieldCheck, Banknote, MapPin, ScanSearch, Phone } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const DISMISS_THRESHOLD = 120;
 
 export type SafetyModalMode = 'tips' | 'whatsapp' | 'call';
 
@@ -77,39 +86,53 @@ export default function SafetyModal({
   whatsappNumber = '2402223456',
 }: Props) {
   const insets = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const opacity = useSharedValue(0);
+  const dragY = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          damping: 20,
-          stiffness: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateY.value = withSpring(0, { damping: 22, stiffness: 220 });
+      opacity.value = withTiming(1, { duration: 200 });
     } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
-          duration: 260,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateY.value = withTiming(SCREEN_HEIGHT, { duration: 260 });
+      opacity.value = withTiming(0, { duration: 200 });
     }
   }, [visible]);
+
+  const dismiss = () => {
+    translateY.value = withTiming(SCREEN_HEIGHT, { duration: 260 });
+    opacity.value = withTiming(0, { duration: 200 });
+    runOnJS(onClose)();
+  };
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        dragY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 800) {
+        runOnJS(dismiss)();
+      } else {
+        dragY.value = withSpring(0, { damping: 20, stiffness: 300 });
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value + dragY.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => {
+    const backdropOpacity = interpolate(
+      dragY.value,
+      [0, SCREEN_HEIGHT * 0.5],
+      [opacity.value, 0],
+      Extrapolation.CLAMP
+    );
+    return { opacity: backdropOpacity };
+  });
 
   const handleContinue = () => {
     onClose();
@@ -130,57 +153,59 @@ export default function SafetyModal({
       statusBarTranslucent
       onRequestClose={onClose}>
       {/* Backdrop */}
-      <Animated.View style={[styles.backdrop, { opacity: opacityAnim }]}>
+      <Animated.View style={[styles.backdrop, backdropStyle]}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={onClose} activeOpacity={1} />
       </Animated.View>
 
       {/* Sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: Math.max(insets.bottom, 24) },
-          { transform: [{ translateY: slideAnim }] },
-        ]}>
-        {/* Drag handle */}
-        <View style={styles.handle} />
+      <GestureDetector gesture={panGesture}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, 24) },
+            sheetStyle,
+          ]}>
+          {/* Drag handle */}
+          <View style={styles.handle} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <ShieldCheck size={32} color={colors.primary} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.title}>Consejos de Seguridad</Text>
-          <Text style={styles.subtitle}>
-            Protege tu dinero y tu seguridad en transacciones P2P.
-          </Text>
-        </View>
-
-        {/* Tips */}
-        <View style={styles.tipsList}>
-          {tips.map(({ icon: Icon, title, desc }) => (
-            <View key={title} style={styles.tip}>
-              <View style={styles.tipIcon}>
-                <Icon size={22} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <View style={styles.tipText}>
-                <Text style={styles.tipTitle}>{title}</Text>
-                <Text style={styles.tipDesc}>{desc}</Text>
-              </View>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.iconCircle}>
+              <ShieldCheck size={32} color={colors.primary} strokeWidth={1.5} />
             </View>
-          ))}
-        </View>
+            <Text style={styles.title}>Consejos de Seguridad</Text>
+            <Text style={styles.subtitle}>
+              Protege tu dinero y tu seguridad en transacciones P2P.
+            </Text>
+          </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.ctaBtn} onPress={handleContinue} activeOpacity={0.88}>
-            {config.ctaIcon && <View>{config.ctaIcon}</View>}
-            <Text style={styles.ctaBtnText}>{config.ctaLabel}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={styles.linkBtnText}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+          {/* Tips */}
+          <View style={styles.tipsList}>
+            {tips.map(({ icon: Icon, title, desc }) => (
+              <View key={title} style={styles.tip}>
+                <View style={styles.tipIcon}>
+                  <Icon size={22} color={colors.primary} strokeWidth={1.5} />
+                </View>
+                <View style={styles.tipText}>
+                  <Text style={styles.tipTitle}>{title}</Text>
+                  <Text style={styles.tipDesc}>{desc}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.ctaBtn} onPress={handleContinue} activeOpacity={0.88}>
+              {config.ctaIcon && <View>{config.ctaIcon}</View>}
+              <Text style={styles.ctaBtnText}>{config.ctaLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.linkBtn} onPress={onClose} activeOpacity={0.7}>
+              <Text style={styles.linkBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </GestureDetector>
     </Modal>
   );
 }
