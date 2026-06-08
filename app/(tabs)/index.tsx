@@ -46,7 +46,7 @@ export default function HomeScreen() {
         ]}>
         <Text style={styles.headerTitle}>Market EG</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={1} >
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={.5} >
             <Bell size={22} color={colors.primary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
