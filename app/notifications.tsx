@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   backBtn: {
     padding: 4,
