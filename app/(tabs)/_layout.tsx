@@ -27,7 +27,20 @@ export default function TabLayout() {
           ),
         }}
       />
-      
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Explorar',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Search
+              size={size}
+              color={color}
+              fill={focused ? color : 'transparent'}
+              strokeWidth={focused ? 0 : 1.5}
+            />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="post"
         options={{
@@ -68,7 +81,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
 }
