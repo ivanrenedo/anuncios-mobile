@@ -192,7 +192,7 @@ export default function NotificationsScreen() {
                       onPress={() => dismiss(notif.id)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Trash2 size={14} color={colors.onSurfaceVariant + '66'} strokeWidth={1.5} />
+                      <Trash2 size={20} color={colors.onSurfaceVariant + '66'} strokeWidth={1.5} />
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
