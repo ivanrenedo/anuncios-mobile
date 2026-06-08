@@ -80,7 +80,9 @@ export default function TabLayout() {
             />
           ),
         }}
-      />
+      /><Tabs.Screen
+        name="safety"
+        options={{ title: 'Seguridad', href: null }} />
     </Tabs>
   );
 }
