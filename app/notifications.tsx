@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-   
+    right: 0,
     zIndex: 50,
     backgroundColor: colors.surface + 'e6',
     flexDirection: 'row',
