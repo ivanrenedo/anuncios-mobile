@@ -280,7 +280,7 @@ export default function ProfileScreen() {
             {renderPairs(tabData[activeTab] as typeof listings).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item) => (
-                  <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.92}>
+                  <RipplePress key={item.id} style={styles.card} borderRadius={16} rippleColor={colors.primary + '12'}>
                     <View style={styles.cardImageWrap}>
                       <Image source={{ uri: item.image }} style={styles.cardImage} />
                       {item.status === 'sold' && (
@@ -288,17 +288,18 @@ export default function ProfileScreen() {
                           <Text style={styles.soldBadgeText}>Vendido</Text>
                         </View>
                       )}
-                      <TouchableOpacity
+                      <RipplePress
                         style={styles.heartBtn}
                         onPress={() => toggleLike(item.id)}
-                        activeOpacity={0.85}>
+                        borderRadius={14}
+                        rippleColor="rgba(255,255,255,0.25)">
                         <Heart
                           size={16}
                           color="#ffffff"
                           fill={liked[item.id] ? '#ffffff' : 'transparent'}
                           strokeWidth={1.5}
                         />
-                      </TouchableOpacity>
+                      </RipplePress>
                     </View>
                     <View style={styles.cardInfo}>
                       <Text style={styles.cardTitle} numberOfLines={1}>
@@ -310,7 +311,7 @@ export default function ProfileScreen() {
                         <Text style={styles.cardLocationText}>{item.location}</Text>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                  </RipplePress>
                 ))}
                 {pair.length === 1 && <View style={styles.cardPlaceholder} />}
               </View>
