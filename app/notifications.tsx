@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backBtn: {
-    padding: 4,
+    padding: 4px,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 18,
