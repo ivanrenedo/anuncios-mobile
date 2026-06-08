@@ -117,16 +117,18 @@ export default function NotificationsScreen() {
     <View style={styles.root}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
-          <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Notificaciones</Text>
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount}</Text>
-            </View>
-          )}
+        <View>
+              <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
+                <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
+              </TouchableOpacity>
+              <View style={styles.headerCenter}>
+                  <Text style={styles.headerTitle}>Notificaciones</Text>
+                  {unreadCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unreadCount}</Text>
+                    </View>
+                  )}
+                </View>
         </View>
         {unreadCount > 0 ? (
           <TouchableOpacity onPress={markAllRead} activeOpacity={0.8} style={styles.markBtn}>
