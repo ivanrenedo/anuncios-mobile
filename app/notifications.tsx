@@ -217,6 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface + 'e6',
     flexDirection: 'row',
     alignItems: 'flex-end',
+    /* justifyContent: 'space-between', */
     paddingHorizontal: 12,
     paddingBottom: 10,
     borderBottomWidth: 0.5,
@@ -228,7 +229,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backBtn: {
-   
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 18,
     width: 72,
   },
