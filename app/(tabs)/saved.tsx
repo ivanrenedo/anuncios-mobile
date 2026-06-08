@@ -80,7 +80,7 @@ export default function SavedScreen() {
     <View style={styles.root}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
-        <Text style={styles.headerTitle}>Favorito</Text>
+        <Text style={styles.headerTitle}>FavoritoS</Text>
       </View>
 
       <ScrollView
