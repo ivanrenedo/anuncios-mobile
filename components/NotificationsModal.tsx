@@ -9,7 +9,6 @@ import {
   Modal,
   Animated,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -106,8 +105,7 @@ const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: 
   verified:{ icon: CheckCircle,   bg: colors.primary + '15',  color: colors.primary },
 };
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_HEIGHT = SCREEN_HEIGHT * 0.85;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
@@ -116,19 +114,19 @@ interface Props {
 
 export default function NotificationsModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const translateX = useRef(new Animated.Value(-SCREEN_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
   const [mounted, setMounted] = useState(false);
+  const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
       Animated.parallel([
-        Animated.spring(translateY, {
+        Animated.spring(translateX, {
           toValue: 0,
-          damping: 22,
-          stiffness: 200,
+          damping: 24,
+          stiffness: 220,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
@@ -139,8 +137,8 @@ export default function NotificationsModal({ visible, onClose }: Props) {
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: SHEET_HEIGHT,
+        Animated.timing(translateX, {
+          toValue: -SCREEN_WIDTH,
           duration: 260,
           useNativeDriver: true,
         }),
@@ -168,35 +166,36 @@ export default function NotificationsModal({ visible, onClose }: Props) {
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
       </Animated.View>
 
-      {/* Sheet */}
+      {/* Panel */}
       <Animated.View
         style={[
-          styles.sheet,
-          { transform: [{ translateY }], paddingBottom: insets.bottom + 16 },
+          styles.panel,
+          {
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom + 16,
+            transform: [{ translateX }],
+          },
         ]}>
-        {/* Handle */}
-        <View style={styles.handle} />
-
-        {/* Sheet header */}
-        <View style={styles.sheetHeader}>
-          <View style={styles.sheetHeaderLeft}>
-            <Text style={styles.sheetTitle}>Notificaciones</Text>
+        {/* Header */}
+        <View style={styles.panelHeader}>
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <X size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
+          </TouchableOpacity>
+          <View style={styles.titleRow}>
+            <Text style={styles.panelTitle}>Notificaciones</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
             )}
           </View>
-          <View style={styles.sheetHeaderRight}>
-            {unreadCount > 0 && (
-              <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
-                <Text style={styles.markAllText}>Leer todo</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <X size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
+          {unreadCount > 0 ? (
+            <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
+              <Text style={styles.markAllText}>Leer todo</Text>
             </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={styles.markAllBtn} />
+          )}
         </View>
 
         {/* List */}
@@ -267,50 +266,42 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  sheet: {
+  panel: {
     position: 'absolute',
+    top: 0,
     bottom: 0,
     left: 0,
     right: 0,
-    height: SHEET_HEIGHT,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
+    shadowOffset: { width: 8, height: 0 },
     shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 16,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.outlineVariant,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  sheetHeader: {
+  panelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.outlineVariant + '44',
   },
-  sheetHeaderLeft: {
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  sheetHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sheetTitle: {
+  panelTitle: {
     fontFamily: 'Manrope-Bold',
     fontSize: 18,
     color: colors.onSurface,
@@ -331,21 +322,14 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   markAllBtn: {
-    paddingHorizontal: 8,
+    width: 70,
+    alignItems: 'flex-end',
     paddingVertical: 4,
   },
   markAllText: {
     fontFamily: 'Manrope-SemiBold',
     fontSize: 13,
     color: colors.secondary,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   list: {
     flex: 1,
