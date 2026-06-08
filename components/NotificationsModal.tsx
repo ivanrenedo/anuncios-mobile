@@ -138,7 +138,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     } else {
       Animated.parallel([
         Animated.timing(translateX, {
-          toValue: -SCREEN_WIDTH,
+          toValue: SCREEN_WIDTH,
           duration: 260,
           useNativeDriver: true,
         }),
