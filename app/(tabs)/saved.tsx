@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Bell, Heart, BarChart2, Plus, ShieldCheck } from 'lucide-react-native';
+import { Heart, BarChart2, Plus } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -81,14 +81,6 @@ export default function SavedScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
         <Text style={styles.headerTitle}>Guardados</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7} onPress={() => router.push('/(tabs)/safety')}>
-            <ShieldCheck size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7}>
-            <Bell size={22} color={colors.primary} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
       </View>
 
       <ScrollView
