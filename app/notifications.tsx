@@ -242,6 +242,8 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
   },
   headerTitle: {
