@@ -233,6 +233,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     display: 'flex',
     flexDirection: 'row',
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
