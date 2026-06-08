@@ -117,7 +117,7 @@ export default function NotificationsScreen() {
     <View style={styles.root}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 56 + insets.top }]}>
-        <View style={styles.headerTitle}>
+        <View style={styles.headerContain}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
             <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
           </TouchableOpacity>
