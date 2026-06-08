@@ -56,7 +56,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="saved"
         options={{
-          title: 'Guardado',
+          title: 'Favorito',
           tabBarIcon: ({ color, size, focused }) => (
             <Heart
               size={size}
