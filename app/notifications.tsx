@@ -216,6 +216,7 @@ const styles = StyleSheet.create({
     zIndex: 50,
     backgroundColor: colors.surface + 'e6',
     flexDirection: 'row',
+    alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingBottom: 10,
     borderBottomWidth: 0.5,
