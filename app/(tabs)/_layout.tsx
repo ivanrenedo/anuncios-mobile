@@ -36,7 +36,7 @@ export default function TabLayout() {
               size={size}
               fill={focused ? color : 'transparent'}
               stroke={focused ? color : 'transparent'}
-              strokeWidth={focused ? 1 : 1.5}
+              strokeWidth={focused ? 0 : 1.5}
             />
           ),
         }}
