@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  X,
+  ChevronLeft,
   Bell,
   Heart,
   ShoppingBag,
@@ -106,8 +106,7 @@ const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: 
   verified:{ icon: CheckCircle,   bg: colors.primary + '15',  color: colors.primary },
 };
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_HEIGHT = SCREEN_HEIGHT * 0.85;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
@@ -116,7 +115,7 @@ interface Props {
 
 export default function NotificationsModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [notifs, setNotifs] = useState(INITIAL_NOTIFS);
   const [mounted, setMounted] = useState(false);
@@ -125,28 +124,28 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     if (visible) {
       setMounted(true);
       Animated.parallel([
-        Animated.spring(translateY, {
+        Animated.spring(translateX, {
           toValue: 0,
           damping: 22,
-          stiffness: 200,
+          stiffness: 220,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 220,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: SHEET_HEIGHT,
-          duration: 260,
+        Animated.timing(translateX, {
+          toValue: SCREEN_WIDTH,
+          duration: 240,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 0,
-          duration: 220,
+          duration: 200,
           useNativeDriver: true,
         }),
       ]).start(() => setMounted(false));
@@ -168,18 +167,18 @@ export default function NotificationsModal({ visible, onClose }: Props) {
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
       </Animated.View>
 
-      {/* Sheet */}
+      {/* Panel */}
       <Animated.View
         style={[
           styles.sheet,
-          { transform: [{ translateY }], paddingBottom: insets.bottom + 16 },
+          { transform: [{ translateX }], paddingBottom: insets.bottom + 8 },
         ]}>
-        {/* Handle */}
-        <View style={styles.handle} />
-
-        {/* Sheet header */}
-        <View style={styles.sheetHeader}>
+        {/* Header */}
+        <View style={[styles.sheetHeader, { paddingTop: insets.top + 8 }]}>
           <View style={styles.sheetHeaderLeft}>
+            <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.7}>
+              <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
+            </TouchableOpacity>
             <Text style={styles.sheetTitle}>Notificaciones</Text>
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -187,16 +186,11 @@ export default function NotificationsModal({ visible, onClose }: Props) {
               </View>
             )}
           </View>
-          <View style={styles.sheetHeaderRight}>
-            {unreadCount > 0 && (
-              <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
-                <Text style={styles.markAllText}>Leer todo</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <X size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
+          {unreadCount > 0 && (
+            <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
+              <Text style={styles.markAllText}>Leer todo</Text>
             </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         {/* List */}
@@ -269,46 +263,38 @@ const styles = StyleSheet.create({
   },
   sheet: {
     position: 'absolute',
+    top: 0,
     bottom: 0,
     left: 0,
     right: 0,
-    height: SHEET_HEIGHT,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
+    shadowOffset: { width: -8, height: 0 },
     shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 16,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.outlineVariant,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    marginRight: 4,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.outlineVariant + '44',
   },
   sheetHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  sheetHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 4,
   },
   sheetTitle: {
     fontFamily: 'Manrope-Bold',
@@ -338,14 +324,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope-SemiBold',
     fontSize: 13,
     color: colors.secondary,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   list: {
     flex: 1,
