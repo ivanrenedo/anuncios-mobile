@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
 import PromoCarousel from '@/components/PromoCarousel';
 import CategoryScroll from '@/components/CategoryScroll';
@@ -22,6 +23,7 @@ const HEADER_HEIGHT = 56;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const headerShadow = scrollY.interpolate({
@@ -44,7 +46,7 @@ export default function HomeScreen() {
         ]}>
         <Text style={styles.headerTitle}>Market EG</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7} onPress={() => router.push('/notifications')}>
             <Bell size={22} color={colors.primary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
