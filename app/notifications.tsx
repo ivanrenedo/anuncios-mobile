@@ -231,6 +231,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerTitle: {
+    position: 'relative',
     display: 'flex',
     flexDirection: 'row',
     right: 0,
