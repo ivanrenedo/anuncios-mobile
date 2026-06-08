@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     display: 'flex',
     justifyContent: 'center',
-     alignItems: 'center',
+    alignItems: 'center',
     flexDirection: 'row'
   },
   backBtn: {
