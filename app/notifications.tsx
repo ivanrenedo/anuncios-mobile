@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  headerTitle: {
+  headerLeft: {
     position: 'relative',
     display: 'flex',
     flexDirection: 'row'
