@@ -230,7 +230,6 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     padding: 4,
-    justifyContent: 'center',
     borderRadius: 18,
     width: 72,
   },
