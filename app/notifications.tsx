@@ -228,8 +228,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   backBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
+   
     borderRadius: 18,
     width: 72,
   },
