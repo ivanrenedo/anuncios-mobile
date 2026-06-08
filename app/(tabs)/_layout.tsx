@@ -34,6 +34,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Search
               size={size}
+              color={color}
               fill={focused ? color : 'transparent'}
               strokeWidth={focused ? 1 : 1.5}
             />
