@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface + 'e6',
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    /* justifyContent: 'space-between', */
     paddingHorizontal: 12,
     paddingBottom: 10,
     borderBottomWidth: 0.5,
@@ -235,6 +235,7 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flexDirection: 'row',
+    
     alignItems: 'center',
     gap: 8,
   },
