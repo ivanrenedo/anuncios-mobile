@@ -46,7 +46,7 @@ export default function HomeScreen() {
         ]}>
         <Text style={styles.headerTitle}>Market EG</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={1.7} onPress={() => router.push('/notifications')}>
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={3} onPress={() => router.push('/notifications')}>
             <Bell size={22} color={colors.primary} strokeWidth={1.5} />
           </TouchableOpacity>
         </View>
