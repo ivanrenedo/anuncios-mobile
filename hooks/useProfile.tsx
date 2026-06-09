@@ -1,5 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase, DEMO_PROFILE_ID } from '@/lib/supabase';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 export interface Profile {
   id: string;
@@ -21,10 +20,32 @@ export interface Profile {
   updated_at: string;
 }
 
+const DEFAULT_PROFILE: Profile = {
+  id: '00000000-0000-0000-0000-000000000001',
+  name: 'Antonio Mbá',
+  location: 'Malabo, Guinea Ecuatorial',
+  bio: 'Vendedor verificado · Miembro desde 2022 · Responde en menos de 1h',
+  avatar_url:
+    'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400',
+  cover_url:
+    'https://images.pexels.com/photos/1732414/pexels-photo-1732414.jpeg?auto=compress&cs=tinysrgb&w=1200',
+  email: 'antonio.mba@example.com',
+  phone: '+240 222 000 000',
+  language: 'es',
+  notif_messages: true,
+  notif_offers: true,
+  notif_marketing: false,
+  show_email: false,
+  show_phone: true,
+  dark_mode: false,
+  created_at: '2022-01-01T00:00:00.000Z',
+  updated_at: new Date().toISOString(),
+};
+
 interface ProfileContextValue {
-  profile: Profile | null;
-  loading: boolean;
-  error: string | null;
+  profile: Profile;
+  loading: false;
+  error: null;
   refresh: () => Promise<void>;
   update: (patch: Partial<Profile>) => Promise<{ ok: boolean; error?: string }>;
 }
@@ -32,57 +53,18 @@ interface ProfileContextValue {
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
 
-  const fetchProfile = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error: err } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', DEMO_PROFILE_ID)
-      .maybeSingle();
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
-    }
-    setProfile(data as Profile | null);
-    setLoading(false);
+  const refresh = useCallback(async () => {}, []);
+
+  const update = useCallback(async (patch: Partial<Profile>) => {
+    setProfile((prev) => ({ ...prev, ...patch, updated_at: new Date().toISOString() }));
+    return { ok: true };
   }, []);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
-
-  const update = useCallback(
-    async (patch: Partial<Profile>) => {
-      const optimistic = profile ? { ...profile, ...patch } : null;
-      if (optimistic) setProfile(optimistic);
-
-      const { data, error: err } = await supabase
-        .from('profiles')
-        .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq('id', DEMO_PROFILE_ID)
-        .select()
-        .maybeSingle();
-
-      if (err) {
-        setError(err.message);
-        await fetchProfile();
-        return { ok: false, error: err.message };
-      }
-      if (data) setProfile(data as Profile);
-      return { ok: true };
-    },
-    [profile, fetchProfile]
-  );
-
   const value = useMemo(
-    () => ({ profile, loading, error, refresh: fetchProfile, update }),
-    [profile, loading, error, fetchProfile, update]
+    () => ({ profile, loading: false as const, error: null, refresh, update }),
+    [profile, refresh, update]
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
