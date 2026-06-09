@@ -77,7 +77,7 @@ export default function RecentlyUploaded({ onLoadMore }: { onLoadMore?: () => vo
       </View>
       {pairs.map((pair, rowIdx) => (
         <View key={rowIdx} style={styles.row}>
-          {pairs.map((item) => (
+          {pair.map((item) => (
             <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.92} onPress={() => router.push('/product')}>
               <View style={styles.imageWrap}>
                 <Image source={{ uri: item.image }} style={styles.image} />
