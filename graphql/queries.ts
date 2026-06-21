@@ -111,6 +111,7 @@ export const GET_PRODUCT = gql`
       status
       views
       favoritesCount
+      createdAt
       seller {
         id
         name

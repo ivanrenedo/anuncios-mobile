@@ -43,9 +43,24 @@ import SwipeableSheet from '@/components/SwipeableSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateProduct } from '@/hooks/useProducts';
 import { useCategoryTree } from '@/hooks/useCategories';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { uploadImages } from '@/lib/upload';
 import Spinner from '@/components/Spinner';
 import { getErrorMessage } from '@/lib/errors';
+
+// Real user photos only — gallery or camera. Backend accepts ≤5 MB per file.
+const MAX_PHOTOS = 5;
+const MAX_PHOTO_MB = 5;
+
+// expo-image-picker is a native module (requireNativeModule at import). Load it
+// defensively so an outdated binary (built before it was added) degrades
+// gracefully instead of crashing the Publicar screen. A fresh dev build enables it.
+let ImagePicker: typeof import('expo-image-picker') | null = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch {
+  ImagePicker = null;
+}
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -149,14 +164,6 @@ const SERVICE_OPTIONS = ['Oferta', 'Demanda'];
 
 const JOB_CATEGORIES = ['Oferta de empleo', 'Busco empleo', 'Practicas'];
 
-const STOCK_PHOTOS = [
-  'https://images.pexels.com/photos/1201996/pexels-photo-1201996.jpeg?auto=compress&cs=tinysrgb&w=400',
-  'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=400',
-  'https://images.pexels.com/photos/812264/pexels-photo-812264.jpeg?auto=compress&cs=tinysrgb&w=400',
-  'https://images.pexels.com/photos/243757/pexels-photo-243757.jpeg?auto=compress&cs=tinysrgb&w=400',
-  'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=400',
-];
-
 type FormState = Record<string, any>;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,12 +217,11 @@ export default function PostScreen() {
     try {
       let imageUrls: string[] = [];
       if (form.photos && form.photos.length > 0) {
-        const realPhotos = form.photos.filter((p: string) => !p.startsWith('https://images.pexels'));
-        if (realPhotos.length > 0) {
-          imageUrls = await uploadImages(realPhotos);
-        } else {
-          imageUrls = form.photos;
-        }
+        // Upload local files; keep any already-hosted URLs as-is.
+        const toUpload = form.photos.filter((p: string) => !/^https?:\/\//.test(p));
+        const existing = form.photos.filter((p: string) => /^https?:\/\//.test(p));
+        const uploaded = toUpload.length > 0 ? await uploadImages(toUpload) : [];
+        imageUrls = [...existing, ...uploaded];
       }
 
       const input: any = {
@@ -1434,10 +1440,71 @@ function PhotoPicker({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const addPhoto = () => {
-    const next = STOCK_PHOTOS[photos.length % STOCK_PHOTOS.length];
-    setPhotos([...photos, next]);
+
+  const addAssets = async (assets: ImagePickerAsset[]) => {
+    const room = MAX_PHOTOS - photos.length;
+    const accepted: string[] = [];
+    let tooBig = false;
+    for (const a of assets.slice(0, room)) {
+      if (a.fileSize != null && a.fileSize > MAX_PHOTO_MB * 1024 * 1024) {
+        tooBig = true;
+        continue;
+      }
+      accepted.push(a.uri);
+    }
+    if (accepted.length) setPhotos([...photos, ...accepted]);
+    if (tooBig) {
+      Alert.alert('Foto demasiado grande', `Cada foto debe pesar menos de ${MAX_PHOTO_MB} MB.`);
+    } else if (assets.length > room) {
+      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${MAX_PHOTOS} fotos por anuncio.`);
+    }
   };
+
+  const pickFromLibrary = async () => {
+    if (!ImagePicker) {
+      Alert.alert('Función no disponible', 'Actualiza la app para añadir fotos.');
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permiso necesario', 'Concede acceso a tus fotos para añadir imágenes.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_PHOTOS - photos.length,
+      quality: 0.7,
+    });
+    if (!res.canceled) await addAssets(res.assets);
+  };
+
+  const takePhoto = async () => {
+    if (!ImagePicker) {
+      Alert.alert('Función no disponible', 'Actualiza la app para añadir fotos.');
+      return;
+    }
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permiso necesario', 'Concede acceso a la cámara para hacer una foto.');
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (!res.canceled) await addAssets(res.assets);
+  };
+
+  const addPhoto = () => {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${MAX_PHOTOS} fotos por anuncio.`);
+      return;
+    }
+    Alert.alert('Añadir foto', undefined, [
+      { text: 'Hacer una foto', onPress: takePhoto },
+      { text: 'Elegir de la galería', onPress: pickFromLibrary },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
   const removePhoto = (i: number) =>
     setPhotos(photos.filter((_, idx) => idx !== i));
 
@@ -1445,7 +1512,7 @@ function PhotoPicker({
     <View style={{ marginBottom: 22 }}>
       <View style={styles.photoHeader}>
         <Text style={styles.fieldLabel}>Fotos</Text>
-        <Text style={styles.photoCount}>{photos.length}/8</Text>
+        <Text style={styles.photoCount}>{photos.length}/{MAX_PHOTOS}</Text>
       </View>
       <ScrollView
         horizontal
@@ -1468,7 +1535,7 @@ function PhotoPicker({
             </TouchableOpacity>
           </View>
         ))}
-        {photos.length < 8 && (
+        {photos.length < MAX_PHOTOS && (
           <TouchableOpacity
             style={styles.photoAdd}
             activeOpacity={0.85}

@@ -10,6 +10,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,10 +26,11 @@ import {
   Heart,
   BadgeCheck,
   Flag,
+  PackageX,
 } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import { getProductById } from '@/constants/products';
+import ProductImage from '@/components/ProductImage';
 import SafetyModal, { SafetyModalMode } from '@/components/SafetyModal';
 import ReportSheet from '@/components/ReportSheet';
 import { useProduct, useViewProduct } from '@/hooks/useProducts';
@@ -47,45 +49,35 @@ function WhatsAppSvg() {
   );
 }
 
+function timeAgo(iso?: string): string {
+  if (!iso) return 'recientemente';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return 'recientemente';
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 60) return 'hace un momento';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} día${d > 1 ? 's' : ''}`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `hace ${mo} mes${mo > 1 ? 'es' : ''}`;
+  const y = Math.floor(mo / 12);
+  return `hace ${y} año${y > 1 ? 's' : ''}`;
+}
+
 export default function ProductDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { product: apiProduct } = useProduct(id || '');
+  const { product: apiProduct, loading } = useProduct(id || '');
   const { trackView } = useViewProduct();
   const { toggle: toggleFav } = useToggleFavorite();
   const { isFavorited } = useIsFavorited(id || '');
   const { isAuthenticated } = useAuth();
-  const sellerId = apiProduct?.seller?.id;
-  const fallback = getProductById(id);
-
-  // Build a merged product: prefer API data, fallback to local
-  const product = apiProduct ? {
-    ...fallback,
-    id: apiProduct.id,
-    title: apiProduct.title,
-    subtitle: apiProduct.category?.label || fallback.subtitle,
-    price: `${Number(apiProduct.price).toLocaleString('es')} XAF`,
-    condition: apiProduct.condition || fallback.condition,
-    description: apiProduct.description || fallback.description,
-    images: apiProduct.images?.length > 0
-      ? apiProduct.images.map((img: any) => img.url.startsWith('/') ? `${API_URL}${img.url}` : img.url)
-      : fallback.images,
-    seller: apiProduct.seller ? {
-      name: apiProduct.seller.name,
-      avatar: apiProduct.seller.avatarUrl || fallback.seller.avatar,
-      rating: 0,
-      sales: 0,
-      verified: apiProduct.seller.verified,
-    } : fallback.seller,
-    location: apiProduct.city || fallback.location,
-    views: apiProduct.views ?? fallback.views,
-    favorites: apiProduct.favoritesCount ?? fallback.favorites,
-    attributes: apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || fallback.attributes,
-  } : fallback;
-
   // Category-specific detail tables (vehicle/property/service/job/marketplace).
   // Stored on publish and fetched in GET_PRODUCT, rendered here as a spec sheet.
   const detailPairs: { label: string; value: string }[] = [];
@@ -122,6 +114,80 @@ export default function ProductDetailScreen() {
   React.useEffect(() => {
     if (id) trackView(id);
   }, [id]);
+
+  // Loading / not-found states — no local mock fallback anymore.
+  if (loading && !apiProduct) {
+    return (
+      <View style={styles.root}>
+        <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+            <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Cargando…</Text>
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={styles.centerFill}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </View>
+    );
+  }
+  if (!apiProduct) {
+    return (
+      <View style={styles.root}>
+        <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+            <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>No disponible</Text>
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={styles.centerFill}>
+          <PackageX size={48} color={colors.onSurfaceVariant + '66'} strokeWidth={1.4} />
+          <Text style={styles.stateTitle}>Anuncio no disponible</Text>
+          <Text style={styles.stateDesc}>Este anuncio no existe o ha sido eliminado.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const sellerId = apiProduct.seller?.id;
+
+  const images: string[] = apiProduct.images?.length
+    ? apiProduct.images.map((img: any) =>
+        img.url.startsWith('/') ? `${API_URL}${img.url}` : img.url,
+      )
+    : [];
+
+  const priceNum = Number(apiProduct.price);
+  const discountPct = apiProduct.discount ?? 0;
+  const product = {
+    id: apiProduct.id,
+    title: apiProduct.title,
+    subtitle: apiProduct.category?.label || '',
+    price: `${priceNum.toLocaleString('es')} XAF`,
+    originalPrice:
+      discountPct > 0
+        ? `${Math.round(priceNum / (1 - discountPct / 100)).toLocaleString('es')} XAF`
+        : undefined,
+    discount: discountPct > 0 ? `-${discountPct}%` : undefined,
+    condition: apiProduct.condition || '',
+    description: apiProduct.description || 'Sin descripción.',
+    images,
+    seller: {
+      name: apiProduct.seller?.name || 'Vendedor',
+      avatar: apiProduct.seller?.avatarUrl || undefined,
+      rating: 0,
+      sales: 0,
+      verified: apiProduct.seller?.verified ?? false,
+    },
+    location: apiProduct.city || 'Guinea Ecuatorial',
+    postedAgo: timeAgo(apiProduct.createdAt),
+    views: apiProduct.views ?? 0,
+    favorites: apiProduct.favoritesCount ?? 0,
+    attributes:
+      apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || [],
+  };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -169,9 +235,13 @@ export default function ProductDetailScreen() {
             onScroll={onScroll}
             scrollEventThrottle={16}
             style={styles.galleryScroll}>
-            {product.images.map((uri: string, i: number) => (
-              <Image key={i} source={{ uri }} style={styles.galleryImage} />
-            ))}
+            {product.images.length > 0 ? (
+              product.images.map((uri: string, i: number) => (
+                <Image key={i} source={{ uri }} style={styles.galleryImage} />
+              ))
+            ) : (
+              <ProductImage uri={null} style={styles.galleryImage} iconSize={48} />
+            )}
           </ScrollView>
 
           {/* Favorite */}
@@ -415,6 +485,26 @@ const makeStyles = (colors: ThemeColors) =>
       width: '100%',
       backgroundColor: colors.surface,
       overflow: 'hidden',
+    },
+    centerFill: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
+      gap: 10,
+    },
+    stateTitle: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 17,
+      color: colors.onSurface,
+      marginTop: 6,
+    },
+    stateDesc: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 14,
+      color: colors.onSurfaceVariant,
+      textAlign: 'center',
+      lineHeight: 20,
     },
     header: {
       position: 'absolute',

@@ -11,6 +11,7 @@ import {
 import { Heart, MapPin, BadgeCheck } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
+import ProductImage from '@/components/ProductImage';
 
 export interface ProductCardItem {
   id: string;
@@ -58,7 +59,7 @@ export default function ProductCard({
       activeOpacity={0.92}
       onPress={onPress}>
       <View style={styles.imageWrap}>
-        <Image source={{ uri: item.image }} style={styles.image} />
+        <ProductImage uri={item.image} style={styles.image} />
         {!!item.promo && (
           <View style={[styles.badge, { backgroundColor: item.promoColor }]}>
             <Text style={styles.badgeText}>{item.promo}</Text>

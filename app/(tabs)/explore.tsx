@@ -37,10 +37,6 @@ import {
   LayoutGrid,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import {
-  SUBCATEGORY_SUGGESTIONS,
-  CATEGORIES as CATALOG,
-} from '@/constants/categories';
 import RipplePress from '@/components/RipplePress';
 import ProductCard from '@/components/ProductCard';
 import SwipeableSheet from '@/components/SwipeableSheet';
@@ -139,16 +135,29 @@ export default function ExploreScreen() {
     if (!incoming) return;
     setQuery(incoming);
 
-    const direct = SUBCATEGORY_SUGGESTIONS[incoming];
-    if (direct) {
-      setRelated(direct);
-      return;
+    // Related terms from the category tree: a parent → its children; a child →
+    // its own children, else its siblings.
+    const lower = incoming.toLowerCase();
+    let rel: string[] = [];
+    for (const parent of tree) {
+      if (parent.label.toLowerCase() === lower) {
+        rel = (parent.children ?? []).map((c: any) => c.label);
+        break;
+      }
+      const child = (parent.children ?? []).find(
+        (c: any) => c.label.toLowerCase() === lower
+      );
+      if (child) {
+        rel = (child.children ?? []).length
+          ? child.children.map((c: any) => c.label)
+          : (parent.children ?? [])
+              .map((c: any) => c.label)
+              .filter((l: string) => l.toLowerCase() !== lower);
+        break;
+      }
     }
-    const cat = CATALOG.find(
-      (c) => c.label.toLowerCase() === incoming.toLowerCase()
-    );
-    setRelated(cat ? cat.subcategories.filter((s) => s !== 'Todos') : []);
-  }, [q]);
+    setRelated(rel);
+  }, [q, tree]);
 
   // Sync incoming ?filterCat= (coming from home or categories page)
   useEffect(() => {

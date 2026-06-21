@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   Dimensions,
   Image,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, LayoutGrid } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import { CATEGORIES, type CategoryData } from '@/constants/categories';
+import { useCategoryTree } from '@/hooks/useCategories';
+import { useProducts } from '@/hooks/useProducts';
+import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 116;
@@ -23,10 +26,6 @@ const TILE_GAP = 12;
 const TILE_WIDTH = (RIGHT_WIDTH - 16 * 2 - TILE_GAP * 2) / 3;
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 84 : 64;
 
-function imageForSub(cat: CategoryData, sub: string) {
-  return cat.products.find((p) => p.subcategory === sub)?.image ?? cat.hero;
-}
-
 export default function CategoriesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -34,13 +33,28 @@ export default function CategoriesScreen() {
   const styles = useThemedStyles(makeStyles);
   const paneAnim = useRef(new Animated.Value(1)).current;
   const rightScrollRef = useRef<ScrollView>(null);
-  const [activeSlug, setActiveSlug] = useState(CATEGORIES[0].slug);
+  const { tree, loading } = useCategoryTree();
+  const { products } = useProducts(100);
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
 
-  const active = CATEGORIES.find((c) => c.slug === activeSlug) ?? CATEGORIES[0];
-  const subs = active.subcategories.filter((s) => s !== 'Todos');
+  // Representative thumbnail per leaf category id (first product image found).
+  const imageByCategory = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of products) {
+      const cid = p.category?.id;
+      const raw = p.images?.[0]?.url;
+      if (cid && raw && !map[cid]) {
+        map[cid] = raw.startsWith('/') ? `${API_URL}${raw}` : raw;
+      }
+    }
+    return map;
+  }, [products]);
+
+  const active = tree.find((c: any) => c.slug === activeSlug) ?? tree[0];
+  const subs: any[] = active?.children ?? [];
 
   const selectCategory = (slug: string) => {
-    if (slug === activeSlug) return;
+    if (active && slug === active.slug) return;
     setActiveSlug(slug);
     rightScrollRef.current?.scrollTo({ y: 0, animated: false });
     paneAnim.setValue(0);
@@ -77,98 +91,122 @@ export default function CategoriesScreen() {
         <Text style={styles.searchPlaceholder}>Buscar en Market EG</Text>
       </TouchableOpacity>
 
-      {/* Two-pane body */}
-      <View style={styles.body}>
-        {/* Left sidebar (text only, no icons) */}
-        <View style={styles.sidebar}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 24 }}>
-            {CATEGORIES.map((cat) => {
-              const isActive = cat.slug === activeSlug;
-              return (
-                <TouchableOpacity
-                  key={cat.slug}
-                  style={[styles.sideItem, isActive && styles.sideItemActive]}
-                  activeOpacity={0.7}
-                  onPress={() => selectCategory(cat.slug)}>
-                  {isActive && (
-                    <View
-                      style={[styles.sideAccent, { backgroundColor: cat.color }]}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.sideLabel,
-                      isActive && {
-                        color: colors.onSurface,
-                        fontFamily: 'Manrope-Bold',
-                      },
-                    ]}
-                    numberOfLines={2}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+      {loading && tree.length === 0 ? (
+        <View style={styles.loadingFill}>
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
+      ) : !active ? (
+        <View style={styles.loadingFill}>
+          <Text style={styles.emptyText}>No hay categorías disponibles.</Text>
+        </View>
+      ) : (
+        <View style={styles.body}>
+          {/* Left sidebar (text only, no icons) */}
+          <View style={styles.sidebar}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 24 }}>
+              {tree.map((cat: any) => {
+                const isActive = cat.slug === active.slug;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.sideItem, isActive && styles.sideItemActive]}
+                    activeOpacity={0.7}
+                    onPress={() => selectCategory(cat.slug)}>
+                    {isActive && (
+                      <View
+                        style={[styles.sideAccent, { backgroundColor: cat.color || colors.primary }]}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.sideLabel,
+                        isActive && {
+                          color: colors.onSurface,
+                          fontFamily: 'Manrope-Bold',
+                        },
+                      ]}
+                      numberOfLines={2}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
 
-        {/* Right detail panel */}
-        <Animated.View
-          style={[
-            styles.detail,
-            { opacity: paneAnim, transform: [{ translateY: paneTranslate }] },
-          ]}>
-          <ScrollView
-            ref={rightScrollRef}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              padding: 16,
-              paddingBottom: TAB_BAR_HEIGHT + 24,
-            }}>
-            <Text style={styles.detailTitle}>{active.label}</Text>
+          {/* Right detail panel */}
+          <Animated.View
+            style={[
+              styles.detail,
+              { opacity: paneAnim, transform: [{ translateY: paneTranslate }] },
+            ]}>
+            <ScrollView
+              ref={rightScrollRef}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                padding: 16,
+                paddingBottom: TAB_BAR_HEIGHT + 24,
+              }}>
+              <Text style={styles.detailTitle}>{active.label}</Text>
 
-            {/* Subcategories grid */}
-            <View style={styles.grid}>
-              {subs.map((sub) => (
-                <TouchableOpacity
-                  key={sub}
-                  style={styles.tile}
-                  activeOpacity={0.8}
-                  onPress={() => goSearch(sub)}>
-                  <View style={styles.tileImageWrap}>
-                    <Image
-                      source={{ uri: imageForSub(active, sub) }}
-                      style={styles.tileImage}
-                    />
-                  </View>
-                  <Text style={styles.tileLabel} numberOfLines={2}>
-                    {sub}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {subs.length === 0 ? (
+                <Text style={styles.emptyText}>Sin subcategorías por ahora.</Text>
+              ) : (
+                <View style={styles.grid}>
+                  {subs.map((sub: any) => {
+                    const img = imageByCategory[sub.id];
+                    return (
+                      <TouchableOpacity
+                        key={sub.id}
+                        style={styles.tile}
+                        activeOpacity={0.8}
+                        onPress={() => goSearch(sub.label)}>
+                        <View style={styles.tileImageWrap}>
+                          {img ? (
+                            <Image source={{ uri: img }} style={styles.tileImage} />
+                          ) : (
+                            <LayoutGrid
+                              size={24}
+                              color={active.color || colors.primary}
+                              strokeWidth={1.5}
+                            />
+                          )}
+                        </View>
+                        <Text style={styles.tileLabel} numberOfLines={2}>
+                          {sub.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
 
-              {/* Ver todo tile → search by category name */}
-              <TouchableOpacity
-                style={styles.tile}
-                activeOpacity={0.8}
-                onPress={() => goSearch(active.label)}>
-                <View style={[styles.tileImageWrap, styles.tileAllWrap]}>
-                  <LayoutGrid size={26} color={active.color} strokeWidth={1.6} />
+                  {/* Ver todo tile → search by category name */}
+                  <TouchableOpacity
+                    style={styles.tile}
+                    activeOpacity={0.8}
+                    onPress={() => goSearch(active.label)}>
+                    <View style={[styles.tileImageWrap, styles.tileAllWrap]}>
+                      <LayoutGrid
+                        size={26}
+                        color={active.color || colors.primary}
+                        strokeWidth={1.6}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.tileLabel,
+                        { color: active.color || colors.primary, fontFamily: 'Manrope-SemiBold' },
+                      ]}>
+                      Ver todo
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <Text
-                  style={[
-                    styles.tileLabel,
-                    { color: active.color, fontFamily: 'Manrope-SemiBold' },
-                  ]}>
-                  Ver todo
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </Animated.View>
-      </View>
+              )}
+            </ScrollView>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -206,6 +244,18 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Regular',
     fontSize: 14,
     color: colors.onSurfaceVariant + '99',
+  },
+  loadingFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
   },
   body: {
     flex: 1,

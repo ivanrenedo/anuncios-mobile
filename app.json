@@ -39,6 +39,13 @@
         {
           "color": "#1f6feb"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Market EG accede a tus fotos para añadirlas a tus anuncios.",
+          "cameraPermission": "Market EG usa la cámara para que hagas fotos de tus anuncios."
+        }
       ]
     ],
     "experiments": {

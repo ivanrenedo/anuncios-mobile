@@ -16,6 +16,16 @@ const REFRESH_TOKEN_KEY = 'market_eg_refresh_token';
 export const GOOGLE_WEB_CLIENT_ID =
   '97086228598-fqa8ukvkbijsronqag78mga4g1us41d3.apps.googleusercontent.com';
 
+/** Reject if a promise (e.g. an unreachable backend call) doesn't settle in time. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), ms),
+    ),
+  ]);
+}
+
 if (Platform.OS !== 'web') {
   GoogleSignin.configure({
     webClientId: GOOGLE_WEB_CLIENT_ID,
@@ -107,17 +117,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loginWithBackend: async (googleUser) => {
     try {
-      const { data } = await apolloClient.mutate({
-        mutation: GOOGLE_LOGIN,
-        variables: {
-          input: {
-            googleId: googleUser.id,
-            email: googleUser.email,
-            name: googleUser.name,
-            avatar: googleUser.avatar,
+      const { data } = await withTimeout(
+        apolloClient.mutate({
+          mutation: GOOGLE_LOGIN,
+          variables: {
+            input: {
+              googleId: googleUser.id,
+              email: googleUser.email,
+              name: googleUser.name,
+              avatar: googleUser.avatar,
+            },
           },
-        },
-      });
+        }),
+        15000,
+      );
       const { accessToken, refreshToken, user } = (data as any).googleLogin;
       if (user.permission === 'DENIED') {
         // Blocked account: refuse the login without storing any tokens.
@@ -140,6 +153,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return authUser;
     } catch (err) {
       console.log('[Auth] Backend login error:', err);
+      Alert.alert(
+        'No se pudo iniciar sesión',
+        'No se pudo conectar con el servidor. Comprueba tu conexión y que el backend sea accesible desde el dispositivo (variable EXPO_PUBLIC_API_URL).',
+      );
       return null;
     }
   },
@@ -177,14 +194,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const result = await get().loginWithBackend(googleUser);
         if (result) {
           console.log('[Auth] Login exitoso:', result.email);
-        } else {
-          // Fallback: save locally without backend
-          set({ user: googleUser, isAuthenticated: true });
-          await AsyncStorage.setItem(
-            AUTH_STORAGE_KEY,
-            JSON.stringify(googleUser),
-          );
         }
+        // If result is null, loginWithBackend already surfaced the reason
+        // (suspended account or connection error). Don't fake an offline
+        // login — a session without a backend token only breaks every guarded
+        // query afterwards.
       }
     } catch (err: any) {
       // Silent only when the user explicitly cancels the picker.
