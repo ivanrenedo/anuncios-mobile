@@ -456,7 +456,36 @@ export const CATEGORIES: CategoryData[] = [
   },
 ];
 
-export function getCategory(slug: string | undefined): CategoryData | undefined {
-  if (!slug) return undefined;
-  return CATEGORIES.find((c) => c.slug === slug);
-}
+/**
+ * Related search terms per subcategory, used to power search suggestions
+ * when navigating from the categories modal into Explore.
+ */
+export const SUBCATEGORY_SUGGESTIONS: Record<string, string[]> = {
+  // Moda
+  'Ropa hombre': ['Camisas', 'Pantalones', 'Chaquetas', 'Camisetas', 'Trajes'],
+  'Ropa mujer': ['Vestidos', 'Blusas', 'Faldas', 'Abrigos', 'Tops'],
+  Calzado: ['Zapatillas', 'Botas', 'Sandalias', 'Tacones', 'Nike'],
+  Accesorios: ['Relojes', 'Bolsos', 'Gafas de sol', 'Cinturones', 'Joyas'],
+  // Tech
+  Móviles: ['iPhone', 'Samsung Galaxy', 'Xiaomi', 'Fundas', 'Cargadores'],
+  Ordenadores: ['MacBook', 'Portátiles', 'PC Gaming', 'Monitores', 'Teclados'],
+  Audio: ['Auriculares', 'Altavoces', 'AirPods', 'Cascos', 'Barras de sonido'],
+  Cámaras: ['Canon', 'Sony Alpha', 'GoPro', 'Objetivos', 'Drones'],
+  TV: ['Smart TV', 'TV 4K', 'Proyectores', 'Soportes TV', 'Chromecast'],
+  // Coches
+  Sedán: ['Toyota Corolla', 'Honda Civic', 'Mercedes', 'BMW Serie 3', 'Audi A4'],
+  SUV: ['Toyota RAV4', 'Hyundai Tucson', 'Kia Sportage', 'Nissan X-Trail', 'Mazda CX-5'],
+  Pickup: ['Toyota Hilux', 'Ford Ranger', 'Nissan Navara', 'Isuzu D-Max', 'Mitsubishi L200'],
+  Motos: ['Yamaha', 'Honda', 'Scooter', 'Motos eléctricas', 'Cascos'],
+  // Hogar
+  Muebles: ['Sofás', 'Mesas', 'Sillas', 'Armarios', 'Camas'],
+  Cocina: ['Ollas', 'Vajilla', 'Cafeteras', 'Cuchillos', 'Microondas'],
+  Decoración: ['Lámparas', 'Cuadros', 'Espejos', 'Alfombras', 'Plantas'],
+  Electrodomésticos: ['Nevera', 'Lavadora', 'Aire acondicionado', 'Ventiladores', 'Aspiradoras'],
+  // Servicios
+  Reformas: ['Fontanería', 'Electricista', 'Pintura', 'Albañilería', 'Carpintería'],
+  Clases: ['Inglés', 'Matemáticas', 'Música', 'Informática', 'Conducir'],
+  Belleza: ['Peluquería', 'Manicura', 'Maquillaje', 'Masajes', 'Estética'],
+  Tecnología: ['Reparación móviles', 'Soporte PC', 'Diseño web', 'Redes', 'Instalaciones'],
+  Transporte: ['Mudanzas', 'Taxi', 'Mensajería', 'Alquiler furgoneta', 'Portes'],
+};

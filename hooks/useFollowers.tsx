@@ -1,0 +1,74 @@
+import { useQuery, useMutation } from '@apollo/client/react';
+import {
+  GET_FOLLOWERS,
+  GET_FOLLOWING,
+  IS_FOLLOWING,
+  FOLLOWERS_COUNT,
+  FOLLOWING_COUNT,
+} from '@/graphql/queries';
+import { FOLLOW_USER, UNFOLLOW_USER } from '@/graphql/mutations';
+
+export function useFollowers(userId: string) {
+  const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWERS, {
+    variables: { userId },
+    skip: !userId,
+  });
+  return { followers: data?.followers ?? [], loading, error, refetch };
+}
+
+export function useFollowing(userId: string) {
+  const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWING, {
+    variables: { userId },
+    skip: !userId,
+  });
+  return { following: data?.following ?? [], loading, error, refetch };
+}
+
+export function useIsFollowing(userId: string) {
+  const { data, loading } = useQuery<any>(IS_FOLLOWING, {
+    variables: { userId },
+    skip: !userId,
+  });
+  return { isFollowing: data?.isFollowing ?? false, loading };
+}
+
+export function useFollowersCount(userId: string) {
+  const { data, loading } = useQuery<any>(FOLLOWERS_COUNT, {
+    variables: { userId },
+    skip: !userId,
+  });
+  return { count: data?.followersCount ?? 0, loading };
+}
+
+export function useFollowingCount(userId: string) {
+  const { data, loading } = useQuery<any>(FOLLOWING_COUNT, {
+    variables: { userId },
+    skip: !userId,
+  });
+  return { count: data?.followingCount ?? 0, loading };
+}
+
+export function useFollowToggle() {
+  const [followMut] = useMutation(FOLLOW_USER);
+  const [unfollowMut] = useMutation(UNFOLLOW_USER);
+
+  const follow = (userId: string) =>
+    followMut({
+      variables: { userId },
+      refetchQueries: [
+        { query: GET_FOLLOWERS, variables: { userId } },
+        { query: FOLLOWERS_COUNT, variables: { userId } },
+      ],
+    });
+
+  const unfollow = (userId: string) =>
+    unfollowMut({
+      variables: { userId },
+      refetchQueries: [
+        { query: GET_FOLLOWERS, variables: { userId } },
+        { query: FOLLOWERS_COUNT, variables: { userId } },
+      ],
+    });
+
+  return { follow, unfollow };
+}

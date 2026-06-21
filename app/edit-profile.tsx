@@ -25,8 +25,9 @@ import {
   FileText,
   Image as ImageIcon,
 } from 'lucide-react-native';
-import { colors } from '@/constants/theme';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
+import Skeleton from '@/components/Skeleton';
 
 interface FormState {
   name: string;
@@ -42,6 +43,8 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile, loading, update } = useProfile();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   const [form, setForm] = useState<FormState>({
     name: '',
@@ -109,8 +112,22 @@ export default function EditProfileScreen() {
 
   if (loading || !profile) {
     return (
-      <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={styles.root}>
+        <Skeleton style={{ height: 160, borderRadius: 0 }} />
+        <View style={{ paddingHorizontal: 16, marginTop: -44 }}>
+          <Skeleton
+            style={{
+              width: 88,
+              height: 88,
+              borderRadius: 44,
+              borderWidth: 3,
+              borderColor: colors.surface,
+            }}
+          />
+          <Skeleton style={{ height: 48, borderRadius: 12, marginTop: 24 }} />
+          <Skeleton style={{ height: 48, borderRadius: 12, marginTop: 14 }} />
+          <Skeleton style={{ height: 96, borderRadius: 12, marginTop: 14 }} />
+        </View>
       </View>
     );
   }
@@ -240,31 +257,6 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Imágenes</Text>
-          <Text style={styles.sectionHelper}>
-            Usa una URL de imagen pública (Pexels, Unsplash, etc.).
-          </Text>
-
-          <Field
-            icon={ImageIcon}
-            label="URL de la foto de perfil"
-            value={form.avatar_url}
-            onChangeText={(v) => update_({ avatar_url: v })}
-            placeholder="https://..."
-            autoCapitalize="none"
-          />
-
-          <Field
-            icon={ImageIcon}
-            label="URL de la portada"
-            value={form.cover_url}
-            onChangeText={(v) => update_({ cover_url: v })}
-            placeholder="https://..."
-            autoCapitalize="none"
-          />
-        </View>
-
         <TouchableOpacity
           style={[styles.bigSaveBtn, saving && { opacity: 0.6 }]}
           onPress={onSave}
@@ -300,6 +292,8 @@ function Field({
   keyboardType = 'default',
   autoCapitalize = 'sentences',
 }: FieldProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
@@ -319,7 +313,8 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.surface,

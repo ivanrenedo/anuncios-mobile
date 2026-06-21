@@ -1,227 +1,273 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
+  ActivityIndicator,
   StyleSheet,
+  Animated,
+  Dimensions,
 } from 'react-native';
-import { Heart } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { colors } from '@/constants/theme';
+import { Plus, Sparkles, Clock } from 'lucide-react-native';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import ProductCard, { ProductCardItem, ProductCardSkeleton } from '@/components/ProductCard';
+import { useProducts } from '@/hooks/useProducts';
+import { API_URL } from '@/lib/config';
 
-const items = [
-  {
-    id: '1',
-    title: 'Smart TV 55" 4K',
-    price: '320.000 XAF',
-    location: 'Malabo',
-    seller: 'Antonio M.',
-    image:
-      'https://images.pexels.com/photos/1201996/pexels-photo-1201996.jpeg?auto=compress&cs=tinysrgb&w=400',
-    avatar:
-      'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=80',
-  },
-  {
-    id: '2',
-    title: 'MacBook Air M2',
-    price: '850.000 XAF',
-    location: 'Bata',
-    seller: 'Estela N.',
-    image:
-      'https://images.pexels.com/photos/812264/pexels-photo-812264.jpeg?auto=compress&cs=tinysrgb&w=400',
-    avatar:
-      'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=80',
-  },
-  {
-    id: '3',
-    title: 'iPhone 15 Pro',
-    price: '750.000 XAF',
-    location: 'Malabo',
-    seller: 'Carlos E.',
-    image:
-      'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=400',
-    avatar:
-      'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=80',
-  },
-  {
-    id: '4',
-    title: 'Cámara Sony Alpha',
-    price: '540.000 XAF',
-    location: 'Ebibeyin',
-    seller: 'Lucía B.',
-    image:
-      'https://images.pexels.com/photos/243757/pexels-photo-243757.jpeg?auto=compress&cs=tinysrgb&w=400',
-    avatar:
-      'https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=80',
-  },
-];
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function RecentlyUploaded({ onLoadMore }: { onLoadMore?: () => void }) {
+function toCardItem(p: any): ProductCardItem {
+  const img = p.images?.[0]?.url || '';
+  return {
+    id: p.id,
+    title: p.title,
+    price: `${Number(p.price).toLocaleString('es')} XAF`,
+    location: p.city,
+    seller: p.seller?.name,
+    avatar: p.seller?.avatarUrl,
+    verified: p.seller?.verified,
+    image: img.startsWith('/') ? `${API_URL}${img}` : img,
+    condition: p.condition,
+  };
+}
+
+const TABS = [
+  { key: 'forYou', label: 'Para ti', icon: Sparkles },
+  { key: 'recent', label: 'Novedades', icon: Clock },
+] as const;
+
+type TabKey = (typeof TABS)[number]['key'];
+
+const PAGE_SIZE = 4;
+const TAB_WIDTH = (SCREEN_WIDTH - 32 - 8) / 2;
+
+export default function RecentlyUploaded() {
   const router = useRouter();
   const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<TabKey>('forYou');
+  const [countForYou, setCountForYou] = useState(PAGE_SIZE);
+  const [countRecent, setCountRecent] = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
-  const toggleLike = (id: string) => {
-    setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
+  const { products: allProducts, loading } = useProducts(20);
+
+  const forYouItems = useMemo(() => allProducts.map(toCardItem), [allProducts]);
+  const recentItems = useMemo(
+    () => [...allProducts].sort((a: any, b: any) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    ).map(toCardItem),
+    [allProducts]
+  );
+
+  const indicatorAnim = useRef(new Animated.Value(0)).current;
+
+  const switchTab = (tab: TabKey) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    Animated.spring(indicatorAnim, {
+      toValue: tab === 'forYou' ? 0 : 1,
+      damping: 20,
+      stiffness: 260,
+      useNativeDriver: true,
+    }).start();
   };
 
-  const pairs: (typeof items[0])[][] = [];
-  for (let i = 0; i < items.length; i += 2) {
-    pairs.push(items.slice(i, i + 2));
+  const toggleLike = (id: string) =>
+    setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const pool = activeTab === 'forYou' ? forYouItems : recentItems;
+  const count = activeTab === 'forYou' ? countForYou : countRecent;
+  const setCount = activeTab === 'forYou' ? setCountForYou : setCountRecent;
+
+  const visible = pool.slice(0, count);
+  const hasMore = count < pool.length;
+
+  const pairs = useMemo(() => {
+    const out: ProductCardItem[][] = [];
+    for (let i = 0; i < visible.length; i += 2) out.push(visible.slice(i, i + 2));
+    return out;
+  }, [visible]);
+
+  const loadMore = () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    setTimeout(() => {
+      setCount((c: number) => Math.min(c + PAGE_SIZE, pool.length));
+      setLoadingMore(false);
+    }, 300);
+  };
+
+  const indicatorTranslate = indicatorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, TAB_WIDTH + 8],
+  });
+
+  if (loading && allProducts.length === 0) {
+    return (
+      <View style={styles.section}>
+        {[0, 1, 2].map((row) => (
+          <View key={row} style={styles.row}>
+            <ProductCardSkeleton />
+            <ProductCardSkeleton />
+          </View>
+        ))}
+      </View>
+    );
   }
+
+  if (pool.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Subidos recientemente</Text>
-      </View>
-      {pairs.map((pair, rowIdx) => (
-        <View key={rowIdx} style={styles.row}>
-          {pair.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.92} onPress={() => router.push('/product')}>
-              <View style={styles.imageWrap}>
-                <Image source={{ uri: item.image }} style={styles.image} />
-                <TouchableOpacity
-                  style={styles.heartBtn}
-                  onPress={() => toggleLike(item.id)}
-                  activeOpacity={0.85}>
-                  <Heart
-                    size={18}
-                    color="#ffffff"
-                    fill={liked[item.id] ? '#ffffff' : 'transparent'}
-                    strokeWidth={1.5}
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.info}>
-                <Text style={styles.productTitle} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={styles.price}>{item.price}</Text>
-                <Text style={styles.location}>{item.location}</Text>
-                <View style={styles.sellerRow}>
-                  <Image source={{ uri: item.avatar }} style={styles.avatar} />
-                  <Text style={styles.sellerName} numberOfLines={1}>
-                    {item.seller}
-                  </Text>
-                </View>
-              </View>
+      <View style={styles.tabBar}>
+        <Animated.View
+          style={[
+            styles.tabIndicator,
+            { width: TAB_WIDTH, transform: [{ translateX: indicatorTranslate }] },
+          ]}
+        />
+        {TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          const Icon = tab.icon;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.tab}
+              activeOpacity={0.7}
+              onPress={() => switchTab(tab.key)}>
+              <Icon
+                size={15}
+                color={active ? colors.primary : colors.onSurfaceVariant}
+                strokeWidth={active ? 2.2 : 1.8}
+              />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {pairs.map((pair, rowIdx) => (
+        <View key={`${activeTab}-${rowIdx}`} style={styles.row}>
+          {pair.map((item) => (
+            <ProductCard
+              key={item.id}
+              item={item}
+              liked={!!liked[item.id]}
+              onLike={() => toggleLike(item.id)}
+              onPress={() =>
+                router.push({ pathname: '/product/[id]', params: { id: item.id } })
+              }
+            />
           ))}
+          {pair.length === 1 && <View style={styles.placeholder} />}
         </View>
       ))}
-      <TouchableOpacity style={styles.loadMore} onPress={onLoadMore} activeOpacity={0.85}>
-        <Text style={styles.loadMoreText}>Cargar más</Text>
-      </TouchableOpacity>
+
+      {hasMore ? (
+        <TouchableOpacity
+          style={styles.loadMore}
+          onPress={loadMore}
+          activeOpacity={0.85}
+          disabled={loadingMore}
+          accessibilityRole="button"
+          accessibilityLabel="Cargar más productos">
+          {loadingMore ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <>
+              <Plus size={16} color={colors.primary} strokeWidth={2} />
+              <Text style={styles.loadMoreText}>Cargar más</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      ) : visible.length > 0 ? (
+        <Text style={styles.endText}>Has visto todos los productos</Text>
+      ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   section: {
     paddingHorizontal: 16,
     marginBottom: 32,
   },
-  header: {
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 14,
+    padding: 4,
     marginBottom: 16,
+    position: 'relative' as const,
+    gap: 8,
   },
-  title: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 17,
-    color: colors.onSurface,
-    lineHeight: 22,
+  tabIndicator: {
+    position: 'absolute' as const,
+    top: 4,
+    left: 4,
+    bottom: 4,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: 10,
+    gap: 6,
+    zIndex: 1,
+  },
+  tabLabel: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: colors.onSurfaceVariant,
+  },
+  tabLabelActive: {
+    fontFamily: 'Manrope-Bold',
+    color: colors.primary,
   },
   row: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
     marginBottom: 16,
   },
-  card: {
-    flex: 1,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '4d',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 3,
-  },
-  imageWrap: {
-    height: 176,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  info: {
-    padding: 12,
-    flex: 1,
-  },
-  productTitle: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 15,
-    color: colors.onSurface,
-    lineHeight: 20,
-  },
-  price: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 17,
-    color: colors.primary,
-    lineHeight: 22,
-    marginTop: 4,
-  },
-  location: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 10,
-    color: colors.onSurfaceVariant + '99',
-    lineHeight: 14,
-  },
-  sellerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.outlineVariant + '33',
-  },
-  avatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  sellerName: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 11,
-    color: colors.onSurfaceVariant,
+  placeholder: {
     flex: 1,
   },
   loadMore: {
-    marginTop: 16,
+    marginTop: 4,
+    height: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: colors.surfaceContainerLow,
-    paddingVertical: 12,
-    paddingHorizontal: 48,
     borderRadius: 12,
-    alignSelf: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '4d',
   },
   loadMoreText: {
     fontFamily: 'Manrope-SemiBold',
     fontSize: 15,
-    color: colors.onSurfaceVariant,
+    color: colors.primary,
+  },
+  endText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 13,
+    color: colors.onSurfaceVariant + '99',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

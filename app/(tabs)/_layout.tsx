@@ -1,9 +1,11 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
-import { Home, Heart, Plus, Search, User, Compass } from 'lucide-react-native';
-import { colors } from '@/constants/theme';
+import { Home, Heart, Plus, LayoutGrid, User } from 'lucide-react-native';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 
 export default function TabLayout() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Tabs
       screenOptions={{
@@ -28,19 +30,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="categories"
         options={{
-          title: 'Explorar',
+          title: 'Categorías',
           tabBarIcon: ({ color, size, focused }) => (
-            <Search
+            <LayoutGrid
               size={size}
               color={color}
-              fill={focused ? color : 'transparent'}
-              strokeWidth={focused ? 1 : 1.5}
+              strokeWidth={focused ? 2.2 : 1.5}
             />
           ),
         }}
       />
+      {/* Explore stays as a route (search target) but hidden from the tab bar */}
+      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen
         name="post"
         options={{
@@ -80,14 +83,13 @@ export default function TabLayout() {
             />
           ),
         }}
-      /><Tabs.Screen
-        name="safety"
-        options={{ title: 'Seguridad', href: null }} />
+      />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   tabBar: {
     backgroundColor: colors.surface + 'cc',
     borderTopWidth: 0.5,

@@ -7,7 +7,10 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  ActivityIndicator,
+  Modal,
+  Pressable,
+  TouchableOpacity,
+  Share,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -16,7 +19,6 @@ import {
   Star,
   MapPin,
   ChevronRight,
-  Heart,
   BadgeCheck,
   Share2,
   Bell,
@@ -29,40 +31,50 @@ import {
   TrendingUp,
   Award,
   Zap,
+  Trash2,
+  ShieldCheck,
+  FileText,
+  Users,
+  User,
+  UserPlus,
+  UserCheck,
+  LogIn,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/theme';
+import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
+import ProductCard from '@/components/ProductCard';
+import Skeleton from '@/components/Skeleton';
+import SettingsModal, { Row, Section } from '@/components/SettingsModal';
 import { useProfile } from '@/hooks/useProfile';
+import { useAuth } from '@/hooks/useAuth';
+import { useProductsBySeller } from '@/hooks/useProducts';
+import { useReviewsBySeller, useSellerRating } from '@/hooks/useReviews';
+import { useFollowers, useFollowersCount, useFollowingCount } from '@/hooks/useFollowers';
+import { API_URL } from '@/lib/config';
+import CenterSafetyModal from '@/components/CenterSafetyModal';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
 
-const TABS = ['Activos', 'Vendidos', 'Valoraciones'] as const;
+const TABS = ['Anuncios', 'Valoraciones', 'Seguidores'] as const;
 
-const listings = [
-  { id: '1', title: 'Smart TV 55" 4K', price: '320.000 XAF', location: 'Malabo', status: 'active', image: 'https://images.pexels.com/photos/1201996/pexels-photo-1201996.jpeg?auto=compress&cs=tinysrgb&w=400' },
-  { id: '2', title: 'MacBook Air M2', price: '850.000 XAF', location: 'Malabo', status: 'active', image: 'https://images.pexels.com/photos/812264/pexels-photo-812264.jpeg?auto=compress&cs=tinysrgb&w=400' },
-  { id: '3', title: 'iPhone 15 Pro', price: '750.000 XAF', location: 'Malabo', status: 'sold', image: 'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=400' },
-  { id: '4', title: 'Cámara Sony Alpha', price: '540.000 XAF', location: 'Malabo', status: 'sold', image: 'https://images.pexels.com/photos/243757/pexels-photo-243757.jpeg?auto=compress&cs=tinysrgb&w=400' },
-  { id: '5', title: 'Nike Air Zoom', price: '45.000 XAF', location: 'Bata', status: 'active', image: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=400' },
-  { id: '6', title: 'Reloj Minimal', price: '12.500 XAF', location: 'Bata', status: 'sold', image: 'https://images.pexels.com/photos/190819/pexels-photo-190819.jpeg?auto=compress&cs=tinysrgb&w=400' },
-];
-
-const reviews = [
-  { id: '1', author: 'Estela N.', avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=80', rating: 5, text: 'Vendedor muy serio y puntual. El producto llegó tal como se describía. ¡Repetiremos!', date: 'hace 3 días' },
-  { id: '2', author: 'Carlos E.', avatar: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=80', rating: 5, text: 'Excelente transacción. Muy recomendable, trato amable y precio justo.', date: 'hace 1 semana' },
-  { id: '3', author: 'Lucía B.', avatar: 'https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=80', rating: 4, text: 'Todo bien aunque tardó un poco en responder. El artículo estaba en perfectas condiciones.', date: 'hace 2 semanas' },
-];
-
-const achievements = [
-  { Icon: Award, label: 'Top vendedor', color: colors.tertiary, bg: colors.tertiary + '15' },
-  { Icon: Zap, label: 'Respuesta rápida', color: colors.secondary, bg: colors.secondary + '15' },
-  { Icon: TrendingUp, label: 'En racha', color: colors.primary, bg: colors.primary + '15' },
-];
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `hace ${days} días`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `hace ${weeks} semanas`;
+  const months = Math.floor(days / 30);
+  return `hace ${months} meses`;
+}
 
 function StarRating({ rating }: { rating: number }) {
+  const { colors } = useTheme();
   return (
     <View style={{ flexDirection: 'row', gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
@@ -82,18 +94,71 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile, loading } = useProfile();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { isAuthenticated, signOut, user } = useAuth();
+  const userId = user?.id || profile?.id || '';
+  const { products: myProducts } = useProductsBySeller(userId);
+  const { reviews: myReviews } = useReviewsBySeller(userId);
+  const { average: avgRating, count: ratingCount } = useSellerRating(userId);
+  const { followers: myFollowers } = useFollowers(userId);
+  const { count: followersCountNum } = useFollowersCount(userId);
+  const { count: followingCountNum } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [followingBack, setFollowingBack] = useState<Record<string, boolean>>({});
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'logout' | 'delete' | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const toggleLike = (id: string) => setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleFollow = (id: string) =>
+    setFollowingBack((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const activeListing = listings.filter((l) => l.status === 'active');
-  const soldListing = listings.filter((l) => l.status === 'sold');
-  const tabData = [activeListing, soldListing, reviews];
+  const onShareProfile = async () => {
+    try {
+      await Share.share({
+        title: 'Market EG',
+        message: `Mira el perfil de ${profile?.name ?? 'este vendedor'} en Market EG.`,
+      });
+    } catch {
+      // user dismissed / share unavailable
+    }
+  };
 
-  const renderPairs = (items: typeof listings) => {
-    const pairs: (typeof listings[0])[][] = [];
+  const productItems = myProducts.map((p: any) => {
+    const img = p.images?.[0]?.url || '';
+    return {
+      id: p.id,
+      title: p.title,
+      price: `${Number(p.price).toLocaleString('es')} XAF`,
+      location: p.city || '',
+      status: p.status || 'active',
+      image: img.startsWith('/') ? `${API_URL}${img}` : img,
+    };
+  });
+
+  const reviewItems = myReviews.map((r: any) => ({
+    id: r.id,
+    author: r.author?.name || '',
+    avatar: r.author?.avatarUrl || '',
+    rating: r.rating,
+    text: r.text || '',
+    date: r.createdAt ? timeAgo(r.createdAt) : '',
+  }));
+
+  const followerItems = myFollowers.map((f: any) => ({
+    id: f.id,
+    name: f.follower?.name || '',
+    avatar: f.follower?.avatarUrl || '',
+    verified: f.follower?.verified ?? false,
+    location: f.follower?.location || '',
+    since: f.createdAt ? timeAgo(f.createdAt) : '',
+  }));
+
+  const renderPairs = (items: any[]) => {
+    const pairs: any[][] = [];
     for (let i = 0; i < items.length; i += 2) pairs.push(items.slice(i, i + 2));
     return pairs;
   };
@@ -116,10 +181,54 @@ export default function ProfileScreen() {
     extrapolateRight: 'clamp',
   });
 
-  if (loading || !profile) {
+  if (!isAuthenticated) {
     return (
       <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={colors.primary} />
+        <View style={styles.authGate}>
+          <View style={styles.authIconWrap}>
+            <User size={48} color={colors.primary} strokeWidth={1.2} />
+          </View>
+          <Text style={styles.authTitle}>Tu perfil</Text>
+          <Text style={styles.authDesc}>
+            Inicia sesión para ver tu perfil, gestionar tus anuncios y conectar con compradores.
+          </Text>
+          <RipplePress
+            style={styles.authBtn}
+            borderRadius={14}
+            rippleColor="rgba(255,255,255,0.25)"
+            onPress={() => router.push('/login')}>
+            <LogIn size={18} color="#ffffff" strokeWidth={2} />
+            <Text style={styles.authBtnText}>Iniciar sesión</Text>
+          </RipplePress>
+        </View>
+      </View>
+    );
+  }
+
+  if (loading || !profile) {
+    return (
+      <View style={styles.root}>
+        <Skeleton style={{ height: COVER_HEIGHT, borderRadius: 0 }} />
+        <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ marginTop: -(AVATAR_SIZE / 2) }}>
+            <Skeleton
+              style={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                borderRadius: AVATAR_SIZE / 2,
+                borderWidth: 4,
+                borderColor: colors.surface,
+              }}
+            />
+          </View>
+          <Skeleton style={{ height: 24, width: '55%', borderRadius: 8, marginTop: 14 }} />
+          <Skeleton style={{ height: 14, width: '40%', borderRadius: 6, marginTop: 10 }} />
+          <Skeleton style={{ height: 64, borderRadius: 16, marginTop: 22 }} />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 22 }}>
+            <Skeleton style={{ flex: 1, height: 150, borderRadius: 16 }} />
+            <Skeleton style={{ flex: 1, height: 150, borderRadius: 16 }} />
+          </View>
+        </View>
       </View>
     );
   }
@@ -169,14 +278,7 @@ export default function ProfileScreen() {
               style={styles.topBarBtn}
               borderRadius={18}
               rippleColor="rgba(255,255,255,0.2)"
-              onPress={() => router.push('/edit-profile')}>
-              <Pencil size={18} color="#ffffff" strokeWidth={1.8} />
-            </RipplePress>
-            <RipplePress
-              style={styles.topBarBtn}
-              borderRadius={18}
-              rippleColor="rgba(255,255,255,0.2)"
-              onPress={() => router.push('/settings')}>
+              onPress={() => setSettingsOpen(true)}>
               <Settings size={20} color="#ffffff" strokeWidth={1.5} />
             </RipplePress>
           </View>
@@ -202,7 +304,9 @@ export default function ProfileScreen() {
             <RipplePress
               style={styles.shareBtn}
               borderRadius={20}
-              rippleColor={colors.primary + '18'}>
+              rippleColor={colors.primary + '18'}
+              accessibilityLabel="Compartir perfil"
+              onPress={onShareProfile}>
               <Share2 size={16} color={colors.primary} strokeWidth={1.7} />
             </RipplePress>
           </View>
@@ -226,26 +330,13 @@ export default function ProfileScreen() {
           {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
         </View>
 
-        {/* Achievements */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.badgesRow}>
-          {achievements.map(({ Icon, label, color, bg }) => (
-            <View key={label} style={[styles.achBadge, { backgroundColor: bg }]}>
-              <Icon size={13} color={color} strokeWidth={2} />
-              <Text style={[styles.achText, { color }]}>{label}</Text>
-            </View>
-          ))}
-        </ScrollView>
-
         {/* Stats */}
         <View style={styles.statsRow}>
           {[
-            { value: '12', label: 'Anuncios' },
-            { value: '4.9', label: 'Valoración' },
-            { value: '48', label: 'Ventas' },
-            { value: '136', label: 'Seguidores' },
+            { value: String(myProducts.length), label: 'Anuncios' },
+            { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración' },
+            { value: String(followersCountNum), label: 'Seguidores' },
+            { value: String(followingCountNum), label: 'Siguiendo' },
           ].map(({ value, label }, i, arr) => (
             <View
               key={label}
@@ -268,216 +359,255 @@ export default function ProfileScreen() {
               <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>
                 {tab}
               </Text>
-              {i === 0 && (
-                <View style={styles.tabBadge}>
-                  <Text style={styles.tabBadgeText}>{activeListing.length}</Text>
-                </View>
-              )}
             </RipplePress>
           ))}
         </View>
 
         {/* Tab content */}
-        {activeTab < 2 ? (
+        {activeTab === 0 ? (
           <View style={styles.grid}>
-            {renderPairs(tabData[activeTab] as typeof listings).map((pair, rowIdx) => (
+            {renderPairs(productItems).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
-                {pair.map((item) => (
-                  <RipplePress
+                {pair.map((item: any) => (
+                  <ProductCard
                     key={item.id}
-                    style={styles.card}
-                    borderRadius={16}
-                    rippleColor={colors.primary + '12'}
-                    onPress={() => router.push('/product')}>
-                    <View style={styles.cardImageWrap}>
-                      <Image source={{ uri: item.image }} style={styles.cardImage} />
-                      {item.status === 'sold' && (
-                        <View style={styles.soldOverlay}>
-                          <View style={styles.soldBadge}>
-                            <Text style={styles.soldBadgeText}>Vendido</Text>
-                          </View>
-                        </View>
-                      )}
-                      <RipplePress
-                        style={styles.heartBtn}
-                        onPress={() => toggleLike(item.id)}
-                        borderRadius={14}
-                        rippleColor="rgba(255,255,255,0.25)">
-                        <Heart
-                          size={16}
-                          color="#ffffff"
-                          fill={liked[item.id] ? '#ffffff' : 'transparent'}
-                          strokeWidth={1.5}
-                        />
-                      </RipplePress>
-                    </View>
-                    <View style={styles.cardInfo}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.cardPrice}>{item.price}</Text>
-                      <View style={styles.cardLocation}>
-                        <MapPin size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-                        <Text style={styles.cardLocationText}>{item.location}</Text>
-                      </View>
-                    </View>
-                  </RipplePress>
+                    item={item}
+                    liked={!!liked[item.id]}
+                    onLike={() => toggleLike(item.id)}
+                    onPress={() =>
+                      router.push({ pathname: '/product/[id]', params: { id: item.id } })
+                    }
+                    sold={item.status === 'sold'}
+                  />
                 ))}
                 {pair.length === 1 && <View style={styles.cardPlaceholder} />}
               </View>
             ))}
-            {(tabData[activeTab] as typeof listings).length === 0 && (
+            {productItems.length === 0 && (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
                 <Text style={styles.emptyText}>Sin anuncios en esta sección</Text>
               </View>
             )}
           </View>
-        ) : (
+        ) : activeTab === 1 ? (
           <View style={styles.reviewsList}>
             <View style={styles.ratingHeader}>
-              <Text style={styles.ratingValue}>4.9</Text>
+              <Text style={styles.ratingValue}>{avgRating > 0 ? avgRating.toFixed(1) : '-'}</Text>
               <View>
-                <StarRating rating={5} />
-                <Text style={styles.ratingMeta}>Basado en {reviews.length} valoraciones</Text>
+                <StarRating rating={Math.round(avgRating)} />
+                <Text style={styles.ratingMeta}>Basado en {ratingCount} valoraciones</Text>
               </View>
             </View>
-            {(tabData[2] as typeof reviews).map((rev) => (
-              <View key={rev.id} style={styles.reviewCard}>
-                <View style={styles.reviewHeader}>
-                  <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewAuthor}>{rev.author}</Text>
-                    <StarRating rating={rev.rating} />
-                  </View>
-                  <Text style={styles.reviewDate}>{rev.date}</Text>
-                </View>
-                <Text style={styles.reviewText}>{rev.text}</Text>
+            {reviewItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Star size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>Aún no tienes valoraciones</Text>
               </View>
-            ))}
+            ) : (
+              reviewItems.map((rev: any) => (
+                <View key={rev.id} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reviewAuthor}>{rev.author}</Text>
+                      <StarRating rating={rev.rating} />
+                    </View>
+                    <Text style={styles.reviewDate}>{rev.date}</Text>
+                  </View>
+                  <Text style={styles.reviewText}>{rev.text}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        ) : (
+          <View style={styles.followersList}>
+            <View style={styles.followersHeader}>
+              <View style={styles.followersIconWrap}>
+                <Users size={20} color={colors.primary} strokeWidth={1.8} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.followersTitle}>{followersCountNum} seguidores</Text>
+                <Text style={styles.followersMeta}>Personas que confían en este perfil</Text>
+              </View>
+            </View>
+            {followerItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Users size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>Aún no tienes seguidores</Text>
+              </View>
+            ) : (
+              <View style={styles.followersCard}>
+                {followerItems.map((f: any, i: number) => {
+                  const isFollowing = !!followingBack[f.id];
+                  const last = i === followerItems.length - 1;
+                  return (
+                    <View
+                      key={f.id}
+                      style={[styles.followerRow, !last && styles.followerRowBorder]}>
+                      <View style={styles.followerAvatarWrap}>
+                        <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
+                        {f.verified && (
+                          <View style={styles.followerVerified}>
+                            <BadgeCheck
+                              size={12}
+                              color="#ffffff"
+                              fill={colors.primary}
+                              strokeWidth={0}
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.followerInfo}>
+                        <Text style={styles.followerName} numberOfLines={1}>
+                          {f.name}
+                        </Text>
+                        <View style={styles.followerMetaRow}>
+                          <MapPin
+                            size={10}
+                            color={colors.onSurfaceVariant + '99'}
+                            strokeWidth={1.5}
+                          />
+                          <Text style={styles.followerMeta} numberOfLines={1}>
+                            {f.location} · {f.since}
+                          </Text>
+                        </View>
+                      </View>
+                      <RipplePress
+                        style={[
+                          styles.followBtn,
+                          isFollowing && styles.followBtnActive,
+                        ]}
+                        borderRadius={999}
+                        rippleColor={
+                          isFollowing
+                            ? colors.outlineVariant + '55'
+                            : 'rgba(255,255,255,0.25)'
+                        }
+                        onPress={() => toggleFollow(f.id)}>
+                        {isFollowing ? (
+                          <>
+                            <UserCheck
+                              size={14}
+                              color={colors.onSurface}
+                              strokeWidth={1.8}
+                            />
+                            <Text style={styles.followBtnTextActive}>Siguiendo</Text>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
+                            <Text style={styles.followBtnText}>Seguir</Text>
+                          </>
+                        )}
+                      </RipplePress>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
+        {/* Support */}
+        <Section title="Soporte y legal">
+          <Row icon={ShieldCheck} label="Centro de seguridad" onPress={() => setcenterSafetyOpen(true)} />
+          <Row icon={HelpCircle} label="Centro de ayuda" onPress={() => {}} />
+          <Row icon={FileText} label="Términos y condiciones" onPress={() => {}} />
+          <Row icon={Lock} label="Política de privacidad" onPress={() => {}} last />
+        </Section>
 
-        {/* Quick actions */}
-        <View style={styles.menuSection}>
-          <Text style={styles.menuGroupTitle}>Cuenta</Text>
-          <View style={styles.menuCard}>
-            <RipplePress
-              style={[styles.menuRow, styles.menuRowBorder]}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}
-              onPress={() => setActiveTab(0)}>
-              <View style={styles.menuIconWrap}>
-                <Tag size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Mis anuncios</Text>
-              <View style={styles.menuBadge}>
-                <Text style={styles.menuBadgeText}>{activeListing.length}</Text>
-              </View>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-            <RipplePress
-              style={[styles.menuRow, styles.menuRowBorder]}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}
-              onPress={() => setActiveTab(1)}>
-              <View style={styles.menuIconWrap}>
-                <Package size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Historial de ventas</Text>
-              <View style={styles.menuBadge}>
-                <Text style={styles.menuBadgeText}>{soldListing.length}</Text>
-              </View>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-            <RipplePress
-              style={styles.menuRow}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}
-              onPress={() => router.push('/settings')}>
-              <View style={styles.menuIconWrap}>
-                <Bell size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Notificaciones</Text>
-              {profile.notif_messages || profile.notif_offers ? (
-                <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
-              ) : (
-                <View style={[styles.statusDot, { backgroundColor: colors.outlineVariant }]} />
-              )}
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-          </View>
-
-          <Text style={styles.menuGroupTitle}>Seguridad</Text>
-          <View style={styles.menuCard}>
-            <RipplePress
-              style={[styles.menuRow, styles.menuRowBorder]}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}
-              onPress={() => router.push('/settings')}>
-              <View style={styles.menuIconWrap}>
-                <Lock size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Privacidad y seguridad</Text>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-            <RipplePress
-              style={styles.menuRow}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}>
-              <View style={styles.menuIconWrap}>
-                <BadgeCheck size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Verificar identidad</Text>
-              <View style={styles.checkChip}>
-                <Text style={styles.checkChipText}>Hecho</Text>
-              </View>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-          </View>
-
-          <Text style={styles.menuGroupTitle}>Soporte</Text>
-          <View style={styles.menuCard}>
-            <RipplePress
-              style={[styles.menuRow, styles.menuRowBorder]}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}>
-              <View style={styles.menuIconWrap}>
-                <HelpCircle size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Centro de ayuda</Text>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-            <RipplePress
-              style={[styles.menuRow, styles.menuRowBorder]}
-              borderRadius={0}
-              rippleColor={colors.primary + '12'}>
-              <View style={styles.menuIconWrap}>
-                <Share2 size={18} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <Text style={styles.menuLabel}>Compartir perfil</Text>
-              <ChevronRight size={16} color={colors.outlineVariant} strokeWidth={1.5} />
-            </RipplePress>
-            <RipplePress
-              style={styles.menuRow}
-              borderRadius={0}
-              rippleColor={colors.error + '12'}
-              onPress={() => router.push('/settings')}>
-              <View style={[styles.menuIconWrap, styles.menuIconWrapDanger]}>
-                <LogOut size={18} color={colors.error} strokeWidth={1.5} />
-              </View>
-              <Text style={[styles.menuLabel, styles.menuLabelDanger]}>Cerrar sesión</Text>
-            </RipplePress>
-          </View>
-        </View>
+        {/* Danger zone */}
+        <Section title="Cuenta" danger>
+          <Row
+            icon={LogOut}
+            label="Cerrar sesión"
+            danger
+            onPress={() => setConfirmAction('logout')}
+          />
+          <Row
+            icon={Trash2}
+            label="Eliminar cuenta"
+            danger
+            onPress={() => setConfirmAction('delete')}
+            last
+          />
+        </Section>
 
         <Text style={styles.version}>Market EG · v1.0.0</Text>
       </Animated.ScrollView>
+
+      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CenterSafetyModal
+        visible={centerSafetyOpen}
+        onClose={() => setcenterSafetyOpen(false)}
+      />
+      {/* Confirmation modal */}
+      <Modal
+        transparent
+        visible={confirmAction !== null}
+        animationType="fade"
+        onRequestClose={() => setConfirmAction(null)}
+        statusBarTranslucent>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setConfirmAction(null)}>
+          <Pressable style={styles.confirmCard}>
+            <View
+              style={[
+                styles.confirmIcon,
+                {
+                  backgroundColor:
+                    confirmAction === 'delete'
+                      ? colors.error + '15'
+                      : colors.tertiary + '15',
+                },
+              ]}>
+              {confirmAction === 'delete' ? (
+                <Trash2 size={26} color={colors.error} strokeWidth={1.5} />
+              ) : (
+                <LogOut size={26} color={colors.tertiary} strokeWidth={1.5} />
+              )}
+            </View>
+            <Text style={styles.confirmTitle}>
+              {confirmAction === 'delete' ? 'Eliminar cuenta' : 'Cerrar sesión'}
+            </Text>
+            <Text style={styles.confirmDesc}>
+              {confirmAction === 'delete'
+                ? 'Esta acción no se puede deshacer. Se eliminarán todos tus anuncios y mensajes.'
+                : 'Cerraremos tu sesión en este dispositivo. Podrás volver a entrar cuando quieras.'}
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancel}
+                onPress={() => setConfirmAction(null)}
+                activeOpacity={0.8}>
+                <Text style={styles.confirmCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.confirmAction,
+                  {
+                    backgroundColor:
+                      confirmAction === 'delete' ? colors.error : colors.tertiary,
+                  },
+                ]}
+                onPress={() => {
+                  if (confirmAction === 'logout') signOut();
+                  setConfirmAction(null);
+                }}
+                activeOpacity={0.85}>
+                <Text style={styles.confirmActionText}>
+                  {confirmAction === 'delete' ? 'Eliminar' : 'Cerrar sesión'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -756,88 +886,10 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '4d',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    gap: 8,
   },
   cardPlaceholder: {
     flex: 1,
-  },
-  cardImageWrap: {
-    height: 140,
-    position: 'relative',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  soldOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  soldBadge: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  soldBadgeText: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 11,
-    color: colors.onSurface,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardInfo: {
-    padding: 10,
-    gap: 2,
-  },
-  cardTitle: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 13,
-    color: colors.onSurface,
-    lineHeight: 18,
-  },
-  cardPrice: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 15,
-    color: colors.primary,
-    lineHeight: 20,
-  },
-  cardLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 2,
-  },
-  cardLocationText: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 10,
-    color: colors.onSurfaceVariant + '99',
   },
   emptyState: {
     alignItems: 'center',
@@ -917,6 +969,126 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.onSurfaceVariant,
     lineHeight: 20,
+  },
+  followersList: {
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 24,
+  },
+  followersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+  },
+  followersIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followersTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 16,
+    color: colors.onSurface,
+    letterSpacing: -0.2,
+  },
+  followersMeta: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  followersCard: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+    overflow: 'hidden',
+  },
+  followerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  followerRowBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.outlineVariant + '33',
+  },
+  followerAvatarWrap: {
+    width: 44,
+    height: 44,
+    position: 'relative',
+  },
+  followerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '44',
+  },
+  followerVerified: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  followerInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  followerName: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 14,
+    color: colors.onSurface,
+  },
+  followerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  followerMeta: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 11,
+    color: colors.onSurfaceVariant + '99',
+    flexShrink: 1,
+  },
+  followBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 999,
+  },
+  followBtnActive: {
+    backgroundColor: colors.surfaceContainerHigh,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '66',
+  },
+  followBtnText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  followBtnTextActive: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: colors.onSurface,
   },
   menuSection: {
     paddingHorizontal: 16,
@@ -1007,6 +1179,122 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.outlineVariant,
     textAlign: 'center',
+    paddingTop: 22,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  confirmCard: {
+    backgroundColor: colors.surface,
+    marginHorizontal: 24,
+    marginBottom: 'auto',
+    marginTop: 'auto',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    gap: 10,
+  },
+  confirmIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  confirmTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 18,
+    color: colors.onSurface,
+  },
+  confirmDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  confirmCancel: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 14,
+    color: colors.onSurface,
+  },
+  confirmAction: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmActionText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 14,
+    color: '#ffffff',
+  },
+  authGate: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 14,
+  },
+  authIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.primary + '0f',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
+  },
+  authTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 22,
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  authDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 15,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 280,
+  },
+  authBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    marginTop: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  authBtnText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 16,
+    color: '#ffffff',
   },
 });

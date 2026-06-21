@@ -1,33 +1,62 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Building2 } from 'lucide-react-native';
-import { colors } from '@/constants/theme';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  Linking,
+} from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
+import { useThemedStyles, type ThemeColors } from '@/constants/theme';
+
+const AD = {
+  label: 'PATROCINADO',
+  title: 'Préstamos Rápidos GEPETROL',
+  desc: 'Financiación inmediata para tu negocio o vivienda con las mejores condiciones locales.',
+  cta: 'Contactar ahora',
+  image:
+    'https://images.pexels.com/photos/259027/pexels-photo-259027.jpeg?auto=compress&cs=tinysrgb&w=400',
+  phone: '+240222000111',
+};
 
 export default function SponsoredAd() {
+  const styles = useThemedStyles(makeStyles);
+  const onContact = () => {
+    Linking.openURL(`tel:${AD.phone}`).catch(() => {});
+  };
+
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      style={styles.container}
+      activeOpacity={0.92}
+      onPress={onContact}
+      accessibilityRole="button"
+      accessibilityLabel={`Anuncio patrocinado: ${AD.title}`}>
       <View style={styles.header}>
-        <Text style={styles.label}>PATROCINADO</Text>
+        <Text style={styles.label}>{AD.label}</Text>
       </View>
       <View style={styles.body}>
-        <View style={styles.iconWrap}>
-          <Building2 size={40} color="#ffffff" strokeWidth={1.5} />
-        </View>
+        <Image source={{ uri: AD.image }} style={styles.image} />
         <View style={styles.textWrap}>
-          <Text style={styles.adTitle}>Préstamos Rápidos GEPETROL</Text>
+          <Text style={styles.adTitle} numberOfLines={1}>
+            {AD.title}
+          </Text>
           <Text style={styles.adDesc} numberOfLines={2}>
-            Financiación inmediata para tu negocio o vivienda con las mejores condiciones locales.
+            {AD.desc}
           </Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.button} activeOpacity={0.9}>
-        <Text style={styles.buttonText}>Contactar ahora</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.button}>
+        <Text style={styles.buttonText}>{AD.cta}</Text>
+        <ChevronRight size={16} color="#ffffff" strokeWidth={2} />
+      </View>
+    </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     marginHorizontal: 16,
     marginBottom: 32,
@@ -54,14 +83,12 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
-  iconWrap: {
+  image: {
     width: 80,
     height: 80,
     borderRadius: 16,
-    backgroundColor: colors.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
     flexShrink: 0,
+    backgroundColor: colors.surfaceContainerHigh,
   },
   textWrap: {
     flex: 1,
@@ -84,7 +111,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     paddingVertical: 10,
     borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
   buttonText: {
     fontFamily: 'Manrope-SemiBold',

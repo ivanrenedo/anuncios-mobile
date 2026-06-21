@@ -1,0 +1,508 @@
+import { gql } from '@apollo/client';
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export const ME = gql`
+  query Me {
+    me {
+      id
+      name
+      email
+      phone
+      avatarUrl
+      coverUrl
+      bio
+      location
+      verified
+      permission
+      language
+      notifMessages
+      notifOffers
+      notifMarketing
+      showEmail
+      showPhone
+      themePreference
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+// ─── Products ────────────────────────────────────────────────────────────────
+
+export const GET_PRODUCTS = gql`
+  query Products($take: Int, $skip: Int) {
+    products(take: $take, skip: $skip) {
+      id
+      title
+      description
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+        location
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+      attributes {
+        id
+        label
+        value
+      }
+      marketplaceDetail {
+        brand
+        model
+      }
+      vehicleDetail {
+        vehicleType
+        brand
+        model
+        year
+        transmission
+        engine
+      }
+      propertyDetail {
+        operation
+        propertyType
+        bedrooms
+        bathrooms
+        address
+      }
+      serviceDetail {
+        serviceType
+        offerType
+      }
+      jobDetail {
+        jobType
+        link
+      }
+    }
+  }
+`;
+
+export const GET_PRODUCT = gql`
+  query Product($id: String!) {
+    product(id: $id) {
+      id
+      title
+      description
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+        location
+        bio
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+      attributes {
+        id
+        label
+        value
+      }
+      marketplaceDetail {
+        brand
+        model
+      }
+      vehicleDetail {
+        vehicleType
+        brand
+        model
+        year
+        transmission
+        engine
+      }
+      propertyDetail {
+        operation
+        propertyType
+        bedrooms
+        bathrooms
+        address
+      }
+      serviceDetail {
+        serviceType
+        offerType
+      }
+      jobDetail {
+        jobType
+        link
+      }
+    }
+  }
+`;
+
+export const SEARCH_PRODUCTS = gql`
+  query SearchProducts($input: SearchProductsInput!) {
+    searchProducts(input: $input) {
+      id
+      title
+      description
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+        location
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+    }
+  }
+`;
+
+export const PRODUCTS_BY_CATEGORY = gql`
+  query ProductsByCategory($categoryId: String!, $take: Int, $skip: Int) {
+    productsByCategory(categoryId: $categoryId, take: $take, skip: $skip) {
+      id
+      title
+      price
+      discount
+      condition
+      city
+      views
+      favoritesCount
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+    }
+  }
+`;
+
+export const PRODUCTS_BY_SELLER = gql`
+  query ProductsBySeller($sellerId: String!) {
+    productsBySeller(sellerId: $sellerId) {
+      id
+      title
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      createdAt
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+    }
+  }
+`;
+
+// ─── Classifications & Categories ────────────────────────────────────────────
+
+export const CATEGORY_TREE = gql`
+  query CategoryTree {
+    categoryTree {
+      id
+      slug
+      label
+      color
+      icon
+      sortOrder
+      children {
+        id
+        slug
+        label
+        color
+        icon
+        sortOrder
+        children {
+          id
+          slug
+          label
+          sortOrder
+        }
+      }
+    }
+  }
+`;
+
+export const GET_CATEGORIES = gql`
+  query Categories {
+    categories {
+      id
+      slug
+      label
+      color
+      icon
+      parentId
+      sortOrder
+    }
+  }
+`;
+
+export const CATEGORY_BY_SLUG = gql`
+  query CategoryBySlug($slug: String!) {
+    categoryBySlug(slug: $slug) {
+      id
+      slug
+      label
+      color
+      icon
+      parentId
+      sortOrder
+      children {
+        id
+        slug
+        label
+        sortOrder
+      }
+    }
+  }
+`;
+
+export const CATEGORY_CHILDREN = gql`
+  query CategoryChildren($parentId: String!) {
+    categoryChildren(parentId: $parentId) {
+      id
+      slug
+      label
+      color
+      icon
+      sortOrder
+    }
+  }
+`;
+
+// ─── Favorites ───────────────────────────────────────────────────────────────
+
+export const MY_FAVORITES = gql`
+  query MyFavorites {
+    myFavorites {
+      id
+      createdAt
+      product {
+        id
+        title
+        price
+        discount
+        condition
+        city
+        views
+        favoritesCount
+        createdAt
+        seller {
+          id
+          name
+          avatarUrl
+          verified
+        }
+        category {
+          id
+          slug
+          label
+          color
+        }
+        images {
+          id
+          url
+          sortOrder
+        }
+      }
+    }
+  }
+`;
+
+export const IS_FAVORITED = gql`
+  query IsFavorited($productId: String!) {
+    isFavorited(productId: $productId)
+  }
+`;
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+export const REVIEWS_BY_SELLER = gql`
+  query ReviewsBySeller($sellerId: String!) {
+    reviewsBySeller(sellerId: $sellerId) {
+      id
+      rating
+      text
+      createdAt
+      author {
+        id
+        name
+        avatarUrl
+      }
+    }
+  }
+`;
+
+export const SELLER_RATING = gql`
+  query SellerRating($sellerId: String!) {
+    sellerRating(sellerId: $sellerId) {
+      average
+      count
+    }
+  }
+`;
+
+// ─── Followers ───────────────────────────────────────────────────────────────
+
+export const GET_FOLLOWERS = gql`
+  query Followers($userId: String!) {
+    followers(userId: $userId) {
+      id
+      createdAt
+      follower {
+        id
+        name
+        avatarUrl
+        verified
+        location
+      }
+    }
+  }
+`;
+
+export const GET_FOLLOWING = gql`
+  query Following($userId: String!) {
+    following(userId: $userId) {
+      id
+      createdAt
+      followed {
+        id
+        name
+        avatarUrl
+        verified
+        location
+      }
+    }
+  }
+`;
+
+export const IS_FOLLOWING = gql`
+  query IsFollowing($userId: String!) {
+    isFollowing(userId: $userId)
+  }
+`;
+
+export const FOLLOWERS_COUNT = gql`
+  query FollowersCount($userId: String!) {
+    followersCount(userId: $userId)
+  }
+`;
+
+export const FOLLOWING_COUNT = gql`
+  query FollowingCount($userId: String!) {
+    followingCount(userId: $userId)
+  }
+`;
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+export const GET_NOTIFICATIONS = gql`
+  query Notifications {
+    notifications {
+      id
+      type
+      title
+      body
+      read
+      avatar
+      createdAt
+    }
+  }
+`;
+
+export const UNREAD_COUNT = gql`
+  query UnreadNotificationsCount {
+    unreadNotificationsCount
+  }
+`;
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+export const GET_USER = gql`
+  query User($id: String!) {
+    user(id: $id) {
+      id
+      name
+      email
+      phone
+      avatarUrl
+      coverUrl
+      bio
+      location
+      verified
+      language
+      showEmail
+      showPhone
+      createdAt
+    }
+  }
+`;

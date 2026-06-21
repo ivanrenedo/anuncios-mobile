@@ -1,78 +1,95 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
   StyleSheet,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Heart, BarChart2, Plus, Search, Bell, ShieldCheck } from 'lucide-react-native';
-import { colors } from '@/constants/theme';
+import { Heart, BarChart2, Plus, Search, Bell, ShieldCheck, LogIn } from 'lucide-react-native';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
+import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
+import CenterSafetyModal from '@/components/CenterSafetyModal';
+import { useAuth } from '@/hooks/useAuth';
+import { useFavorites, useToggleFavorite } from '@/hooks/useFavorites';
+import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - 12) / 2;
 
-const CATEGORIES = ['Todos', 'Tecnología', 'Moda', 'Hogar', 'Otros'];
-
-const SAVED_ITEMS = [
-  {
-    id: '1',
-    title: 'iPhone 15 Pro',
-    price: '750.000 XAF',
-    category: 'Tecnología',
-    seller: 'Carlos E.',
-    avatar: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=80',
-    image: 'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '2',
-    title: 'Nike Air Zoom',
-    price: '45.000 XAF',
-    category: 'Moda',
-    seller: 'Antonio M.',
-    avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=80',
-    image: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '3',
-    title: 'Reloj Minimal',
-    price: '12.500 XAF',
-    category: 'Moda',
-    seller: 'Estela N.',
-    avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=80',
-    image: 'https://images.pexels.com/photos/190819/pexels-photo-190819.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-];
-
-const TOTAL = SAVED_ITEMS.reduce((sum, item) => {
-  const num = parseInt(item.price.replace(/\./g, '').replace(' XAF', ''), 10);
-  return sum + num;
-}, 0);
-
-function formatXAF(n: number) {
-  return n.toLocaleString('es-GQ') + ' XAF';
-}
-
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { isAuthenticated } = useAuth();
+  const { favorites, loading: favsLoading, refetch } = useFavorites();
+  const { toggle } = useToggleFavorite();
   const [activeCategory, setActiveCategory] = useState('Todos');
-  const [liked, setLiked] = useState<Record<string, boolean>>(
-    Object.fromEntries(SAVED_ITEMS.map((i) => [i.id, true]))
-  );
+  const [safetyOpen, setSafetyOpen] = useState(false);
+
+  const savedItems = useMemo(() => favorites.map((f: any) => {
+    const p = f.product;
+    const img = p.images?.[0]?.url || '';
+    return {
+      id: p.id,
+      title: p.title,
+      price: `${Number(p.price).toLocaleString('es')} XAF`,
+      category: p.category?.label || '',
+      seller: p.seller?.name,
+      avatar: p.seller?.avatarUrl,
+      image: img.startsWith('/') ? `${API_URL}${img}` : img,
+      priceValue: Number(p.price),
+    };
+  }), [favorites]);
+
+  const categories = useMemo<string[]>(() => {
+    const cats = new Set<string>(
+      savedItems.map((i: any) => i.category as string).filter(Boolean),
+    );
+    return ['Todos', ...Array.from(cats)];
+  }, [savedItems]);
 
   const visibleItems =
     activeCategory === 'Todos'
-      ? SAVED_ITEMS
-      : SAVED_ITEMS.filter((i) => i.category === activeCategory);
+      ? savedItems
+      : savedItems.filter((i: any) => i.category === activeCategory);
 
-  const pairs: (typeof SAVED_ITEMS[0] | null)[][] = [];
+  const TOTAL = savedItems.reduce((sum: number, i: any) => sum + (i.priceValue || 0), 0);
+
+  const pairs: (any | null)[][] = [];
   for (let i = 0; i < visibleItems.length; i += 2) {
     pairs.push([visibleItems[i], visibleItems[i + 1] ?? null]);
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.root}>
+        <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
+          <Text style={styles.headerTitle}>Favoritos</Text>
+        </View>
+        <View style={styles.authGate}>
+          <View style={styles.authIconWrap}>
+            <Heart size={48} color={colors.primary} strokeWidth={1.2} />
+          </View>
+          <Text style={styles.authTitle}>Guarda tus favoritos</Text>
+          <Text style={styles.authDesc}>
+            Inicia sesión para guardar los anuncios que más te interesan y no perderlos de vista.
+          </Text>
+          <RipplePress
+            style={styles.authBtn}
+            borderRadius={14}
+            rippleColor="rgba(255,255,255,0.25)"
+            onPress={() => router.push('/login')}>
+            <LogIn size={18} color="#ffffff" strokeWidth={2} />
+            <Text style={styles.authBtnText}>Iniciar sesión</Text>
+          </RipplePress>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -80,17 +97,6 @@ export default function SavedScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
         <Text style={styles.headerTitle}>Favoritos</Text>
-        <View style={styles.headerActions}>
-          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/(tabs)/explore')}>
-            <Search size={22} color={colors.primary} strokeWidth={1.5} />
-          </RipplePress>
-          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/(tabs)/safety')}>
-            <ShieldCheck size={22} color={colors.primary} strokeWidth={1.5} />
-          </RipplePress>
-          <RipplePress style={styles.headerBtn} borderRadius={18} rippleColor={colors.primary + '22'} onPress={() => router.push('/notifications')}>
-            <Bell size={22} color={colors.primary} strokeWidth={1.5} />
-          </RipplePress>
-        </View>
       </View>
 
       <ScrollView
@@ -102,7 +108,7 @@ export default function SavedScreen() {
         {/* Category filter chips */}
         <View style={styles.chipsSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <RipplePress
                 key={cat}
                 style={[styles.chip, activeCategory === cat && styles.chipActive]}
@@ -118,24 +124,37 @@ export default function SavedScreen() {
         </View>
 
         {/* Product grid */}
-        {visibleItems.length > 0 ? (
+        {favsLoading && savedItems.length === 0 ? (
+          <View style={styles.grid}>
+            {[0, 1, 2].map((row) => (
+              <View key={row} style={styles.gridRow}>
+                <ProductCardSkeleton />
+                <ProductCardSkeleton />
+              </View>
+            ))}
+          </View>
+        ) : visibleItems.length > 0 ? (
           <View style={styles.grid}>
             {pairs.map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair[0] && (
                   <ProductCard
                     item={pair[0]}
-                    liked={liked[pair[0].id]}
-                    onLike={() => setLiked((p) => ({ ...p, [pair[0]!.id]: !p[pair[0]!.id] }))}
-                    onPress={() => router.push('/product')}
+                    liked={true}
+                    onLike={() => toggle(pair[0]!.id)}
+                    onPress={() =>
+                      router.push({ pathname: '/product/[id]', params: { id: pair[0]!.id } })
+                    }
                   />
                 )}
                 {pair[1] ? (
                   <ProductCard
                     item={pair[1]}
-                    liked={liked[pair[1].id]}
-                    onLike={() => setLiked((p) => ({ ...p, [pair[1]!.id]: !p[pair[1]!.id] }))}
-                    onPress={() => router.push('/product')}
+                    liked={true}
+                    onLike={() => toggle(pair[1]!.id)}
+                    onPress={() =>
+                      router.push({ pathname: '/product/[id]', params: { id: pair[1]!.id } })
+                    }
                   />
                 ) : (
                   <RipplePress
@@ -170,8 +189,8 @@ export default function SavedScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.insightTitle}>Resumen de Guardados</Text>
                 <Text style={styles.insightDesc}>
-                  Tienes {SAVED_ITEMS.length} artículos guardados que suman un total de{' '}
-                  <Text style={styles.insightAmount}>{formatXAF(TOTAL)}</Text>.{' '}
+                  Tienes {savedItems.length} artículos guardados que suman un total de{' '}
+                  <Text style={styles.insightAmount}>{TOTAL.toLocaleString('es-GQ') + ' XAF'}</Text>.{' '}
                   ¡No pierdas las mejores ofertas!
                 </Text>
               </View>
@@ -179,47 +198,14 @@ export default function SavedScreen() {
           </View>
         )}
       </ScrollView>
+
+      <CenterSafetyModal visible={safetyOpen} onClose={() => setSafetyOpen(false)} />
     </View>
   );
 }
 
-function ProductCard({
-  item,
-  liked,
-  onLike,
-  onPress,
-}: {
-  item: (typeof SAVED_ITEMS)[0];
-  liked: boolean;
-  onLike: () => void;
-  onPress: () => void;
-}) {
-  return (
-    <RipplePress style={styles.card} borderRadius={16} rippleColor={colors.primary + '12'} onPress={onPress}>
-      <View style={styles.cardImageWrap}>
-        <Image source={{ uri: item.image }} style={styles.cardImage} />
-        <RipplePress style={styles.heartBtn} borderRadius={16} rippleColor={colors.error + '22'} onPress={onLike}>
-          <Heart
-            size={16}
-            color={liked ? colors.error : '#ffffff'}
-            fill={liked ? colors.error : 'transparent'}
-            strokeWidth={1.5}
-          />
-        </RipplePress>
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.cardPrice}>{item.price}</Text>
-        <View style={styles.cardSeller}>
-          <Image source={{ uri: item.avatar }} style={styles.cardAvatar} />
-          <Text style={styles.cardSellerName} numberOfLines={1}>{item.seller}</Text>
-        </View>
-      </View>
-    </RipplePress>
-  );
-}
-
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -294,82 +280,7 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '4d',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cardImageWrap: {
-    aspectRatio: 1,
-    position: 'relative',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardBody: {
-    padding: 10,
-    gap: 2,
-  },
-  cardTitle: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 13,
-    color: colors.onSurface,
-    lineHeight: 18,
-  },
-  cardPrice: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 15,
-    color: colors.primaryContainer,
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  cardSeller: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 8,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.outlineVariant + '22',
-  },
-  cardAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '33',
-  },
-  cardSellerName: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 11,
-    color: colors.onSurfaceVariant,
-    flex: 1,
+    gap: 8,
   },
   addCard: {
     flex: 1,
@@ -454,5 +365,56 @@ const styles = StyleSheet.create({
   insightAmount: {
     fontFamily: 'Manrope-Bold',
     color: colors.onSurface,
+  },
+  authGate: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 14,
+  },
+  authIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.primary + '0f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  authTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 22,
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  authDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 15,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 280,
+  },
+  authBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    marginTop: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  authBtnText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 16,
+    color: '#ffffff',
   },
 });

@@ -8,7 +8,7 @@ import {
   ViewStyle,
   StyleProp,
 } from 'react-native';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/constants/theme';
 
 interface Props {
   onPress?: () => void;
@@ -19,6 +19,7 @@ interface Props {
   borderRadius?: number;
   disabled?: boolean;
   hitSlop?: { top?: number; bottom?: number; left?: number; right?: number };
+  accessibilityLabel?: string;
 }
 
 export default function RipplePress({
@@ -26,11 +27,14 @@ export default function RipplePress({
   onLongPress,
   children,
   style,
-  rippleColor = colors.primary + '22',
+  rippleColor,
   borderRadius = 8,
   disabled = false,
   hitSlop,
+  accessibilityLabel,
 }: Props) {
+  const { colors } = useTheme();
+  const ripple = rippleColor ?? colors.primary + '22';
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -73,7 +77,9 @@ export default function RipplePress({
         onLongPress={onLongPress}
         disabled={disabled}
         hitSlop={hitSlop}
-        android_ripple={{ color: rippleColor, borderless: false }}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={accessibilityLabel}
+        android_ripple={{ color: ripple, borderless: false }}
         style={style}>
         {children}
       </Pressable>
@@ -86,6 +92,8 @@ export default function RipplePress({
       onLongPress={onLongPress}
       disabled={disabled}
       hitSlop={hitSlop}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={accessibilityLabel}
       onPressIn={animateIn}
       onPressOut={animateOut}
       style={[{ overflow: 'hidden', borderRadius }, style as ViewStyle]}>
@@ -93,7 +101,7 @@ export default function RipplePress({
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: rippleColor, opacity, borderRadius },
+            { backgroundColor: ripple, opacity, borderRadius },
           ]}
           pointerEvents="none"
         />

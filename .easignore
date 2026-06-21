@@ -1,0 +1,8 @@
+# Let EAS generate the native projects from app.json via prebuild instead of
+# uploading the local, machine-specific android/ios folders. Keeping android/
+# here would make EAS ignore app.json plugins (expo-notifications, etc.) and
+# ship the local Windows JDK path baked into android/gradle.properties.
+android/
+ios/
+node_modules/.cache
+.expo

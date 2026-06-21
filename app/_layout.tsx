@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+} from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts } from 'expo-font';
 import {
@@ -9,9 +15,49 @@ import {
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
 import * as SplashScreen from 'expo-splash-screen';
+import { ApolloProvider } from '@apollo/client/react';
+import { apolloClient } from '@/lib/apollo';
 import { ProfileProvider } from '@/hooks/useProfile';
+import { AuthProvider } from '@/hooks/useAuth';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { ThemeProvider, useTheme } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+function RootNavigator() {
+  const { colors, isDark } = useTheme();
+  usePushNotifications();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.surface },
+          
+        }}>
+        <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+        <Stack.Screen
+          name="product/[id]"
+          options={{ animation: 'none',  }}
+        />
+        <Stack.Screen
+          name="user/[id]"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="edit-profile"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="login"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </View>
+  );
+}
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -33,40 +79,18 @@ export default function RootLayout() {
   }
 
   return (
-    <ProfileProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="product"
-          options={{
-            presentation: 'card',
-            animation: 'slide_from_right',
-          }}
-        />
-        <Stack.Screen
-          name="category/[slug]"
-          options={{
-            presentation: 'card',
-            animation: 'slide_from_right',
-          }}
-        />
-        <Stack.Screen
-          name="edit-profile"
-          options={{
-            presentation: 'card',
-            animation: 'slide_from_right',
-          }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{
-            presentation: 'card',
-            animation: 'slide_from_right',
-          }}
-        />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="dark" />
-    </ProfileProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ApolloProvider client={apolloClient}>
+          <AuthProvider>
+            <ProfileProvider>
+              <ThemeProvider>
+                <RootNavigator />
+              </ThemeProvider>
+            </ProfileProvider>
+          </AuthProvider>
+        </ApolloProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
