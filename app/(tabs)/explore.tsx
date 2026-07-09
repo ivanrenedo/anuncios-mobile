@@ -6,10 +6,10 @@ import {
   Pressable,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   StyleSheet,
   Dimensions,
   Animated,
-  Platform,
   Switch,
   BackHandler,
 } from 'react-native';
@@ -19,15 +19,15 @@ import {
   ChevronLeft,
   Search,
   SlidersHorizontal,
-  TrendingUp,
   ChevronDown,
   ChevronRight,
   X,
-  User,
   Sparkles,
   Tag,
-  Truck,
   Navigation,
+  Building2,
+  Briefcase,
+  Minus,
   Check,
   Smartphone,
   Shirt,
@@ -35,69 +35,120 @@ import {
   Home as HomeIcon,
   Wrench,
   LayoutGrid,
+  Plus,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import ProductCard from '@/components/ProductCard';
+import ProductCard, { ProductCardSkeleton, fmtPrice } from '@/components/ProductCard';
 import SwipeableSheet from '@/components/SwipeableSheet';
-import { useProducts } from '@/hooks/useProducts';
+import Spinner from '@/components/Spinner';
 import { useCategoryTree } from '@/hooks/useCategories';
+import { useFavoriteToggle } from '@/hooks/useFavorites';
+import { useQuery, useLazyQuery } from '@apollo/client/react';
+import { GET_FILTERABLE_SECTIONS, GET_SECTION_PRODUCTS, SEARCH_PRODUCTS } from '@/graphql/queries';
 import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const POPULAR = ['iPhone 15 Pro', 'Toyota Hilux', 'Relojes Lujo', 'MacBook M2', 'PS5'];
+function timeAgo(iso?: string): string {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'hace un momento';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} d`;
+  const mo = Math.floor(d / 30);
+  return `hace ${mo} meses`;
+}
 
 function toExploreItem(p: any) {
   const img = p.images?.[0]?.url || '';
   return {
     id: p.id,
     title: p.title,
-    price: `${Number(p.price).toLocaleString('es')} XAF`,
+    description: p.description || '',
+    price: fmtPrice(Number(p.price)),
+    priceRaw: Number(p.price),
     location: p.city || '',
     seller: p.seller?.name || '',
+    sellerId: p.seller?.id,
     verified: p.seller?.verified ?? false,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     avatar: p.seller?.avatarUrl || '',
     category: p.category?.label || '',
     categoryId: p.category?.id || '',
+    categoryLabel: p.category?.label || '',
     priceNum: Number(p.price),
     createdAt: p.createdAt,
+    discount: p.discount,
+    operation: p.propertyDetail?.operation,
+    offerType: p.serviceDetail?.offerType,
+    postedAgo: timeAgo(p.createdAt),
   };
 }
 
-const LOCATIONS = ['Todas las ciudades', 'Malabo', 'Bata', 'Ebebiyin', 'Mongomo', 'Luba'];
-const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Relevancia' },
-  { value: 'price_low', label: 'Precio: Bajo a Alto' },
-  { value: 'price_high', label: 'Precio: Alto a Bajo' },
-  { value: 'newest', label: 'Más recientes' },
-];
+type CatFilter = {
+  icon: any;
+  label?: string;
+  color?: string;
+  brandModel?: boolean;
+  conditions?: string[];
+  operations?: string[];
+  engines?: string[];
+  transmissions?: string[];
+  offerTypes?: string[];
+  bedrooms?: boolean;
+  bathrooms?: boolean;
+  surface?: boolean;
+};
 
-// Per-category filter capabilities (the drawer adapts to the active category).
-type CatFilter = { icon: any; brandModel?: boolean; conditions?: string[] };
-// Keyed by the real top-level category labels seeded in the catalog.
 const CATEGORY_FILTERS: Record<string, CatFilter> = {
-  Todos: { icon: LayoutGrid },
-  Moda: { icon: Shirt, conditions: ['Nuevo', 'Como nuevo', 'Buen estado'] },
-  Tech: {
-    icon: Smartphone,
-    brandModel: true,
-    conditions: ['Nuevo', 'Reacondicionado', 'Buen estado', 'Para piezas'],
-  },
-  Coches: {
+  todos: { icon: LayoutGrid },
+  moda: { icon: Shirt, conditions: ['Nuevo', 'Como nuevo', 'Buen estado'] },
+  tech: { icon: Smartphone, brandModel: true, conditions: ['Nuevo', 'Reacondicionado', 'Buen estado', 'Para piezas'] },
+  'electrónica': { icon: Smartphone, brandModel: true, conditions: ['Nuevo', 'Reacondicionado', 'Buen estado', 'Para piezas'] },
+  hogar: { icon: HomeIcon, conditions: ['Nuevo', 'Buen estado'] },
+  'vehículos': {
     icon: Car,
+    label: 'Vehículos',
+    color: '#8c5000',
     brandModel: true,
     conditions: ['Nuevo', 'Buen estado', 'Para piezas'],
+    operations: ['Venta', 'Alquiler'],
+    engines: ['Gasolina', 'Diésel', 'Híbrido', 'Eléctrico', 'GLP'],
+    transmissions: ['Manual', 'Automático'],
   },
-  Hogar: { icon: HomeIcon, conditions: ['Nuevo', 'Buen estado'] },
-  Servicios: { icon: Wrench },
+  inmobiliaria: {
+    icon: Building2,
+    label: 'Inmobiliaria',
+    color: '#5F5E5A',
+    conditions: ['Obra nueva', 'Buen estado', 'A reformar'],
+    operations: ['Venta', 'Alquiler'],
+    bedrooms: true,
+    bathrooms: true,
+    surface: true,
+  },
+  servicios: {
+    icon: Wrench,
+    label: 'Servicios',
+    color: '#006b5e',
+    offerTypes: ['Oferta', 'Demanda'],
+  },
+  empleo: {
+    icon: Briefcase,
+    label: 'Empleo',
+    color: '#ba1a1a',
+  },
 };
 
 const BRANDS: Record<string, string[]> = {
-  Tech: ['Apple', 'Samsung', 'Xiaomi', 'Huawei', 'Sony', 'Google', 'LG'],
-  Coches: ['Toyota', 'Mercedes', 'BMW', 'Hyundai', 'Kia', 'Ford', 'Nissan'],
+  tech: ['Apple', 'Samsung', 'Xiaomi', 'Huawei', 'Sony', 'Google', 'LG'],
+  'electrónica': ['Apple', 'Samsung', 'Xiaomi', 'Huawei', 'Sony', 'Google', 'LG'],
 };
+
 
 
 export default function ExploreScreen() {
@@ -105,28 +156,122 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const { q, filterCat } = useLocalSearchParams<{ q?: string; filterCat?: string }>();
-  const { products: apiProducts } = useProducts(50);
+  const { q, filterCat, sectionId: paramSectionId } = useLocalSearchParams<{
+    q?: string;
+    filterCat?: string;
+    sectionId?: string;
+  }>();
+  const PAGE_SIZE = 8;
+  const [hasMore, setHasMore] = useState(true);
   const { tree } = useCategoryTree();
-  const PRODUCTS = apiProducts.map(toExploreItem);
   const categoryNames = ['Todos', ...tree.map((t: any) => t.label)];
   const [query, setQuery] = useState('');
   const [related, setRelated] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState('Todos');
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const { isFavorite, toggleFavorite } = useFavoriteToggle();
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  const { data: sectionsData } = useQuery(GET_FILTERABLE_SECTIONS, { fetchPolicy: 'cache-and-network' });
+  const filterableSections: { id: string; title: string; icon?: string; filter: any }[] =
+    (sectionsData as any)?.filterableSections ?? [];
+
+  const { data: sectionProductsData, loading: sectionProductsLoading } = useQuery(
+    GET_SECTION_PRODUCTS,
+    {
+      variables: { sectionId: activeSectionId!, take: 50 },
+      skip: !activeSectionId,
+    },
+  );
+  const sectionProducts = activeSectionId
+    ? ((sectionProductsData as any)?.sectionProducts ?? []).map(toExploreItem)
+    : null;
+  type SortOrder = 'price_asc' | 'price_desc' | 'az' | 'za' | null;
+  const SORT_LABELS: Record<Exclude<SortOrder, null>, string> = {
+    price_asc: 'Menor precio',
+    price_desc: 'Mayor precio',
+    az: 'A - Z',
+    za: 'Z - A',
+  };
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+  const [sortPickerOpen, setSortPickerOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [sortIndex, setSortIndex] = useState(0);
-  const [locationIndex, setLocationIndex] = useState(0);
+  const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
+  const [cityFilter, setCityFilter] = useState('');
   // Filter drawer state
-  const [saveSearch, setSaveSearch] = useState(false);
-  const [delivery, setDelivery] = useState(true);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [activeConditions, setActiveConditions] = useState<string[]>([]);
   const [sellerType, setSellerType] = useState<'particulares' | 'profesionales' | null>(null);
   const [withPriceOnly, setWithPriceOnly] = useState(false);
   const [brand, setBrand] = useState<string | null>(null);
-  const [picker, setPicker] = useState<null | 'location' | 'brand'>(null);
+  const [picker, setPicker] = useState<null | 'brand'>(null);
+  const [brandModelQuery, setBrandModelQuery] = useState('');
+  const [activeEngines, setActiveEngines] = useState<string[]>([]);
+  const [activeTransmissions, setActiveTransmissions] = useState<string[]>([]);
+  const [operation, setOperation] = useState<string | null>(null);
+  const [filterBedrooms, setFilterBedrooms] = useState(0);
+  const [filterBathrooms, setFilterBathrooms] = useState(0);
+  const [surfaceMin, setSurfaceMin] = useState('');
+  const [filterOfferType, setFilterOfferType] = useState<string | null>(null);
+
+  // Resolve category → categoryId for the server query
+  const activeCategoryId = activeCategory !== 'Todos'
+    ? tree.find((t: any) => t.label === activeCategory)?.id ?? undefined
+    : undefined;
+
+  // Build server search input from filter state
+  const searchInput = {
+    query: query.trim() || undefined,
+    categoryId: activeCategoryId,
+    city: cityFilter.trim() || undefined,
+    condition: activeConditions.length === 1 ? activeConditions[0] : undefined,
+    priceMin: priceMin ? parseInt(priceMin, 10) : undefined,
+    priceMax: priceMax ? parseInt(priceMax, 10) : undefined,
+    sortBy: sortOrder === 'price_asc' || sortOrder === 'price_desc' ? sortOrder : 'recent',
+    take: PAGE_SIZE,
+    skip: 0,
+  };
+
+  const { data: searchData, loading: productsLoading, refetch: refetchProducts } = useQuery<any>(
+    SEARCH_PRODUCTS,
+    { variables: { input: searchInput }, fetchPolicy: 'cache-and-network', notifyOnNetworkStatusChange: true },
+  );
+
+  const [fetchMore] = useLazyQuery<any>(SEARCH_PRODUCTS, {
+    fetchPolicy: 'network-only',
+  });
+
+  // First page derived synchronously — no useEffect delay
+  const firstPage = (searchData?.searchProducts ?? []).map(toExploreItem);
+
+  // Extra pages loaded via "Cargar más"
+  const [extraPages, setExtraPages] = useState<any[]>([]);
+
+  // Reset extras when the base query changes (filters, search, sort)
+  useEffect(() => {
+    setExtraPages([]);
+    setHasMore(firstPage.length >= PAGE_SIZE);
+    setLoadingMore(false);
+  }, [searchData]);
+
+  const searchResults = [...firstPage, ...extraPages];
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const { data } = await fetchMore({
+        variables: { input: { ...searchInput, skip: searchResults.length } },
+      });
+      const next = (data?.searchProducts ?? []).map(toExploreItem);
+      setExtraPages((prev) => [...prev, ...next]);
+      setHasMore(next.length >= PAGE_SIZE);
+    } catch {}
+    setLoadingMore(false);
+  };
 
   // Sync incoming ?q= (e.g. coming from the categories modal) into the search.
   // Subcategory → its related terms; whole category → its subcategories.
@@ -168,6 +313,12 @@ export default function ExploreScreen() {
     setActiveConditions([]);
   }, [filterCat]);
 
+  // Sync incoming ?sectionId= (coming from home "Ver todo")
+  useEffect(() => {
+    const incoming = typeof paramSectionId === 'string' ? paramSectionId : '';
+    if (incoming) setActiveSectionId(incoming);
+  }, [paramSectionId]);
+
   const drawerAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -200,8 +351,6 @@ export default function ExploreScreen() {
     }, [filterOpen])
   );
 
-  const toggleLike = (id: string) => setLiked((p) => ({ ...p, [id]: !p[id] }));
-
   const clearSearch = () => {
     setQuery('');
     setRelated([]);
@@ -209,49 +358,33 @@ export default function ExploreScreen() {
 
   const applySuggestion = (term: string) => setQuery(term);
 
-  const q2 = query.trim().toLowerCase();
-  let visibleProducts = q2
-    ? PRODUCTS.filter(
-        (p: any) =>
-          p.title.toLowerCase().includes(q2) ||
-          p.seller.toLowerCase().includes(q2)
-      )
-    : PRODUCTS;
-  if (activeCategory !== 'Todos') {
-    const root = tree.find((t: any) => t.label === activeCategory);
-    if (root) {
-      const ids = new Set<string>([
-        root.id,
-        ...(root.children ?? []).map((c: any) => c.id),
-      ]);
-      visibleProducts = visibleProducts.filter((p: any) => ids.has(p.categoryId));
-    } else {
-      visibleProducts = visibleProducts.filter((p: any) => p.category === activeCategory);
-    }
-  }
+  // Server handles: query, categoryId, city, condition, price, sortBy.
+  // Post-filters for what the backend doesn't support yet:
+  let visibleProducts = sectionProducts ? sectionProducts : searchResults;
+
   if (sellerType === 'profesionales')
     visibleProducts = visibleProducts.filter((p: any) => p.verified);
   else if (sellerType === 'particulares')
     visibleProducts = visibleProducts.filter((p: any) => !p.verified);
-  if (locationIndex !== 0)
-    visibleProducts = visibleProducts.filter((p: any) => p.location === LOCATIONS[locationIndex]);
+  if (withPriceOnly)
+    visibleProducts = visibleProducts.filter((p: any) => p.priceNum > 0);
+  if (activeConditions.length > 1)
+    visibleProducts = visibleProducts.filter((p: any) =>
+      activeConditions.includes(p.condition ?? ''));
+  if (brandModelQuery.trim())
+    visibleProducts = visibleProducts.filter((p: any) =>
+      p.title.toLowerCase().includes(brandModelQuery.trim().toLowerCase()));
 
-  const minN = priceMin ? parseInt(priceMin, 10) : null;
-  const maxN = priceMax ? parseInt(priceMax, 10) : null;
-  if (minN != null)
-    visibleProducts = visibleProducts.filter((p: any) => p.priceNum >= minN);
-  if (maxN != null)
-    visibleProducts = visibleProducts.filter((p: any) => p.priceNum <= maxN);
-
-  if (sortIndex === 1) visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.priceNum - b.priceNum);
-  else if (sortIndex === 2) visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.priceNum - a.priceNum);
-  else if (sortIndex === 3) visibleProducts = [...visibleProducts].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (sortOrder === 'az')
+    visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.title.localeCompare(b.title));
+  else if (sortOrder === 'za')
+    visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.title.localeCompare(a.title));
 
   const pairs: any[][] = [];
   for (let i = 0; i < visibleProducts.length; i += 2)
     pairs.push(visibleProducts.slice(i, i + 2));
 
-  const catFilter = CATEGORY_FILTERS[activeCategory] ?? CATEGORY_FILTERS.Todos;
+  const catFilter = CATEGORY_FILTERS[activeCategory.toLowerCase()] ?? CATEGORY_FILTERS.todos;
   const CatIcon = catFilter.icon;
 
   const toggleCondition = (c: string) =>
@@ -259,46 +392,70 @@ export default function ExploreScreen() {
       prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
     );
 
+  const toggleEngine = (e: string) =>
+    setActiveEngines((prev) =>
+      prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e]
+    );
+
+  const toggleTransmission = (t: string) =>
+    setActiveTransmissions((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+    );
+
   // Count active filters for the badge
   const filterCount =
     (activeCategory !== 'Todos' ? 1 : 0) +
-    (locationIndex !== 0 ? 1 : 0) +
+    (cityFilter.trim() ? 1 : 0) +
     (priceMin !== '' || priceMax !== '' ? 1 : 0) +
     (activeConditions.length > 0 ? 1 : 0) +
     (sellerType !== null ? 1 : 0) +
     (brand !== null ? 1 : 0) +
-    (withPriceOnly ? 1 : 0);
+    (brandModelQuery.trim() ? 1 : 0) +
+    (withPriceOnly ? 1 : 0) +
+    (activeEngines.length > 0 ? 1 : 0) +
+    (activeTransmissions.length > 0 ? 1 : 0) +
+    (operation !== null ? 1 : 0) +
+    (filterBedrooms > 0 ? 1 : 0) +
+    (filterBathrooms > 0 ? 1 : 0) +
+    (surfaceMin !== '' ? 1 : 0) +
+    (filterOfferType !== null ? 1 : 0);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refetchProducts(); } catch {}
+    setRefreshing(false);
+  };
 
   const clearFilters = () => {
-    // Reset every filter back to its default.
     setQuery('');
     setRelated([]);
     setActiveCategory('Todos');
     setActiveConditions([]);
-    setLocationIndex(0);
+    setCityFilter('');
     setSellerType(null);
     setPriceMin('');
     setPriceMax('');
     setBrand(null);
-    setDelivery(true);
+    setBrandModelQuery('');
     setWithPriceOnly(false);
-    setSaveSearch(false);
+    setActiveSectionId(null);
+    setSortOrder(null);
+    setActiveEngines([]);
+    setActiveTransmissions([]);
+    setOperation(null);
+    setFilterBedrooms(0);
+    setFilterBathrooms(0);
+    setSurfaceMin('');
+    setFilterOfferType(null);
   };
 
   const pickerOptions =
-    picker === 'location'
-      ? LOCATIONS
-      : picker === 'brand'
-      ? BRANDS[activeCategory] ?? []
+    picker === 'brand'
+      ? BRANDS[activeCategory.toLowerCase()] ?? []
       : [];
-  const pickerValue =
-    picker === 'location'
-      ? LOCATIONS[locationIndex]
-      : brand ?? '';
+  const pickerValue = brand ?? '';
   const onPickerSelect = (opt: string) => {
-    if (picker === 'location') {
-      setLocationIndex(LOCATIONS.indexOf(opt));
-    } else if (picker === 'brand') {
+    if (picker === 'brand') {
       setBrand(opt);
     }
     setPicker(null);
@@ -310,7 +467,7 @@ export default function ExploreScreen() {
       <View style={[styles.header, { paddingTop: insets.top, height: 100 + insets.top }]}>
         {/* Row 1: back + search + filter */}
         <View style={styles.searchRow}>
-          <RipplePress onPress={() => router.back()} style={styles.backBtn} borderRadius={18} rippleColor={colors.primary + '22'}>
+          <RipplePress onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} style={styles.backBtn} borderRadius={18} rippleColor={colors.primary + '22'}>
             <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
           </RipplePress>
           <View style={styles.searchBox}>
@@ -342,29 +499,56 @@ export default function ExploreScreen() {
             )}
           </RipplePress>
         </View>
-        {/* Row 2: sort */}
+        {/* Row 2: section/sort selector */}
         <View style={styles.sortRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortScroll}>
-            {SORT_OPTIONS.map((opt, i) => (
-              <RipplePress
-                key={opt.value}
-                style={[styles.sortChip, sortIndex === i && styles.sortChipActive]}
-                onPress={() => setSortIndex(i)}
-                borderRadius={20}
-                rippleColor={colors.primary + '18'}>
-                <Text style={[styles.sortChipText, sortIndex === i && styles.sortChipTextActive]}>
-                  {opt.label}
-                </Text>
-                {sortIndex === i && <ChevronDown size={12} color={colors.primary} strokeWidth={2} />}
-              </RipplePress>
-            ))}
-          </ScrollView>
+          <RipplePress
+            style={styles.sectionSelect}
+            onPress={() => setSectionPickerOpen(true)}
+            borderRadius={12}
+            rippleColor={colors.primary + '18'}>
+            <Text style={styles.sectionSelectText} numberOfLines={1}>
+              {activeSectionId
+                ? filterableSections.find((s) => s.id === activeSectionId)?.title ?? 'Filtro'
+                : 'Filtros'}
+            </Text>
+            <ChevronDown size={16} color={colors.primary} strokeWidth={2} />
+          </RipplePress>
+          {(activeSectionId) && (
+            <RipplePress
+              style={styles.sectionClear}
+              onPress={() => { setActiveSectionId(null) }}
+              borderRadius={8}
+              rippleColor={colors.primary + '18'}>
+              <X size={14} color={colors.primary} strokeWidth={2} />
+            </RipplePress>
+          )}
+
+          <RipplePress
+            style={styles.sectionSelect}
+            onPress={() => setSortPickerOpen(true)}
+            borderRadius={12}
+            rippleColor={colors.primary + '18'}>
+            <Text style={styles.sectionSelectText} numberOfLines={1}>
+              {sortOrder ? SORT_LABELS[sortOrder] : 'Ordenar'}
+            </Text>
+            <ChevronDown size={16} color={colors.primary} strokeWidth={2} />
+          </RipplePress>
+          {sortOrder && (
+            <RipplePress
+              style={styles.sectionClear}
+              onPress={() => setSortOrder(null)}
+              borderRadius={8}
+              rippleColor={colors.primary + '18'}>
+              <X size={14} color={colors.primary} strokeWidth={2} />
+            </RipplePress>
+          )}
         </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 100 + insets.top, paddingBottom: 32 }}>
+        contentContainerStyle={{ paddingTop: 100 + insets.top, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Category pills */}
         <View style={styles.section}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
@@ -410,37 +594,28 @@ export default function ExploreScreen() {
           </View>
         )}
 
-        {/* Popular searches (only when nothing searched) */}
-        {query.length === 0 && related.length === 0 && (
-          <View style={[styles.section, { paddingBottom: 0 }]}>
-            <Text style={styles.sectionTitle}>Búsquedas populares</Text>
-            <View style={styles.trendingWrap}>
-              {POPULAR.map((term) => (
-                <RipplePress
-                  key={term}
-                  style={styles.trendingChip}
-                  onPress={() => setQuery(term)}
-                  borderRadius={8}
-                  rippleColor={colors.secondary + '18'}>
-                  <TrendingUp size={13} color={colors.secondary} strokeWidth={1.5} />
-                  <Text style={styles.trendingText}>{term}</Text>
-                </RipplePress>
-              ))}
-            </View>
+        {/* Results header */}
+        {!productsLoading && visibleProducts.length > 0 && (
+          <View style={styles.resultsHeader}>
+            <Text style={styles.resultsCount}>
+              {query.trim()
+                ? `${visibleProducts.length} resultados para "${query.trim()}"`
+                : `${visibleProducts.length} resultados`}
+            </Text>
           </View>
         )}
 
-        {/* Results header */}
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsCount}>
-            {query.trim()
-              ? `${visibleProducts.length} resultados para "${query.trim()}"`
-              : `${visibleProducts.length} resultados`}
-          </Text>
-        </View>
-
         {/* Product grid */}
-        {visibleProducts.length > 0 ? (
+        {productsLoading && visibleProducts.length === 0 || sectionProductsLoading ? (
+          <View style={styles.grid}>
+            {[0, 1, 2].map((row) => (
+              <View key={row} style={styles.gridRow}>
+                <ProductCardSkeleton />
+                <ProductCardSkeleton />
+              </View>
+            ))}
+          </View>
+        ) : visibleProducts.length > 0 ? (
           <View style={styles.grid}>
             {pairs.map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
@@ -448,8 +623,8 @@ export default function ExploreScreen() {
                   <ProductCard
                     key={item.id}
                     item={item}
-                    liked={!!liked[item.id]}
-                    onLike={() => toggleLike(item.id)}
+                    liked={isFavorite(item.id)}
+                    onLike={() => toggleFavorite(item.id)}
                     onPress={() =>
                       router.push({ pathname: '/product/[id]', params: { id: item.id } })
                     }
@@ -459,7 +634,16 @@ export default function ExploreScreen() {
               </View>
             ))}
           </View>
-        ) : (
+        ) : productsLoading ? (
+          <View style={styles.grid}>
+            {[0, 1, 2].map((row) => (
+              <View key={row} style={styles.gridRow}>
+                <ProductCardSkeleton />
+                <ProductCardSkeleton />
+              </View>
+            ))}
+          </View>
+        ) : searchData ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Search size={32} color={colors.primary + '88'} strokeWidth={1.5} />
@@ -471,14 +655,27 @@ export default function ExploreScreen() {
                 : 'Prueba con otras palabras o revisa la ortografía.'}
             </Text>
           </View>
-        )}
+        ) : null}
 
         {/* Load more */}
-        <View style={styles.loadMoreWrap}>
-          <RipplePress style={styles.loadMoreBtn} borderRadius={12} rippleColor={colors.primary + '18'}>
-            <Text style={styles.loadMoreText}>Cargar más</Text>
-          </RipplePress>
-        </View>
+        {(hasMore || loadingMore) && (
+          <View style={styles.loadMoreWrap}>
+            <RipplePress
+              style={styles.loadMoreBtn}
+              borderRadius={12}
+              rippleColor={colors.primary + '18'}
+              onPress={loadMore}>
+              {loadingMore ? (
+                <Spinner color={colors.primary} />
+              ) : (
+                <>
+                  <Plus size={16} color={colors.primary} strokeWidth={2} />
+                  <Text style={styles.loadMoreText}>Cargar más</Text>
+                </>
+              )}
+            </RipplePress>
+          </View>
+        )}
       </ScrollView>
 
       {/* Filter drawer */}
@@ -499,18 +696,10 @@ export default function ExploreScreen() {
               </RipplePress>
             </View>
 
-            {/* Save / clear row */}
-            <View style={styles.fdSaveRow}>
-              <Text style={styles.fdSaveLabel}>Guardar búsqueda</Text>
-              <Switch
-                value={saveSearch}
-                onValueChange={setSaveSearch}
-                trackColor={{ false: colors.surfaceContainerHigh, true: colors.primary }}
-                thumbColor="#ffffff"
-              />
-              <View style={{ flex: 1 }} />
+            {/* Clear row */}
+            <View style={[styles.fdSaveRow, { justifyContent: 'flex-end' }]}>
               <RipplePress onPress={clearFilters} borderRadius={8} rippleColor={colors.primary + '12'}>
-                <Text style={styles.fdClearText}>Borrar</Text>
+                <Text style={styles.fdClearText}>Borrar filtros</Text>
               </RipplePress>
             </View>
 
@@ -537,97 +726,330 @@ export default function ExploreScreen() {
                 )}
               </View>
 
-              {/* Categoría */}
-              <Text style={styles.fdLabel}>Categoría</Text>
-              <RipplePress
-                style={styles.fdSelector}
-                borderRadius={14}
-                rippleColor={colors.primary + '10'}
-                onPress={() => {
-                  closeFilter();
-                  setTimeout(() => {
-                    router.push('/(tabs)/categories');
-                  }, 280);
-                }}>
-                <View style={[styles.fdSelectorIcon, { backgroundColor: colors.primary + '15' }]}>
-                  <CatIcon size={20} color={colors.primary} strokeWidth={1.8} />
+              {/* ─── Card: Qué y dónde ─── */}
+              <View style={styles.fdCard}>
+                <View style={styles.fdCardHeader}>
+                  <Navigation size={16} color={colors.onSurfaceVariant} strokeWidth={2} />
+                  <Text style={styles.fdCardTitle}>Qué y dónde</Text>
                 </View>
-                <Text style={styles.fdSelectorValue}>{activeCategory}</Text>
-                <ChevronRight size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
-              </RipplePress>
-
-              {/* Ciudad - Sector */}
-              <Text style={styles.fdLabel}>Ciudad - Sector</Text>
-              <RipplePress style={styles.fdSelector} borderRadius={14} rippleColor={colors.primary + '10'} onPress={() => setPicker('location')}>
-                <View style={[styles.fdSelectorIcon, { backgroundColor: colors.surfaceContainerHigh }]}>
-                  <Navigation size={18} color={colors.onSurface} strokeWidth={1.8} />
-                </View>
-                <Text style={styles.fdSelectorValue}>{LOCATIONS[locationIndex]}</Text>
-                <ChevronRight size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
-              </RipplePress>
-
-              {/* Delivery */}
-              <View style={styles.fdToggleRow}>
-                <View style={styles.fdToggleIconDark}>
-                  <Truck size={18} color="#ffffff" strokeWidth={1.8} />
-                </View>
-                <Text style={styles.fdToggleLabel}>Envío a toda Guinea Ecuatorial</Text>
-                <Switch
-                  value={delivery}
-                  onValueChange={setDelivery}
-                  trackColor={{ false: colors.surfaceContainerHigh, true: colors.secondary }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-
-              {/* Precio */}
-              <Text style={styles.fdLabel}>Precio</Text>
-              <View style={styles.fdPriceRow}>
-                <View style={styles.fdPriceField}>
+                <Text style={styles.fdLabel}>Categoría</Text>
+                <RipplePress
+                  style={styles.fdSelector}
+                  borderRadius={14}
+                  rippleColor={colors.primary + '10'}
+                  onPress={() => {
+                    closeFilter();
+                    setTimeout(() => {
+                      router.push('/(tabs)/categories');
+                    }, 280);
+                  }}>
+                  <View style={[styles.fdSelectorIcon, { backgroundColor: colors.primary + '15' }]}>
+                    <CatIcon size={20} color={colors.primary} strokeWidth={1.8} />
+                  </View>
+                  <Text style={styles.fdSelectorValue}>{activeCategory}</Text>
+                  <ChevronRight size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
+                </RipplePress>
+                <Text style={styles.fdLabel}>Ubicación</Text>
+                <View style={[styles.fdSelector, { paddingHorizontal: 12 }]}>
+                  <View style={[styles.fdSelectorIcon, { backgroundColor: colors.surfaceContainerHigh }]}>
+                    <Navigation size={18} color={colors.onSurface} strokeWidth={1.8} />
+                  </View>
                   <TextInput
-                    style={styles.fdPriceInput}
-                    value={priceMin}
-                    onChangeText={(v) => setPriceMin(v.replace(/[^\d]/g, ''))}
-                    placeholder="Mín"
+                    style={[styles.fdSelectorValue, { flex: 1, padding: 0 }]}
+                    value={cityFilter}
+                    onChangeText={setCityFilter}
+                    placeholder="Ej: Malabo"
                     placeholderTextColor={colors.onSurfaceVariant + '88'}
-                    keyboardType="numeric"
                   />
-                  <Text style={styles.fdPriceSuffix}>XAF</Text>
-                </View>
-                <View style={styles.fdPriceField}>
-                  <TextInput
-                    style={styles.fdPriceInput}
-                    value={priceMax}
-                    onChangeText={(v) => setPriceMax(v.replace(/[^\d]/g, ''))}
-                    placeholder="Máx"
-                    placeholderTextColor={colors.onSurfaceVariant + '88'}
-                    keyboardType="numeric"
-                  />
-                  <Text style={styles.fdPriceSuffix}>XAF</Text>
+                  {cityFilter.trim() !== '' && (
+                    <TouchableOpacity onPress={() => setCityFilter('')} activeOpacity={0.7}>
+                      <X size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
-              {/* Marca - Modelo (category-adaptive) */}
-              {catFilter.brandModel && (
-                <>
-                  <Text style={styles.fdLabel}>Marca - Modelo</Text>
-                  <RipplePress style={styles.fdSelector} borderRadius={14} rippleColor={colors.primary + '10'} onPress={() => setPicker('brand')}>
-                    <View style={[styles.fdSelectorIcon, { backgroundColor: colors.surfaceContainerHigh }]}>
-                      <Tag size={18} color={colors.onSurface} strokeWidth={1.8} />
-                    </View>
-                    <Text style={[styles.fdSelectorValue, !brand && { color: colors.onSurfaceVariant }]}>
-                      {brand ?? 'Elegir marca - modelo'}
+              {/* ─── Card: Precio ─── */}
+              <View style={styles.fdCard}>
+                <View style={styles.fdCardHeader}>
+                  <Tag size={16} color={colors.onSurfaceVariant} strokeWidth={2} />
+                  <Text style={styles.fdCardTitle}>Precio</Text>
+                </View>
+                <View style={styles.fdPriceRow}>
+                  <View style={styles.fdPriceField}>
+                    <TextInput
+                      style={styles.fdPriceInput}
+                      value={priceMin}
+                      onChangeText={(v) => setPriceMin(v.replace(/[^\d]/g, ''))}
+                      placeholder="Mín"
+                      placeholderTextColor={colors.onSurfaceVariant + '88'}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.fdPriceSuffix}>XAF</Text>
+                  </View>
+                  <View style={styles.fdPriceField}>
+                    <TextInput
+                      style={styles.fdPriceInput}
+                      value={priceMax}
+                      onChangeText={(v) => setPriceMax(v.replace(/[^\d]/g, ''))}
+                      placeholder="Máx"
+                      placeholderTextColor={colors.onSurfaceVariant + '88'}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.fdPriceSuffix}>XAF</Text>
+                  </View>
+                </View>
+                <View style={styles.fdToggleRow}>
+                  <View style={styles.fdToggleIconDark}>
+                    <Tag size={14} color="#ffffff" strokeWidth={1.8} />
+                  </View>
+                  <Text style={styles.fdToggleLabel}>Solo con precio</Text>
+                  <Switch
+                    value={withPriceOnly}
+                    onValueChange={setWithPriceOnly}
+                    trackColor={{ false: colors.surfaceContainerHigh, true: colors.secondary }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+              </View>
+
+              {/* ─── Card: Category-specific ─── */}
+              {catFilter.label && (
+                <View style={[styles.fdCard, { borderColor: (catFilter.color ?? colors.primary) + '40' }]}>
+                  <View style={styles.fdCardHeader}>
+                    <CatIcon size={16} color={catFilter.color ?? colors.primary} strokeWidth={2} />
+                    <Text style={[styles.fdCardTitle, { color: catFilter.color ?? colors.primary }]}>
+                      {catFilter.label}
                     </Text>
-                    <ChevronRight size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
-                  </RipplePress>
-                </>
+                  </View>
+
+                  {/* Operación */}
+                  {catFilter.operations && (
+                    <>
+                      <Text style={styles.fdLabel}>Operación</Text>
+                      <View style={styles.fdChipsWrap}>
+                        {catFilter.operations.map((op) => {
+                          const active = operation === op;
+                          return (
+                            <RipplePress
+                              key={op}
+                              style={[styles.fdChip, active && styles.fdChipActive]}
+                              onPress={() => setOperation(active ? null : op)}
+                              borderRadius={999}
+                              rippleColor={colors.primary + '18'}>
+                              <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>{op}</Text>
+                            </RipplePress>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Marca / Modelo (text input for vehicles) */}
+                  {catFilter.brandModel && activeCategory.toLowerCase() === 'vehículos' && (
+                    <>
+                      <Text style={styles.fdLabel}>Marca / Modelo</Text>
+                      <View style={[styles.fdSelector, { paddingHorizontal: 12 }]}>
+                        <View style={[styles.fdSelectorIcon, { backgroundColor: colors.surfaceContainerHigh }]}>
+                          <Car size={18} color={colors.onSurface} strokeWidth={1.8} />
+                        </View>
+                        <TextInput
+                          style={[styles.fdSelectorValue, { flex: 1, padding: 0 }]}
+                          value={brandModelQuery}
+                          onChangeText={setBrandModelQuery}
+                          placeholder="Ej: Toyota Corolla"
+                          placeholderTextColor={colors.onSurfaceVariant + '88'}
+                        />
+                        {brandModelQuery.trim() !== '' && (
+                          <TouchableOpacity onPress={() => setBrandModelQuery('')} activeOpacity={0.7}>
+                            <X size={18} color={colors.onSurfaceVariant} strokeWidth={2} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Estado */}
+                  {catFilter.conditions && (
+                    <>
+                      <Text style={styles.fdLabel}>Estado</Text>
+                      <View style={styles.fdChipsWrap}>
+                        {catFilter.conditions.map((cond) => {
+                          const active = activeConditions.includes(cond);
+                          return (
+                            <RipplePress
+                              key={cond}
+                              style={[styles.fdChip, active && styles.fdChipActive]}
+                              onPress={() => toggleCondition(cond)}
+                              borderRadius={999}
+                              rippleColor={colors.primary + '18'}>
+                              <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>{cond}</Text>
+                            </RipplePress>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Motor */}
+                  {catFilter.engines && (
+                    <>
+                      <Text style={styles.fdLabel}>Motor</Text>
+                      <View style={styles.fdChipsWrap}>
+                        {catFilter.engines.map((eng) => {
+                          const active = activeEngines.includes(eng);
+                          return (
+                            <RipplePress
+                              key={eng}
+                              style={[styles.fdChip, active && styles.fdChipActive]}
+                              onPress={() => toggleEngine(eng)}
+                              borderRadius={999}
+                              rippleColor={colors.primary + '18'}>
+                              <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>{eng}</Text>
+                            </RipplePress>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Transmisión */}
+                  {catFilter.transmissions && (
+                    <>
+                      <Text style={styles.fdLabel}>Transmisión</Text>
+                      <View style={styles.fdChipsWrap}>
+                        {catFilter.transmissions.map((tr) => {
+                          const active = activeTransmissions.includes(tr);
+                          return (
+                            <RipplePress
+                              key={tr}
+                              style={[styles.fdChip, active && styles.fdChipActive]}
+                              onPress={() => toggleTransmission(tr)}
+                              borderRadius={999}
+                              rippleColor={colors.primary + '18'}>
+                              <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>{tr}</Text>
+                            </RipplePress>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Tipo de oferta (servicios) */}
+                  {catFilter.offerTypes && (
+                    <>
+                      <Text style={styles.fdLabel}>Tipo de oferta</Text>
+                      <View style={styles.fdChipsWrap}>
+                        {catFilter.offerTypes.map((ot) => {
+                          const active = filterOfferType === ot;
+                          return (
+                            <RipplePress
+                              key={ot}
+                              style={[styles.fdChip, active && styles.fdChipActive]}
+                              onPress={() => setFilterOfferType(active ? null : ot)}
+                              borderRadius={999}
+                              rippleColor={colors.primary + '18'}>
+                              <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>{ot}</Text>
+                            </RipplePress>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  {/* Habitaciones + Baños */}
+                  {(catFilter.bedrooms || catFilter.bathrooms) && (
+                    <View style={styles.fdStepperRow}>
+                      {catFilter.bedrooms && (
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.fdLabel}>Habitaciones (mín.)</Text>
+                          <View style={styles.fdStepper}>
+                            <RipplePress
+                              style={styles.fdStepperBtn}
+                              borderRadius={8}
+                              rippleColor={colors.primary + '18'}
+                              onPress={() => setFilterBedrooms((v) => Math.max(0, v - 1))}>
+                              <Minus size={18} color={colors.onSurface} strokeWidth={2} />
+                            </RipplePress>
+                            <Text style={styles.fdStepperValue}>{filterBedrooms}</Text>
+                            <RipplePress
+                              style={styles.fdStepperBtn}
+                              borderRadius={8}
+                              rippleColor={colors.primary + '18'}
+                              onPress={() => setFilterBedrooms((v) => v + 1)}>
+                              <Plus size={18} color={colors.onSurface} strokeWidth={2} />
+                            </RipplePress>
+                          </View>
+                        </View>
+                      )}
+                      {catFilter.bathrooms && (
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.fdLabel}>Baños (mín.)</Text>
+                          <View style={styles.fdStepper}>
+                            <RipplePress
+                              style={styles.fdStepperBtn}
+                              borderRadius={8}
+                              rippleColor={colors.primary + '18'}
+                              onPress={() => setFilterBathrooms((v) => Math.max(0, v - 1))}>
+                              <Minus size={18} color={colors.onSurface} strokeWidth={2} />
+                            </RipplePress>
+                            <Text style={styles.fdStepperValue}>{filterBathrooms}</Text>
+                            <RipplePress
+                              style={styles.fdStepperBtn}
+                              borderRadius={8}
+                              rippleColor={colors.primary + '18'}
+                              onPress={() => setFilterBathrooms((v) => v + 1)}>
+                              <Plus size={18} color={colors.onSurface} strokeWidth={2} />
+                            </RipplePress>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Superficie */}
+                  {catFilter.surface && (
+                    <>
+                      <Text style={styles.fdLabel}>Superficie mínima (m²)</Text>
+                      <View style={[styles.fdPriceField, { marginBottom: 4 }]}>
+                        <TextInput
+                          style={styles.fdPriceInput}
+                          value={surfaceMin}
+                          onChangeText={(v) => setSurfaceMin(v.replace(/[^\d]/g, ''))}
+                          placeholder="Ej: 50"
+                          placeholderTextColor={colors.onSurfaceVariant + '88'}
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.fdPriceSuffix}>m²</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
               )}
 
-              {/* Estado (category-adaptive) */}
-              {catFilter.conditions && (
-                <>
+              {/* ─── Card: Non-specialized categories with conditions/brand ─── */}
+              {!catFilter.label && catFilter.conditions && (
+                <View style={styles.fdCard}>
+                  <View style={styles.fdCardHeader}>
+                    <Sparkles size={16} color={colors.onSurfaceVariant} strokeWidth={2} />
+                    <Text style={styles.fdCardTitle}>Detalles del producto</Text>
+                  </View>
+                  {catFilter.brandModel && (
+                    <>
+                      <Text style={styles.fdLabel}>Marca - Modelo</Text>
+                      <RipplePress style={styles.fdSelector} borderRadius={14} rippleColor={colors.primary + '10'} onPress={() => setPicker('brand')}>
+                        <View style={[styles.fdSelectorIcon, { backgroundColor: colors.surfaceContainerHigh }]}>
+                          <Tag size={18} color={colors.onSurface} strokeWidth={1.8} />
+                        </View>
+                        <Text style={[styles.fdSelectorValue, !brand && { color: colors.onSurfaceVariant }]}>
+                          {brand ?? 'Elegir marca - modelo'}
+                        </Text>
+                        <ChevronRight size={20} color={colors.onSurfaceVariant} strokeWidth={2} />
+                      </RipplePress>
+                    </>
+                  )}
                   <Text style={styles.fdLabel}>Estado</Text>
-                  <View style={styles.fdChipsWrap}>
+                  <View style={[styles.fdChipsWrap, { marginBottom: 4 }]}>
                     {catFilter.conditions.map((cond) => {
                       const active = activeConditions.includes(cond);
                       return (
@@ -642,41 +1064,32 @@ export default function ExploreScreen() {
                       );
                     })}
                   </View>
-                </>
+                </View>
               )}
 
-              {/* Tipo de vendedores */}
-              <Text style={styles.fdLabel}>Tipo de vendedores</Text>
-              <View style={styles.fdChipsWrap}>
-                {(['particulares', 'profesionales'] as const).map((t) => {
-                  const active = sellerType === t;
-                  return (
-                    <RipplePress
-                      key={t}
-                      style={[styles.fdChip, active && styles.fdChipActive]}
-                      onPress={() => setSellerType(active ? null : t)}
-                      borderRadius={999}
-                      rippleColor={colors.primary + '18'}>
-                      <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>
-                        {t === 'particulares' ? 'Particulares' : 'Profesionales'}
-                      </Text>
-                    </RipplePress>
-                  );
-                })}
-              </View>
-
-              {/* With price only */}
-              <View style={[styles.fdToggleRow, { marginTop: 18 }]}>
-                <View style={styles.fdToggleIconDark}>
-                  <Tag size={16} color="#ffffff" strokeWidth={1.8} />
+              {/* ─── Card: Vendedor ─── */}
+              <View style={styles.fdCard}>
+                <View style={styles.fdCardHeader}>
+                  <Sparkles size={16} color={colors.onSurfaceVariant} strokeWidth={2} />
+                  <Text style={styles.fdCardTitle}>Vendedor</Text>
                 </View>
-                <Text style={styles.fdToggleLabel}>Anuncios con precio únicamente</Text>
-                <Switch
-                  value={withPriceOnly}
-                  onValueChange={setWithPriceOnly}
-                  trackColor={{ false: colors.surfaceContainerHigh, true: colors.secondary }}
-                  thumbColor="#ffffff"
-                />
+                <View style={[styles.fdChipsWrap, { marginBottom: 4 }]}>
+                  {(['particulares', 'profesionales'] as const).map((t) => {
+                    const active = sellerType === t;
+                    return (
+                      <RipplePress
+                        key={t}
+                        style={[styles.fdChip, active && styles.fdChipActive]}
+                        onPress={() => setSellerType(active ? null : t)}
+                        borderRadius={999}
+                        rippleColor={colors.primary + '18'}>
+                        <Text style={[styles.fdChipText, active && styles.fdChipTextActive]}>
+                          {t === 'particulares' ? 'Particulares' : 'Profesionales'}
+                        </Text>
+                      </RipplePress>
+                    );
+                  })}
+                </View>
               </View>
             </ScrollView>
 
@@ -692,11 +1105,7 @@ export default function ExploreScreen() {
           <SwipeableSheet
             visible={picker !== null}
             onClose={() => setPicker(null)}
-            title={
-              picker === 'location'
-                ? 'Elegir ciudad - sector'
-                : 'Elegir marca'
-            }>
+            title="Elegir marca">
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
               {pickerOptions.length === 0 ? (
                 <Text style={styles.fdSheetEmpty}>No hay opciones para esta categoría.</Text>
@@ -721,6 +1130,61 @@ export default function ExploreScreen() {
           </SwipeableSheet>
         </>
       )}
+
+      {/* Section/sort picker sheet */}
+      <SwipeableSheet
+        visible={sectionPickerOpen}
+        onClose={() => setSectionPickerOpen(false)}
+        title="Filtros">
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+          {filterableSections.length > 0 && (
+            <>
+              <TouchableOpacity
+                style={styles.fdSheetOption}
+                activeOpacity={0.7}
+                onPress={() => { setActiveSectionId(null); setSectionPickerOpen(false); }}>
+                <Text style={[styles.fdSheetOptionText, !activeSectionId && styles.fdSheetOptionActive]}>
+                  Todos
+                </Text>
+                {!activeSectionId && <Check size={18} color={colors.primary} strokeWidth={2.2} />}
+              </TouchableOpacity>
+              {filterableSections.map((sec) => (
+                <TouchableOpacity
+                  key={sec.id}
+                  style={styles.fdSheetOption}
+                  activeOpacity={0.7}
+                  onPress={() => { setActiveSectionId(sec.id); setSectionPickerOpen(false); }}>
+                  <Text style={[styles.fdSheetOptionText, activeSectionId === sec.id && styles.fdSheetOptionActive]}>
+                    {sec.title}
+                  </Text>
+                  {activeSectionId === sec.id && <Check size={18} color={colors.primary} strokeWidth={2.2} />}
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </ScrollView>
+      </SwipeableSheet>
+
+      {/* Sort picker sheet */}
+      <SwipeableSheet
+        visible={sortPickerOpen}
+        onClose={() => setSortPickerOpen(false)}
+        title="Ordenar por">
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+          {(Object.keys(SORT_LABELS) as Exclude<SortOrder, null>[]).map((key) => (
+            <TouchableOpacity
+              key={key}
+              style={styles.fdSheetOption}
+              activeOpacity={0.7}
+              onPress={() => { setSortOrder(key); setSortPickerOpen(false); }}>
+              <Text style={[styles.fdSheetOptionText, sortOrder === key && styles.fdSheetOptionActive]}>
+                {SORT_LABELS[key]}
+              </Text>
+              {sortOrder === key && <Check size={18} color={colors.primary} strokeWidth={2.2} />}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </SwipeableSheet>
     </View>
   );
 }
@@ -908,6 +1372,71 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     color: colors.primary,
   },
+  fdCard: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '4d',
+    backgroundColor: colors.surfaceContainerLowest,
+    padding: 14,
+    marginBottom: 12,
+  },
+  fdCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 14,
+  },
+  fdCardTitle: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 15,
+    color: colors.onSurface,
+  },
+  fdSep: {
+    height: 1,
+    backgroundColor: colors.outlineVariant + '40',
+    marginVertical: 16,
+  },
+  fdCatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginBottom: 16,
+  },
+  fdCatBadgeText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+  },
+  fdStepperRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 18,
+  },
+  fdStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  fdStepperBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceContainerLow,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '4d',
+  },
+  fdStepperValue: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 18,
+    color: colors.onSurface,
+    minWidth: 28,
+    textAlign: 'center',
+  },
   fdFooter: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -1036,35 +1565,36 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 13,
   },
   sortRow: {
-    paddingHorizontal: 12,
-  },
-  sortScroll: {
-    flexGrow: 0,
-  },
-  sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 8,
+  },
+  sectionSelect: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     backgroundColor: colors.surfaceContainerLow,
     borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '33',
+    borderColor: colors.outlineVariant + '4d',
   },
-  sortChipActive: {
-    backgroundColor: colors.primary + '15',
-    borderColor: colors.primary + '55',
-  },
-  sortChipText: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 12,
-    color: colors.onSurfaceVariant,
-  },
-  sortChipTextActive: {
+  sectionSelectText: {
+    flex: 1,
     fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
     color: colors.primary,
+  },
+  sectionClear: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: colors.primary + '12',
   },
   section: {
     paddingHorizontal: 16,
@@ -1186,12 +1716,15 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 20,
   },
   loadMoreBtn: {
+    height: 46,
     borderWidth: 1,
     borderColor: colors.outlineVariant + '4d',
     borderRadius: 12,
-    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: colors.surfaceContainerHigh,
+    justifyContent: 'center',
+    gap: 8,
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceContainerLow,
   },
   loadMoreText: {
     fontFamily: 'Manrope-SemiBold',

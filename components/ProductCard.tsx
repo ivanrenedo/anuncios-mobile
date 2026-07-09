@@ -8,10 +8,12 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
-import { Heart, MapPin, BadgeCheck } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Heart, MapPin, BadgeCheck, Clock } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
 import ProductImage from '@/components/ProductImage';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface ProductCardItem {
   id: string;
@@ -20,11 +22,18 @@ export interface ProductCardItem {
   image: string;
   avatar?: string;
   seller?: string;
+  sellerId?: string;
   location?: string;
   condition?: string;
   verified?: boolean;
   promo?: string;
   promoColor?: string;
+  discount?: number;
+  priceRaw?: number;
+  categoryLabel?: string;
+  operation?: string;
+  offerType?: string;
+  postedAgo?: string;
 }
 
 interface Props {
@@ -34,11 +43,18 @@ interface Props {
   onPress: () => void;
   /** Fixed width (for horizontal scrolls). Omit to use flex:1 inside a row. */
   width?: number;
-  /** Show a "Vendido" overlay on the image */
-  sold?: boolean;
   /** Override the price color (e.g. category accent) */
   accentColor?: string;
   style?: StyleProp<ViewStyle>;
+}
+
+export function fmtNumber(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} mill`;
+  return Math.round(n).toLocaleString('es');
+}
+ 
+export function fmtPrice(n: number) {
+  return `${fmtNumber(n)} XFA`;
 }
 
 export default function ProductCard({
@@ -47,12 +63,27 @@ export default function ProductCard({
   onLike,
   onPress,
   width,
-  sold = false,
   accentColor,
   style,
-}: Props) {
+}: Props) { 
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
+
+  const { user } = useAuth();
+
+  const showPrice = (item.priceRaw ?? 0) > 0;
+  const hasDiscount = showPrice && (item.discount ?? 0) > 0 && (item.discount ?? 0) < 100;
+  const finalPrice = hasDiscount && item.priceRaw
+    ? fmtPrice(Math.round(item.priceRaw * (1 - (item.discount ?? 0) / 100)))
+    : item.price;
+
+  const tags: { label: string; bg: string; color: string }[] = [];
+  if (item.operation) tags.push({ label: item.operation, bg: '#E1F5EE', color: '#0F6E56' });
+  if (item.offerType) tags.push({ label: item.offerType, bg: '#EEEDFE', color: '#534AB7' });
+  if (item.categoryLabel) tags.push({ label: item.categoryLabel, bg: '#E6F1FB', color: '#185FA5' });
+  
+
   return (
     <TouchableOpacity
       style={[width ? { width } : styles.flex, style]}
@@ -65,19 +96,17 @@ export default function ProductCard({
             <Text style={styles.badgeText}>{item.promo}</Text>
           </View>
         )}
-        {sold && (
-          <View style={styles.soldOverlay}>
-            <View style={styles.soldBadge}>
-              <Text style={styles.soldBadgeText}>Vendido</Text>
-            </View>
+        {!item.promo && hasDiscount && (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>-{item.discount}%</Text>
           </View>
         )}
-        {item.condition && !sold && (
+        {item.condition && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
           </View>
         )}
-        {onLike && (
+        {onLike && ( 
           <TouchableOpacity
             style={styles.heartBtn}
             onPress={onLike}
@@ -93,27 +122,72 @@ export default function ProductCard({
             />
           </TouchableOpacity>
         )}
-      </View> 
+      </View>
+      {tags.length > 0 && (
+        <View style={styles.tagsRow}>
+          {tags.map((t) => (
+            <View key={t.label} style={[styles.tag, { backgroundColor: t.bg }]}>
+              <Text style={[styles.tagText, { color: t.color }]}>{t.label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       <Text style={styles.title} numberOfLines={2}>
         {item.title}
       </Text>
-      <Text
-        style={[styles.price, accentColor ? { color: accentColor } : null]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}>
-        {item.price}
-      </Text>
-      {item.location && (
-        <View style={styles.locationRow}>
-          <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-          <Text style={styles.location} numberOfLines={1}>
-            {item.location}
+      {showPrice && (hasDiscount ? (
+        <View style={styles.priceRow}>
+          <Text
+            style={[styles.price, { color: colors.error }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}>
+            {finalPrice}
           </Text>
+          <Text style={styles.priceOriginal} numberOfLines={1}>
+            {item.price}
+          </Text>
+        </View>
+      ) : (
+        <Text
+          style={[styles.price, accentColor ? { color: accentColor } : null]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}>
+          {item.price}
+        </Text>
+      ))}
+      {(item.location || item.postedAgo) && (
+        <View style={styles.locationRow}>
+          {item.location && (
+            <>
+              <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              <Text style={styles.location} numberOfLines={1}>
+                {item.location}
+              </Text>
+            </>
+          )}
+          {item.location && item.postedAgo && (
+            <Text style={styles.metaDot}>·</Text>
+          )}
+          {item.postedAgo && (
+            <>
+              <Clock size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              <Text style={styles.location} numberOfLines={1}>
+                {item.postedAgo}
+              </Text>
+            </>
+          )}
         </View>
       )}
       {item.seller && (
-        <View style={styles.sellerRow}>
+        <TouchableOpacity
+          style={styles.sellerRow}
+          activeOpacity={0.7}
+          onPress={(e) => {
+            e.stopPropagation();
+            user?.id === item.sellerId ? router.push('/(tabs)/profile')  : router.push(`/user/${item.sellerId}`)  
+          }}>
           {item.avatar && <Image source={{ uri: item.avatar }} style={styles.avatar} />}
           <Text style={styles.sellerName} numberOfLines={1}>
             {item.seller}
@@ -122,11 +196,11 @@ export default function ProductCard({
             <BadgeCheck
               size={12}
               color="#ffffff"
+              style={styles.verified}
               fill={colors.primary}
-              strokeWidth={0}
             />
           )}
-        </View>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
@@ -206,17 +280,59 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
     letterSpacing: 0.5,
   },
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: colors.error,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    zIndex: 8,
+  },
+  discountBadgeText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 11,
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
+  tag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tagText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 10,
+  },
   title: {
     fontFamily: 'Manrope-Regular',
     fontSize: 15,
     color: colors.onSurface,
     lineHeight: 20,
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   price: {
     fontFamily: 'Manrope-SemiBold',
     fontSize: 15,
     color: colors.primary,
     lineHeight: 20,
+  },
+  priceOriginal: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 11,
+    color: colors.onSurfaceVariant + '88',
+    textDecorationLine: 'line-through',
   },
   locationRow: {
     flexDirection: 'row',
@@ -228,13 +344,19 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Regular',
     fontSize: 11,
     color: colors.onSurfaceVariant + '99',
-    flex: 1,
+  },
+  metaDot: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 11,
+    color: colors.onSurfaceVariant + '66',
+    marginHorizontal: 2,
   },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 12,
+    marginBottom: 12,
     paddingTop: 8,
     borderTopWidth: 0.5,
     borderTopColor: colors.outlineVariant + '33',
@@ -258,6 +380,12 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 4,
     borderRadius: 4,
     marginBottom: 4,
+    zIndex: 8
+  },
+  verified: {
+    position: "absolute",
+    bottom: -4,
+    left: 12,
     zIndex: 8
   },
   badgeText: {

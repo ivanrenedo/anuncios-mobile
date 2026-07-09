@@ -8,13 +8,13 @@ import {
 
 /** Top-level categories with their nested children (the menu tree). */
 export function useCategoryTree() {
-  const { data, loading, error, refetch } = useQuery<any>(CATEGORY_TREE);
+  const { data, loading, error, refetch } = useQuery<any>(CATEGORY_TREE, { fetchPolicy: 'cache-and-network' });
   return { tree: data?.categoryTree ?? [], loading, error, refetch };
 }
 
 /** Flat list of every category node. */
 export function useCategories() {
-  const { data, loading, error, refetch } = useQuery<any>(GET_CATEGORIES);
+  const { data, loading, error, refetch } = useQuery<any>(GET_CATEGORIES, { fetchPolicy: 'cache-and-network' });
   return { categories: data?.categories ?? [], loading, error, refetch };
 }
 
@@ -22,6 +22,7 @@ export function useCategoryBySlug(slug: string) {
   const { data, loading, error } = useQuery<any>(CATEGORY_BY_SLUG, {
     variables: { slug },
     skip: !slug,
+    fetchPolicy: 'cache-and-network',
   });
   return { category: data?.categoryBySlug ?? null, loading, error };
 }
@@ -31,6 +32,7 @@ export function useCategoryChildren(parentId: string) {
   const { data, loading, error } = useQuery<any>(CATEGORY_CHILDREN, {
     variables: { parentId },
     skip: !parentId,
+    fetchPolicy: 'cache-and-network',
   });
   return { children: data?.categoryChildren ?? [], loading, error };
 }

@@ -31,7 +31,19 @@ const authLink = setContext(async (_, { headers }) => {
 
 export const apolloClient = new ApolloClient({
   link: authLink.concat(httpLink),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      ProductModel: {
+        fields: {
+          images: { merge: false },
+          vehicleDetail: { merge: false },
+          propertyDetail: { merge: false },
+          serviceDetail: { merge: false },
+          jobDetail: { merge: false },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: { fetchPolicy: 'cache-and-network' },
     query: { fetchPolicy: 'network-only' },

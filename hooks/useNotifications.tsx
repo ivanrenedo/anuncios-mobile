@@ -5,6 +5,7 @@ import {
   MARK_NOTIFICATION_READ,
   MARK_ALL_NOTIFICATIONS_READ,
   DELETE_NOTIFICATION,
+  DELETE_ALL_NOTIFICATIONS,
 } from '@/graphql/mutations';
 
 export function useNotifications() {
@@ -44,4 +45,11 @@ export function useDeleteNotification() {
   });
   const remove = (id: string) => mutate({ variables: { id } });
   return { remove };
+}
+
+export function useDeleteAllNotifications() {
+  const [mutate, { loading }] = useMutation(DELETE_ALL_NOTIFICATIONS, {
+    refetchQueries: [{ query: GET_NOTIFICATIONS }, { query: UNREAD_COUNT }],
+  });
+  return { deleteAll: () => mutate(), loading };
 }

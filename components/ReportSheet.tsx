@@ -20,7 +20,7 @@ const REASONS: Record<ReportType, { value: string; label: string }[]> = {
   product: [
     { value: 'spam', label: 'Spam o engañoso' },
     { value: 'scam', label: 'Estafa o fraude' },
-    { value: 'prohibited', label: 'Producto prohibido o ilegal' },
+    { value: 'prohibited', label: 'Anuncio prohibido o ilegal' },
     { value: 'offensive', label: 'Contenido ofensivo' },
     { value: 'other', label: 'Otro' },
   ],

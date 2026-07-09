@@ -7,7 +7,7 @@ export const GOOGLE_LOGIN = gql`
     googleLogin(input: $input) {
       accessToken
       refreshToken
-      user { id name email avatarUrl permission }
+      user { id name email avatarUrl permission phone verified }
     }
   }
 `;
@@ -76,8 +76,14 @@ export const DELETE_PRODUCT = gql`
 `;
 
 export const VIEW_PRODUCT = gql`
-  mutation ViewProduct($id: String!) {
-    viewProduct(id: $id) { id views }
+  mutation ViewProduct($id: String!, $viewerKey: String) {
+    viewProduct(id: $id, viewerKey: $viewerKey) { id views }
+  }
+`;
+
+export const DELETE_MY_ACCOUNT = gql`
+  mutation DeleteMyAccount {
+    deleteMyAccount { id }
   }
 `;
 
@@ -94,6 +100,15 @@ export const TOGGLE_FAVORITE = gql`
 export const CREATE_REVIEW = gql`
   mutation CreateReview($input: CreateReviewInput!) {
     createReview(input: $input) {
+      id rating text createdAt
+      author { id name avatarUrl }
+    }
+  }
+`;
+
+export const UPDATE_REVIEW = gql`
+  mutation UpdateReview($id: String!, $input: UpdateReviewInput!) {
+    updateReview(id: $id, input: $input) {
       id rating text createdAt
       author { id name avatarUrl }
     }
@@ -149,6 +164,52 @@ export const MARK_ALL_NOTIFICATIONS_READ = gql`
 export const DELETE_NOTIFICATION = gql`
   mutation DeleteNotification($id: String!) {
     deleteNotification(id: $id) { id }
+  }
+`;
+
+export const DELETE_ALL_NOTIFICATIONS = gql`
+  mutation DeleteAllNotifications {
+    deleteAllNotifications
+  }
+`;
+
+// ─── OTP ────────────────────────────────────────────────────────────────────
+
+export const SEND_PHONE_OTP = gql`
+  mutation SendPhoneOtp($input: SendPhoneOtpInput!) {
+    sendPhoneOtp(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+export const VERIFY_PHONE_OTP = gql`
+  mutation VerifyPhoneOtp($input: VerifyPhoneOtpInput!) {
+    verifyPhoneOtp(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+// ─── Home sections ──────────────────────────────────────────────────────────
+
+export const TRACK_HOME_SECTION_EVENT = gql`
+  mutation TrackHomeSectionEvent($sectionId: String!, $event: String!, $viewerKey: String!) {
+    trackHomeSectionEvent(sectionId: $sectionId, event: $event, viewerKey: $viewerKey)
+  }
+`;
+
+// ─── Verifications ───────────────────────────────────────────────────────────
+
+export const REQUEST_VERIFICATION = gql`
+  mutation RequestVerification {
+    requestVerification {
+      id
+      status
+      createdAt
+    }
   }
 `;
 

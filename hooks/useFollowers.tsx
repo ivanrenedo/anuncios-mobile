@@ -28,6 +28,7 @@ export function useIsFollowing(userId: string) {
   const { data, loading } = useQuery<any>(IS_FOLLOWING, {
     variables: { userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   return { isFollowing: data?.isFollowing ?? false, loading };
 }
@@ -36,6 +37,7 @@ export function useFollowersCount(userId: string) {
   const { data, loading } = useQuery<any>(FOLLOWERS_COUNT, {
     variables: { userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   return { count: data?.followersCount ?? 0, loading };
 }
@@ -44,31 +46,31 @@ export function useFollowingCount(userId: string) {
   const { data, loading } = useQuery<any>(FOLLOWING_COUNT, {
     variables: { userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   return { count: data?.followingCount ?? 0, loading };
 }
 
+const FOLLOW_QUERIES = [
+  'Followers',
+  'Following',
+  'FollowersCount',
+  'FollowingCount',
+  'IsFollowing',
+];
+
 export function useFollowToggle() {
-  const [followMut] = useMutation(FOLLOW_USER);
-  const [unfollowMut] = useMutation(UNFOLLOW_USER);
+  const [followMut] = useMutation(FOLLOW_USER, {
+    refetchQueries: FOLLOW_QUERIES,
+    awaitRefetchQueries: true,
+  });
+  const [unfollowMut] = useMutation(UNFOLLOW_USER, {
+    refetchQueries: FOLLOW_QUERIES,
+    awaitRefetchQueries: true,
+  });
 
-  const follow = (userId: string) =>
-    followMut({
-      variables: { userId },
-      refetchQueries: [
-        { query: GET_FOLLOWERS, variables: { userId } },
-        { query: FOLLOWERS_COUNT, variables: { userId } },
-      ],
-    });
-
-  const unfollow = (userId: string) =>
-    unfollowMut({
-      variables: { userId },
-      refetchQueries: [
-        { query: GET_FOLLOWERS, variables: { userId } },
-        { query: FOLLOWERS_COUNT, variables: { userId } },
-      ],
-    });
+  const follow = (userId: string) => followMut({ variables: { userId } });
+  const unfollow = (userId: string) => unfollowMut({ variables: { userId } });
 
   return { follow, unfollow };
 }

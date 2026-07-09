@@ -72,26 +72,30 @@ export const GET_PRODUCTS = gql`
         model
       }
       vehicleDetail {
-        vehicleType
+        id
+        operation
         brand
         model
         year
+        kilometrage
         transmission
         engine
       }
       propertyDetail {
+        id
         operation
-        propertyType
         bedrooms
         bathrooms
+        floor
+        surface
         address
       }
       serviceDetail {
-        serviceType
+        id
         offerType
       }
       jobDetail {
-        jobType
+        id
         link
       }
     }
@@ -119,6 +123,8 @@ export const GET_PRODUCT = gql`
         verified
         location
         bio
+        phone
+        showPhone
       }
       category {
         id
@@ -141,26 +147,30 @@ export const GET_PRODUCT = gql`
         model
       }
       vehicleDetail {
-        vehicleType
+        id
+        operation
         brand
         model
         year
+        kilometrage
         transmission
         engine
       }
       propertyDetail {
+        id
         operation
-        propertyType
         bedrooms
         bathrooms
+        floor
+        surface
         address
       }
       serviceDetail {
-        serviceType
+        id
         offerType
       }
       jobDetail {
-        jobType
+        id
         link
       }
     }
@@ -198,6 +208,19 @@ export const SEARCH_PRODUCTS = gql`
         id
         url
         sortOrder
+      }
+      propertyDetail {
+        operation
+      }
+      serviceDetail {
+        offerType
+      }
+      vehicleDetail {
+        operation
+        brand
+        model
+        engine
+        transmission
       }
     }
   }
@@ -259,6 +282,15 @@ export const PRODUCTS_BY_SELLER = gql`
         id
         url
         sortOrder
+      }
+      vehicleDetail {
+        operation
+      }
+      propertyDetail {
+        operation
+      }
+      serviceDetail {
+        offerType
       }
     }
   }
@@ -374,6 +406,15 @@ export const MY_FAVORITES = gql`
           url
           sortOrder
         }
+        vehicleDetail {
+          operation
+        }
+        propertyDetail {
+          operation
+        }
+        serviceDetail {
+          offerType
+        }
       }
     }
   }
@@ -475,6 +516,10 @@ export const GET_NOTIFICATIONS = gql`
       body
       read
       avatar
+      relatedProductId
+      relatedUserId
+      sectionId
+      filterCat
       createdAt
     }
   }
@@ -483,6 +528,116 @@ export const GET_NOTIFICATIONS = gql`
 export const UNREAD_COUNT = gql`
   query UnreadNotificationsCount {
     unreadNotificationsCount
+  }
+`;
+
+// ─── Home sections ──────────────────────────────────────────────────────────
+
+export const GET_HOME_SECTIONS = gql`
+  query HomeSections($viewerKey: String) {
+    homeSections(viewerKey: $viewerKey) {
+      id
+      type
+      title
+      subtitle
+      icon
+      filter
+      config
+      sortOrder
+      products {
+        id
+        title
+        description
+        price
+        discount
+        condition
+        city
+        views
+        favoritesCount
+        createdAt
+        seller {
+          id
+          name
+          avatarUrl
+          verified
+        }
+        category {
+          id
+          slug
+          label
+          color
+        }
+        images {
+          id
+          url
+          sortOrder
+        }
+        vehicleDetail {
+          operation
+        }
+        propertyDetail {
+          operation
+        }
+        serviceDetail {
+          offerType
+        }
+      }
+    }
+  }
+`;
+
+export const GET_FILTERABLE_SECTIONS = gql`
+  query FilterableSections {
+    filterableSections {
+      id
+      type
+      title
+      icon
+      filter
+    }
+  }
+`;
+
+export const GET_SECTION_PRODUCTS = gql`
+  query SectionProducts($sectionId: String!, $take: Int, $skip: Int) {
+    sectionProducts(sectionId: $sectionId, take: $take, skip: $skip) {
+      id
+      title
+      description
+      price
+      discount
+      condition
+      city
+      views
+      favoritesCount
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+      }
+      vehicleDetail {
+        operation
+      }
+      propertyDetail {
+        operation
+      }
+      serviceDetail {
+        offerType
+      }
+    }
   }
 `;
 
@@ -503,6 +658,20 @@ export const GET_USER = gql`
       language
       showEmail
       showPhone
+      createdAt
+    }
+  }
+`;
+
+// ─── Verifications ───────────────────────────────────────────────────────────
+
+export const MY_VERIFICATION_REQUEST = gql`
+  query MyVerificationRequest {
+    myVerificationRequest {
+      id
+      status
+      rejectedReason
+      reviewedAt
       createdAt
     }
   }

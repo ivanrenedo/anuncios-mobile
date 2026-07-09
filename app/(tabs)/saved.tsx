@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  RefreshControl,
   StyleSheet,
   Dimensions,
 } from 'react-native';
@@ -11,10 +12,10 @@ import { useRouter } from 'expo-router';
 import { Heart, BarChart2, Plus, Search, Bell, ShieldCheck, LogIn } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard';
+import ProductCard, { ProductCardSkeleton, fmtPrice } from '@/components/ProductCard';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import { useAuth } from '@/hooks/useAuth';
-import { useFavorites, useToggleFavorite } from '@/hooks/useFavorites';
+import { useFavorites, useFavoriteToggle } from '@/hooks/useFavorites';
 import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -27,22 +28,40 @@ export default function SavedScreen() {
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const { favorites, loading: favsLoading, refetch } = useFavorites();
-  const { toggle } = useToggleFavorite();
+  const { isFavorite, toggleFavorite } = useFavoriteToggle();
+  const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [safetyOpen, setSafetyOpen] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refetch(); } catch {}
+    setRefreshing(false);
+  };
 
   const savedItems = useMemo(() => favorites.map((f: any) => {
     const p = f.product;
     const img = p.images?.[0]?.url || '';
+    const s = p.createdAt ? Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 1000) : 0;
+    const ago = !p.createdAt ? '' : s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.floor(s / 60)} min` : s < 86400 ? `hace ${Math.floor(s / 3600)} h` : s < 2592000 ? `hace ${Math.floor(s / 86400)} d` : `hace ${Math.floor(s / 2592000)} meses`;
     return {
       id: p.id,
       title: p.title,
-      price: `${Number(p.price).toLocaleString('es')} XAF`,
+      price: fmtPrice(Number(p.price)),
+      priceRaw: Number(p.price),
       category: p.category?.label || '',
+      categoryLabel: p.category?.label || '',
       seller: p.seller?.name,
+      sellerId: p.seller?.id,
+      location: p.city,
+      verified: p.seller?.verified,
       avatar: p.seller?.avatarUrl,
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       priceValue: Number(p.price),
+      discount: p.discount,
+      operation: p.propertyDetail?.operation,
+      offerType: p.serviceDetail?.offerType,
+      postedAgo: ago,
     };
   }), [favorites]);
 
@@ -104,7 +123,8 @@ export default function SavedScreen() {
         contentContainerStyle={{
           paddingTop: 44 + insets.top + 8,
           paddingBottom: 32,
-        }}>
+        }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Category filter chips */}
         <View style={styles.chipsSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
@@ -140,18 +160,18 @@ export default function SavedScreen() {
                 {pair[0] && (
                   <ProductCard
                     item={pair[0]}
-                    liked={true}
-                    onLike={() => toggle(pair[0]!.id)}
+                    liked={isFavorite(pair[0]!.id)}
+                    onLike={() => toggleFavorite(pair[0]!.id)}
                     onPress={() =>
                       router.push({ pathname: '/product/[id]', params: { id: pair[0]!.id } })
                     }
                   />
                 )}
                 {pair[1] ? (
-                  <ProductCard
+                  <ProductCard 
                     item={pair[1]}
-                    liked={true}
-                    onLike={() => toggle(pair[1]!.id)}
+                    liked={isFavorite(pair[1]!.id)}
+                    onLike={() => toggleFavorite(pair[1]!.id)}
                     onPress={() =>
                       router.push({ pathname: '/product/[id]', params: { id: pair[1]!.id } })
                     }
@@ -190,7 +210,7 @@ export default function SavedScreen() {
                 <Text style={styles.insightTitle}>Resumen de Guardados</Text>
                 <Text style={styles.insightDesc}>
                   Tienes {savedItems.length} artículos guardados que suman un total de{' '}
-                  <Text style={styles.insightAmount}>{TOTAL.toLocaleString('es-GQ') + ' XAF'}</Text>.{' '}
+                  <Text style={styles.insightAmount}>{fmtPrice(TOTAL)}</Text>.{' '}
                   ¡No pierdas las mejores ofertas!
                 </Text>
               </View>

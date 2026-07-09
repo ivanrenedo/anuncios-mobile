@@ -38,7 +38,7 @@ export default function LoginScreen() {
           style={styles.backBtn}
           borderRadius={20}
           rippleColor={colors.primary + '18'}
-          onPress={() => router.back()}>
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)}>
           <ArrowLeft size={22} color={colors.onSurface} strokeWidth={1.8} />
         </RipplePress>
       </View>
@@ -52,14 +52,14 @@ export default function LoginScreen() {
 
         <Text style={styles.title}>Bienvenido a Market EG</Text>
         <Text style={styles.subtitle}>
-          Compra y vende productos en Guinea Ecuatorial de forma segura y sencilla.
+          Compra y vende entre particulares en Guinea Ecuatorial de forma segura y sencilla.
         </Text>
 
         <View style={styles.features}>
           {[
-            'Publica anuncios gratis',
+            'Publica anuncios gratis y sin comisiones',
             'Conecta con compradores y vendedores',
-            'Chatea en tiempo real',
+            'Comunidad activa',
           ].map((text) => (
             <View key={text} style={styles.featureRow}>
               <View style={styles.featureDot} />

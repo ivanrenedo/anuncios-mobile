@@ -9,6 +9,7 @@ import {
 import { apolloClient, setToken, removeToken, getToken } from '@/lib/apollo';
 import { GOOGLE_LOGIN } from '@/graphql/mutations';
 import { ME } from '@/graphql/queries';
+import { getErrorMessage } from '@/lib/errors';
 
 const AUTH_STORAGE_KEY = 'market_eg_auth_v1';
 const REFRESH_TOKEN_KEY = 'market_eg_refresh_token';
@@ -38,6 +39,8 @@ export interface AuthUser {
   name: string;
   email: string;
   avatar: string;
+  phone: string | null;
+  verified: boolean;
 }
 
 interface GoogleUser {
@@ -95,6 +98,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               name: data.me.name,
               email: data.me.email,
               avatar: data.me.avatarUrl || cached.avatar,
+              phone: data.me.phone || null,
+              verified: data.me.verified ?? false,
             };
             set({ user: fresh, isAuthenticated: true });
             await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fresh));
@@ -147,15 +152,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         name: user.name,
         email: user.email,
         avatar: user.avatarUrl || googleUser.avatar,
+        phone: user.phone || null,
+        verified: user.verified ?? false,
       };
       set({ user: authUser, isAuthenticated: true });
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
       return authUser;
     } catch (err) {
       console.log('[Auth] Backend login error:', err);
+      // Surfaces the backend message (e.g. "Tu cuenta ha sido suspendida"); falls
+      // back to a connection hint for network/timeout errors.
       Alert.alert(
         'No se pudo iniciar sesión',
-        'No se pudo conectar con el servidor. Comprueba tu conexión y que el backend sea accesible desde el dispositivo (variable EXPO_PUBLIC_API_URL).',
+        getErrorMessage(
+          err,
+          'No se pudo conectar con el servidor. Comprueba tu conexión y la URL del backend (hasPlayServices).',
+        ),
       );
       return null;
     }
@@ -163,10 +175,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   completeWebLogin: async (googleAccessToken) => {
     try {
-      const res = await fetch(
-        'https://www.googleapis.com/oauth2/v3/userinfo',
-        { headers: { Authorization: `Bearer ${googleAccessToken}` } },
-      );
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${googleAccessToken}` },
+      });
       const info = await res.json();
       await get().loginWithBackend({
         id: info.sub,
@@ -180,9 +191,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signInWithGoogleNative: async () => {
+    // Timing probe: logs how long each phase takes so we can see *where* the
+    // delay is (Play Services init, the Google account picker / token exchange,
+    // or our backend mutation). Watch the Metro console for "[Auth timing]".
+    const t0 = Date.now();
+    const lap = (label: string, from: number) =>
+      console.log(`[Auth timing] ${label}: ${Date.now() - from}ms`);
     try {
-      await GoogleSignin.hasPlayServices();
-      const googleResult = await GoogleSignin.signIn();
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: false,
+      });
+      lap('hasPlayServices', t0);
+      const tPicker = Date.now();
+      // Cap the native flow: with the Credential Manager API the bottom sheet
+      // can render as an empty/black overlay and never resolve, hanging the
+      // promise indefinitely. Fail after 45s with a clear error instead.
+      const googleResult = await withTimeout(GoogleSignin.signIn(), 45000);
+      lap('signIn (picker + Google token)', tPicker);
       if (isSuccessResponse(googleResult)) {
         const { user: gUser } = googleResult.data;
         const googleUser: GoogleUser = {
@@ -191,7 +216,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name: gUser.name || '',
           avatar: gUser.photo || '',
         };
+        const tBackend = Date.now();
         const result = await get().loginWithBackend(googleUser);
+        lap('loginWithBackend (our API)', tBackend);
+        lap('TOTAL', t0);
         if (result) {
           console.log('[Auth] Login exitoso:', result.email);
         }

@@ -10,22 +10,18 @@ import {
   Modal,
   Animated,
   Dimensions,
-  Pressable,
 } from 'react-native';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   X,
-  MessageSquare,
   Tag,
   Megaphone,
   Mail,
   Phone,
   Globe,
   Moon,
-  LogOut,
-  Trash2,
   Check,
   ChevronRight,
 } from 'lucide-react-native';
@@ -72,7 +68,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
   const [pending, setPending] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'logout' | 'delete' | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -106,7 +101,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
         setMounted(false);
         setLangOpen(false);
         setThemeOpen(false);
-        setConfirmAction(null);
       });
     }
   }, [visible]);
@@ -126,7 +120,9 @@ export default function SettingsModal({ visible, onClose }: Props) {
 
   const onTheme = async (pref: ThemePref) => {
     setThemeOpen(false);
+    setPending('theme_preference');
     await update({ theme_preference: pref });
+    setPending(null);
   };
 
   const goEditProfile = () => {
@@ -194,14 +190,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
 
             {/* Notifications */}
             <Section title="Notificaciones">
-              {/* <Toggle
-                icon={MessageSquare}
-                label="Mensajes"
-                description="Avísame cuando reciba un mensaje"
-                value={profile.notif_messages}
-                loading={pending === 'notif_messages'}
-                onChange={(v) => onToggle('notif_messages', v)}
-              /> */}
               <Toggle
                 icon={Tag}
                 label="Ofertas y precios"
@@ -301,75 +289,12 @@ export default function SettingsModal({ visible, onClose }: Props) {
         })}
       </SwipeableSheet>
 
-      {/* Confirmation modal */}
-      <Modal
-        transparent
-        visible={confirmAction !== null}
-        animationType="fade"
-        onRequestClose={() => setConfirmAction(null)}
-        statusBarTranslucent>
-        <Pressable style={styles.confirmBackdrop} onPress={() => setConfirmAction(null)}>
-          <Pressable style={styles.confirmCard}>
-            <View
-              style={[
-                styles.confirmIcon,
-                {
-                  backgroundColor:
-                    confirmAction === 'delete'
-                      ? colors.error + '15'
-                      : colors.tertiary + '15',
-                },
-              ]}>
-              {confirmAction === 'delete' ? (
-                <Trash2 size={26} color={colors.error} strokeWidth={1.5} />
-              ) : (
-                <LogOut size={26} color={colors.tertiary} strokeWidth={1.5} />
-              )}
-            </View>
-            <Text style={styles.confirmTitle}>
-              {confirmAction === 'delete' ? 'Eliminar cuenta' : 'Cerrar sesión'}
-            </Text>
-            <Text style={styles.confirmDesc}>
-              {confirmAction === 'delete'
-                ? 'Esta acción no se puede deshacer. Se eliminarán todos tus anuncios y mensajes.'
-                : 'Cerraremos tu sesión en este dispositivo. Podrás volver a entrar cuando quieras.'}
-            </Text>
-            <View style={styles.confirmActions}>
-              <TouchableOpacity
-                style={styles.confirmCancel}
-                onPress={() => setConfirmAction(null)}
-                activeOpacity={0.8}>
-                <Text style={styles.confirmCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.confirmAction,
-                  {
-                    backgroundColor:
-                      confirmAction === 'delete' ? colors.error : colors.tertiary,
-                  },
-                ]}
-                onPress={() => setConfirmAction(null)}
-                activeOpacity={0.85}>
-                <Text style={styles.confirmActionText}>
-                  {confirmAction === 'delete' ? 'Eliminar' : 'Cerrar sesión'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      
     </Modal>
   );
 }
 
-interface SectionProps {
-  title: string;
-  danger?: boolean;
-  children: React.ReactNode;
-}
-
-export function Section({ title, children, danger }: SectionProps) {
+export function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
@@ -626,71 +551,5 @@ const makeStyles = (colors: ThemeColors) =>
   langTextActive: {
     fontFamily: 'Manrope-SemiBold',
     color: colors.primary,
-  },
-  confirmBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  confirmCard: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 24,
-    marginBottom: 'auto',
-    marginTop: 'auto',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    gap: 10,
-  },
-  confirmIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  confirmTitle: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 18,
-    color: colors.onSurface,
-  },
-  confirmDesc: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 14,
-    color: colors.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  confirmCancel: {
-    flex: 1,
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmCancelText: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 14,
-    color: colors.onSurface,
-  },
-  confirmAction: {
-    flex: 1,
-    height: 46,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmActionText: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 14,
-    color: '#ffffff',
   },
 });

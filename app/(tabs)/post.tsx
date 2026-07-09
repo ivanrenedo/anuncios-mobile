@@ -8,7 +8,6 @@ import {
   Image,
   StyleSheet,
   Platform,
-  KeyboardAvoidingView,
   Alert,
   Dimensions,
   BackHandler,
@@ -16,8 +15,9 @@ import {
   Animated,
   FlatList,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import {
   ChevronLeft,
   ChevronDown,
@@ -41,16 +41,17 @@ import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants
 import RipplePress from '@/components/RipplePress';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useCreateProduct } from '@/hooks/useProducts';
+import { useCreateProduct, useUpdateProduct, useProduct } from '@/hooks/useProducts';
 import { useCategoryTree } from '@/hooks/useCategories';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { uploadImages } from '@/lib/upload';
+import { resolveImage } from '@/lib/config';
 import Spinner from '@/components/Spinner';
+import { fmtPrice as fmtPriceCompact } from '@/components/ProductCard';
 import { getErrorMessage } from '@/lib/errors';
 
-// Real user photos only — gallery or camera. Backend accepts ≤5 MB per file.
-const MAX_PHOTOS = 5;
-const MAX_PHOTO_MB = 5;
+const MAX_PHOTOS = 4;
+const MAX_PHOTO_MB = 2;
 
 // expo-image-picker is a native module (requireNativeModule at import). Load it
 // defensively so an outdated binary (built before it was added) degrades
@@ -80,6 +81,12 @@ const KIND_META: Record<
     Icon: ShoppingBag,
     color: colors.primary,
   },
+    inmobiliaria: {
+    label: 'Inmobiliaria',
+    subtitle: 'Pisos, casas, locales y terrenos',
+    Icon: Building2,
+    color: colors.outline,
+  },
   vehiculos: {
     label: 'Vehículos',
     subtitle: 'Coches, motos, camiones y más',
@@ -92,12 +99,6 @@ const KIND_META: Record<
     Icon: Wrench,
     color: colors.secondary,
   },
-  inmobiliaria: {
-    label: 'Inmobiliaria',
-    subtitle: 'Pisos, casas, locales y terrenos',
-    Icon: Building2,
-    color: colors.tertiary,
-  },
   empleo: {
     label: 'Empleo',
     subtitle: 'Publica una oferta o búscala',
@@ -106,65 +107,97 @@ const KIND_META: Record<
   },
 };
 
-const CITIES = [
-  'Malabo',
-  'Bata',
-  'Ebibeyin',
-  'Mongomo',
-  'Luba',
-  'Aconibe',
-  'Evinayong',
-];
 
 const CONDITIONS_FULL = [
   'Sin abrir',
   'Nuevo',
   'Como nuevo',
   'En buen estado',
-  'En condiciones aceptables',
+  'aceptable',
   'Lo ha dado todo',
 ];
 
 const PROPERTY_CONDITIONS = ['Obra nueva', 'Buen estado', 'A reformar'];
 const PROPERTY_OPERATIONS = ['Venta', 'Alquiler'];
-const PROPERTY_TYPES = [
-  'Piso',
-  'Casa',
-  'Habitación',
-  'Local/Oficina',
-  'Garaje',
-  'Terreno',
-  'Trastero',
-];
 
-const VEHICLE_TYPES = [
-  'Coche',
-  'Moto/Bicicleta',
-  'Camión',
-  'Herramientas y accesorios',
-  'Alquiler de vehículos',
-  'Barco',
-];
+
 const ENGINE_TYPES = ['Gasolina', 'Diésel', 'Híbrido', 'Eléctrico', 'GLP'];
 const TRANSMISSION_TYPES = ['Manual', 'Automático'];
 
-const SERVICE_CATEGORIES = [
-  'Limpieza',
-  'Mudanzas',
-  'Reparación',
-  'Belleza',
-  'Clases particulares',
-  'Eventos',
-  'Negocios y gestiones comerciales',
-  'Salud',
-  'Tecnología',
-  'Otros',
-];
+
 const SERVICE_OPTIONS = ['Oferta', 'Demanda'];
 
-const JOB_CATEGORIES = ['Oferta de empleo', 'Busco empleo', 'Practicas'];
-
 type FormState = Record<string, any>;
+
+function getMissingFields(kind: Kind, form: FormState): string[] {
+  const missing: string[] = [];
+  const check = (val: unknown, label: string) => {
+    if (val === undefined || val === null || val === '') missing.push(label);
+  };
+
+  if (!form.photos || form.photos.length === 0) missing.push('Fotos');
+  check(form.categoryId, 'Categoría');
+  check(form.title, 'Título');
+  check(form.description, 'Descripción');
+  check(form.city, 'Ubicación');
+
+  switch (kind) {
+    case 'MarketPlace':
+      check(form.condition, 'Estado');
+      break;
+    case 'vehiculos':
+      check(form.condition, 'Estado');
+      check(form.transmission, 'Cambio');
+      check(form.engine, 'Motor');
+      break;
+    case 'servicios':
+      check(form.offerType, 'Modalidad');
+      break;
+    case 'inmobiliaria':
+      check(form.condition, 'Estado');
+      if (!form.bedrooms || form.bedrooms <= 0) missing.push('Habitaciones');
+      check(form.address, 'Dirección');
+      break;
+  }
+
+  return missing;
+}
+
+function kindFromProduct(product: any): Kind {
+  if (product.vehicleDetail) return 'vehiculos';
+  if (product.propertyDetail) return 'inmobiliaria';
+  if (product.serviceDetail) return 'servicios';
+  if (product.jobDetail) return 'empleo';
+  return 'MarketPlace';
+}
+
+function prefillForm(product: any): FormState {
+  return {
+    photos: product.images?.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((i: any) => resolveImage(i.url)) ?? [],
+    categoryId: product.category?.id,
+    categoryLabel: product.category?.label,
+    title: product.title ?? '',
+    description: product.description ?? '',
+    price: product.price ? String(product.price) : '',
+    discount: product.discount ? String(product.discount) : '',
+    condition: product.condition ?? '',
+    city: product.city ?? '',
+    brand: product.marketplaceDetail?.brand ?? product.vehicleDetail?.brand ?? '',
+    model: product.marketplaceDetail?.model ?? product.vehicleDetail?.model ?? '',
+    operation: product.vehicleDetail?.operation ?? product.propertyDetail?.operation ?? '',
+    year: product.vehicleDetail?.year ? String(product.vehicleDetail.year) : '',
+    kilometrage: product.vehicleDetail?.kilometrage ? String(product.vehicleDetail.kilometrage) : '',
+    transmission: product.vehicleDetail?.transmission ?? '',
+    engine: product.vehicleDetail?.engine ?? '',
+    bedrooms: product.propertyDetail?.bedrooms ? String(product.propertyDetail.bedrooms) : '',
+    bathrooms: product.propertyDetail?.bathrooms ? String(product.propertyDetail.bathrooms) : '',
+    floor: product.propertyDetail?.floor ? String(product.propertyDetail.floor) : '',
+    surface: product.propertyDetail?.surface ? String(product.propertyDetail.surface) : '',
+    address: product.propertyDetail?.address ?? '',
+    offerType: product.serviceDetail?.offerType ?? '',
+    link: product.jobDetail?.link ?? '',
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
@@ -176,13 +209,29 @@ export default function PostScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
-  const { create, loading: publishing } = useCreateProduct();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEdit = !!editId;
+  const { product: editProduct, loading: loadingProduct } = useProduct(editId ?? '');
+  const { create, loading: creating } = useCreateProduct();
+  const { update, loading: updating } = useUpdateProduct();
+  const publishing = isEdit ? updating : creating;
+  const submittingRef = useRef(false);
   const [kind, setKind] = useState<Kind | null>(null);
   const [form, setForm] = useState<FormState>({ photos: [] });
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const editPrefilled = useRef(false);
 
   const setField = (k: string, v: any) =>
     setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (isEdit && editProduct && !editPrefilled.current) {
+      editPrefilled.current = true;
+      setKind(kindFromProduct(editProduct));
+      setForm(prefillForm(editProduct));
+    }
+  }, [isEdit, editProduct]);
 
   // Intercept hardware / gesture back: reset kind to null instead of leaving
   useFocusEffect(
@@ -190,6 +239,10 @@ export default function PostScreen() {
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
         if (previewOpen) {
           setPreviewOpen(false);
+          return true;
+        }
+        if (isEdit) {
+          reset();
           return true;
         }
         if (kind) {
@@ -200,24 +253,27 @@ export default function PostScreen() {
         return false;
       });
       return () => sub.remove();
-    }, [kind, previewOpen])
+    }, [kind, previewOpen, isEdit])
   );
 
   const reset = () => {
     setKind(null);
     setForm({ photos: [] });
     setPreviewOpen(false);
+    setShowErrors(false);
+    editPrefilled.current = false;
+    if (isEdit) {
+      router.setParams({ editId: '' });
+      router.push('/(tabs)/profile')
+    }
   };
 
   const onPublish = async () => {
-    if (!form.categoryId) {
-      Alert.alert('Falta la categoría', 'Selecciona una categoría para tu anuncio.');
-      return;
-    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     try {
       let imageUrls: string[] = [];
       if (form.photos && form.photos.length > 0) {
-        // Upload local files; keep any already-hosted URLs as-is.
         const toUpload = form.photos.filter((p: string) => !/^https?:\/\//.test(p));
         const existing = form.photos.filter((p: string) => /^https?:\/\//.test(p));
         const uploaded = toUpload.length > 0 ? await uploadImages(toUpload) : [];
@@ -227,6 +283,7 @@ export default function PostScreen() {
       const input: any = {
         title: form.title || 'Sin título',
         price: parseFloat(String(form.price || '0').replace(/\./g, '').replace(',', '.')),
+        discount: form.discount ? parseInt(form.discount) : undefined,
         description: form.description,
         condition: form.condition,
         city: form.city,
@@ -236,30 +293,46 @@ export default function PostScreen() {
       if (form.categoryId) input.categoryId = form.categoryId;
 
       if (kind === 'MarketPlace' && (form.brand || form.model)) {
-        input.marketplaceDetail = { brand: form.brand, model: form.model };
+        input.marketplaceDetail = { brand: form.brand || undefined, model: form.model || undefined };
       } else if (kind === 'vehiculos') {
         input.vehicleDetail = {
-          vehicleType: form.vehicleType, brand: form.brand, model: form.model,
+          operation: form.operation || undefined,
+          brand: form.brand || undefined,
+          model: form.model || undefined,
           year: form.year ? parseInt(form.year) : undefined,
-          transmission: form.transmission, engine: form.engine,
+          kilometrage: form.kilometrage ? parseInt(form.kilometrage) : undefined,
+          transmission: form.transmission || undefined,
+          engine: form.engine || undefined,
         };
       } else if (kind === 'inmobiliaria') {
         input.propertyDetail = {
-          operation: form.operation, propertyType: form.propertyType,
+          operation: form.operation || undefined,
           bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
           bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
-          address: form.address,
+          floor: form.floor ? parseInt(form.floor) : undefined,
+          surface: form.surface ? parseInt(form.surface) : undefined,
+          address: form.address || undefined,
         };
       } else if (kind === 'servicios') {
-        input.serviceDetail = { serviceType: form.serviceType, offerType: form.offerType };
+        input.serviceDetail = { offerType: form.offerType || undefined };
       } else if (kind === 'empleo') {
-        input.jobDetail = { jobType: form.jobType, link: form.link };
+        input.jobDetail = { link: form.link || undefined };
       }
 
-      await create(input);
-      Alert.alert('Publicado', 'Tu anuncio ha sido publicado.', [{ text: 'OK', onPress: reset }]);
+      if (isEdit) {
+        await update(editId!, input);
+        submittingRef.current = false;
+        Alert.alert('Actualizado', 'Tu anuncio ha sido actualizado.', [
+          { text: 'OK', onPress: reset },
+        ]);
+      } else {
+        await create(input);
+        submittingRef.current = false;
+        Alert.alert('Publicado', 'Tu anuncio ha sido publicado.', [{ text: 'OK', onPress: reset }]);
+      }
     } catch (err) {
-      Alert.alert('Error', getErrorMessage(err, 'No se pudo publicar el anuncio.'));
+      submittingRef.current = false;
+      Alert.alert('Error', getErrorMessage(err, isEdit ? 'No se pudo actualizar el anuncio.' : 'No se pudo publicar el anuncio.'));
     }
   };
 
@@ -287,14 +360,20 @@ export default function PostScreen() {
     );
   }
 
+  if (isEdit && loadingProduct) {
+    return (
+      <View style={[styles.root, { alignItems: 'center' as const, justifyContent: 'center' as const }]}>
+        <Spinner color={colors.primary} />
+      </View>
+    );
+  }
+
   if (!kind) {
     return <KindPicker insets={insets} onPick={setKind} />;
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.root}>
+    <View style={styles.root}>
       <View
         style={[
           styles.header,
@@ -308,41 +387,44 @@ export default function PostScreen() {
           <ChevronLeft size={22} color={colors.onSurface} strokeWidth={2} />
         </RipplePress>
         <Text style={styles.headerTitle}>
-          Publicar {KIND_META[kind].label.toLowerCase()}
+          {isEdit ? 'Editar anuncio' : `Publicar ${KIND_META[kind].label.toLowerCase()}`}
         </Text>
         <View style={styles.headerBtn} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           padding: 16,
           paddingBottom: insets.bottom + 110,
         }}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
+        enableOnAndroid>
         <PhotoPicker
           photos={form.photos ?? []}
           setPhotos={(p) => setField('photos', p)}
+          showErrors={showErrors}
         />
 
-        <CategoryField form={form} setField={setField} />
+        <CategoryField form={form} setField={setField} kind={kind} showErrors={showErrors} />
 
         {kind === 'MarketPlace' && (
-          <ProductoForm form={form} setField={setField} />
+          <ProductoForm form={form} setField={setField} showErrors={showErrors} />
         )}
         {kind === 'vehiculos' && (
-          <VehiculoForm form={form} setField={setField} />
+          <VehiculoForm form={form} setField={setField} showErrors={showErrors} />
         )}
         {kind === 'servicios' && (
-          <ServicioForm form={form} setField={setField} />
+          <ServicioForm form={form} setField={setField} showErrors={showErrors} />
         )}
         {kind === 'inmobiliaria' && (
-          <InmobiliariaForm form={form} setField={setField} />
+          <InmobiliariaForm form={form} setField={setField} showErrors={showErrors} />
         )}
         {kind === 'empleo' && (
-          <EmpleoForm form={form} setField={setField} />
+          <EmpleoForm form={form} setField={setField} showErrors={showErrors} />
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View
         style={[
@@ -353,9 +435,20 @@ export default function PostScreen() {
           style={styles.publishBtn}
           borderRadius={14}
           rippleColor="rgba(255,255,255,0.25)"
-          onPress={() => setPreviewOpen(true)}>
+          onPress={() => {
+            const missing = getMissingFields(kind, form);
+            if (missing.length > 0) {
+              setShowErrors(true);
+              Alert.alert(
+                'Campos obligatorios',
+                `Completa los siguientes campos:\n\n• ${missing.join('\n• ')}`,
+              );
+              return;
+            }
+            setPreviewOpen(true);
+          }}>
           <Eye size={20} color="#ffffff" strokeWidth={2} />
-          <Text style={styles.publishBtnText}>Revisar y publicar</Text>
+          <Text style={styles.publishBtnText}>{isEdit ? 'Revisar y guardar' : 'Revisar y publicar'}</Text>
         </RipplePress>
       </View>
 
@@ -367,8 +460,9 @@ export default function PostScreen() {
         onClose={() => setPreviewOpen(false)}
         onPublish={onPublish}
         loading={publishing}
+        isEdit={isEdit}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -431,6 +525,29 @@ function KindPicker({
 interface FormProps {
   form: FormState;
   setField: (k: string, v: any) => void;
+  showErrors?: boolean;
+}
+
+const SPECIALIZED_LABELS = ['vehículos', 'inmobiliaria', 'servicios', 'empleo'];
+
+const KIND_TO_CATEGORY: Record<Kind, string | null> = {
+  vehiculos: 'vehículos',
+  inmobiliaria: 'inmobiliaria',
+  servicios: 'servicios',
+  empleo: 'empleo',
+  MarketPlace: null,
+};
+
+function filterTreeByKind(tree: any[], kind: Kind): any[] {
+  const mapped = KIND_TO_CATEGORY[kind];
+  if (mapped) {
+    const match = tree.find((c: any) => c.label.toLowerCase() === mapped);
+    return match ? [match] : [];
+  }
+
+  return tree.filter(
+    (c: any) => !SPECIALIZED_LABELS.includes(c.label.toLowerCase()),
+  );
 }
 
 /**
@@ -438,12 +555,14 @@ interface FormProps {
  * Stores the chosen node's id in `categoryId` (required by the backend) and a
  * human label in `categoryLabel` (for the preview).
  */
-function CategoryField({ form, setField }: FormProps) {
+function CategoryField({ form, setField, kind, showErrors }: FormProps & { kind: Kind; showErrors?: boolean }) {
   const { tree } = useCategoryTree();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [open, setOpen] = useState(false);
   const [root, setRoot] = useState<any>(null);
+
+  const filtered = filterTreeByKind(tree, kind);
 
   const close = () => {
     setOpen(false);
@@ -456,7 +575,7 @@ function CategoryField({ form, setField }: FormProps) {
   };
 
   return (
-    <Field label="Categoría">
+    <Field label="Categoría" required error={showErrors && !form.categoryId}>
       <TouchableOpacity
         style={styles.select}
         activeOpacity={0.85}
@@ -474,7 +593,7 @@ function CategoryField({ form, setField }: FormProps) {
           showsVerticalScrollIndicator={false}
           style={{ maxHeight: SCREEN_HEIGHT * 0.55 }}>
           {!root
-            ? tree.map((r: any) => (
+            ? filtered.map((r: any) => (
                 <TouchableOpacity
                   key={r.id}
                   style={styles.selectOption}
@@ -539,10 +658,11 @@ function CategoryField({ form, setField }: FormProps) {
   );
 }
 
-function ProductoForm({ form, setField }: FormProps) {
+function ProductoForm({ form, setField, showErrors }: FormProps) {
+  const e = showErrors;
   return (
     <>
-      <Field label="Título">
+      <Field label="Título" required error={e && !form.title}>
         <Input
           placeholder="Ej: iPhone 15 Pro 256GB"
           value={form.title}
@@ -550,7 +670,7 @@ function ProductoForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Descripción">
+      <Field label="Descripción" required error={e && !form.description}>
         <Textarea
           placeholder="Detalles, motivo de venta, garantía…"
           value={form.description}
@@ -575,13 +695,13 @@ function ProductoForm({ form, setField }: FormProps) {
         </Field>
       </RowFields>
 
-      <Field label="Estado">
+      <Field label="Estado" required error={e && !form.condition}>
         <Select
           options={CONDITIONS_FULL}
           value={form.condition}
           onChange={(v) => setField('condition', v)}
           placeholder="Selecciona el estado"
-          title="Estado del producto"
+          title="Estado del anuncio"
         />
       </Field>
 
@@ -605,31 +725,57 @@ function ProductoForm({ form, setField }: FormProps) {
         </Field>
       </RowFields>
 
-      <Field label="Ciudad">
-        <Select
-          options={CITIES}
+      <Field label="Ubicación (Ciudad)" required error={e && !form.city}>
+        <Input
+          placeholder="Ej: Malabo"
           value={form.city}
-          onChange={(v) => setField('city', v)}
-          placeholder="Selecciona la ciudad"
-          title="Ciudad"
+          onChangeText={(v) => setField('city', v)}
         />
       </Field>
     </>
   );
 }
 
-function VehiculoForm({ form, setField }: FormProps) {
+function VehiculoForm({ form, setField, showErrors }: FormProps) {
+  const e = showErrors;
   return (
     <>
-      <Field label="Tipo de vehículo">
-        <Select
-          options={VEHICLE_TYPES}
-          value={form.vehicleType}
-          onChange={(v) => setField('vehicleType', v)}
-          placeholder="Selecciona el tipo"
-          title="Tipo de vehículo"
+      <Field label="Título" required error={e && !form.title}>
+        <Input
+          placeholder="Ej: Toyota Hilux 2020 4x4"
+          value={form.title}
+          onChangeText={(v) => setField('title', v)}
         />
       </Field>
+
+      <Field label="Descripción" required error={e && !form.description}>
+        <Textarea
+          placeholder="Kilometraje, mantenimiento, equipamiento…"
+          value={form.description}
+          onChangeText={(v) => setField('description', v)}
+        />
+      </Field>
+
+      <RowFields>
+        <Field label="Operación" style={{ flex: 1 }}>
+          <Select
+            options={PROPERTY_OPERATIONS}
+            value={form.operation}
+            onChange={(v) => setField('operation', v)}
+            placeholder="Venta o alquiler"
+            title="Operación"
+          />
+        </Field>
+        <Field label="Estado" required error={e && !form.condition} style={{ flex: 1 }}>
+          <Select
+            options={CONDITIONS_FULL}
+            value={form.condition}
+            onChange={(v) => setField('condition', v)}
+            placeholder="Estado"
+            title="Estado del vehículo"
+          />
+        </Field>
+      </RowFields>
 
       <RowFields>
         <Field label="Marca" style={{ flex: 1 }}>
@@ -658,7 +804,18 @@ function VehiculoForm({ form, setField }: FormProps) {
             maxLength={4}
           />
         </Field>
-        <Field label="Cambio" style={{ flex: 1 }}>
+        <Field label="Kilometraje" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.kilometrage}
+            onChangeText={(v) => setField('kilometrage', onlyNumeric(v))}
+            keyboardType="numeric"
+          />
+        </Field>
+      </RowFields>
+
+      <RowFields>
+        <Field label="Cambio" required error={e && !form.transmission} style={{ flex: 1 }}>
           <Select
             options={TRANSMISSION_TYPES}
             value={form.transmission}
@@ -667,43 +824,16 @@ function VehiculoForm({ form, setField }: FormProps) {
             title="Cambio"
           />
         </Field>
-      </RowFields>
-
-      <Field label="Motor">
+        <Field label="Motor" required error={e && !form.engine} style={{ flex: 1 }}>
         <Select
           options={ENGINE_TYPES}
           value={form.engine}
           onChange={(v) => setField('engine', v)}
-          placeholder="Selecciona el tipo de motor"
+          placeholder="Tipo"
           title="Motor"
         />
-      </Field>
-
-      <Field label="Estado">
-        <Select
-          options={CONDITIONS_FULL}
-          value={form.condition}
-          onChange={(v) => setField('condition', v)}
-          placeholder="Selecciona el estado"
-          title="Estado del vehículo"
-        />
-      </Field>
-
-      <Field label="Título">
-        <Input
-          placeholder="Ej: Toyota Hilux 2020 4x4"
-          value={form.title}
-          onChangeText={(v) => setField('title', v)}
-        />
-      </Field>
-
-      <Field label="Descripción">
-        <Textarea
-          placeholder="Kilometraje, mantenimiento, equipamiento…"
-          value={form.description}
-          onChangeText={(v) => setField('description', v)}
-        />
-      </Field>
+        </Field>
+      </RowFields>
 
       <RowFields>
         <Field label="Precio (XAF)" style={{ flex: 1 }}>
@@ -725,41 +855,22 @@ function VehiculoForm({ form, setField }: FormProps) {
         </Field>
       </RowFields>
 
-      <Field label="Ciudad">
-        <Select
-          options={CITIES}
+      <Field label="Ubicación (Ciudad)" required error={e && !form.city}>
+        <Input
+          placeholder="Ej: Malabo"
           value={form.city}
-          onChange={(v) => setField('city', v)}
-          placeholder="Selecciona la ciudad"
-          title="Ciudad"
+          onChangeText={(v) => setField('city', v)}
         />
       </Field>
     </>
   );
 }
 
-function ServicioForm({ form, setField }: FormProps) {
+function ServicioForm({ form, setField, showErrors }: FormProps) {
+  const e = showErrors;
   return (
     <>
-      <Field label="Servicio">
-        <Select
-          options={SERVICE_CATEGORIES}
-          value={form.service}
-          onChange={(v) => setField('service', v)}
-          placeholder="Selecciona el servicio"
-          title="Listado de servicios"
-        />
-      </Field>
-      <Field label="Categoría">
-        <Select
-          options={SERVICE_OPTIONS}
-          value={form.category}
-          onChange={(v) => setField('category', v)}
-          placeholder="¿Buscas u ofreces?"
-          title="Categoría de servicios"
-        />
-      </Field>
-      <Field label="Título">
+     <Field label="Título" required error={e && !form.title}>
         <Input
           placeholder="Ej: Electricista a domicilio"
           value={form.title}
@@ -767,7 +878,7 @@ function ServicioForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Descripción">
+      <Field label="Descripción" required error={e && !form.description}>
         <Textarea
           placeholder="Experiencia, horarios, qué incluye el servicio…"
           value={form.description}
@@ -775,31 +886,68 @@ function ServicioForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Precio (XAF)">
-        <Input
-          placeholder="0"
-          value={form.price}
-          onChangeText={(v) => setField('price', onlyNumeric(v))}
-          keyboardType="numeric"
+      <Field label="Modalidad" required error={e && !form.offerType}>
+        <Select
+          options={SERVICE_OPTIONS}
+          value={form.offerType}
+          onChange={(v) => setField('offerType', v)}
+          placeholder="¿Buscas u ofreces?"
+          title="Modalidad"
         />
       </Field>
 
-      <Field label="Ciudad">
-        <Select
-          options={CITIES}
+
+      <RowFields>
+        <Field label="Precio (XAF)" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.price}
+            onChangeText={(v) => setField('price', onlyNumeric(v))}
+            keyboardType="numeric"
+          />
+        </Field>
+        <Field label="Descuento (%)" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.discount}
+            onChangeText={(v) => setField('discount', onlyNumeric(v))}
+            keyboardType="numeric"
+            maxLength={2}
+          />
+        </Field>
+      </RowFields>
+
+      <Field label="Ubicación (Ciudad)" required error={e && !form.city}>
+        <Input
+          placeholder="Ej: Malabo"
           value={form.city}
-          onChange={(v) => setField('city', v)}
-          placeholder="Selecciona la ciudad"
-          title="Ciudad"
+          onChangeText={(v) => setField('city', v)}
         />
       </Field>
     </>
   );
 }
 
-function InmobiliariaForm({ form, setField }: FormProps) {
+function InmobiliariaForm({ form, setField, showErrors }: FormProps) {
+  const e = showErrors;
   return (
     <>
+    <Field label="Título" required error={e && !form.title}>
+        <Input
+          placeholder="Ej: Piso 3 hab. centro Malabo"
+          value={form.title}
+          onChangeText={(v) => setField('title', v)}
+        />
+      </Field>
+
+      <Field label="Descripción" required error={e && !form.description}>
+        <Textarea
+          placeholder="Superficie, planta, año, características…"
+          value={form.description}
+          onChangeText={(v) => setField('description', v)}
+        />
+      </Field>
+
       <Field label="Operación">
         <Select
           options={PROPERTY_OPERATIONS}
@@ -810,17 +958,7 @@ function InmobiliariaForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Tipo de inmueble">
-        <Select
-          options={PROPERTY_TYPES}
-          value={form.propertyType}
-          onChange={(v) => setField('propertyType', v)}
-          placeholder="Selecciona el tipo"
-          title="Tipo de inmueble"
-        />
-      </Field>
-
-      <Field label="Estado">
+      <Field label="Estado" required error={e && !form.condition}>
         <Select
           options={PROPERTY_CONDITIONS}
           value={form.condition}
@@ -831,7 +969,7 @@ function InmobiliariaForm({ form, setField }: FormProps) {
       </Field>
 
       <RowFields>
-        <Field label="Habitaciones" style={{ flex: 1 }}>
+        <Field label="Habitaciones" required error={e && (!form.bedrooms || form.bedrooms <= 0)} style={{ flex: 1 }}>
           <Stepper
             value={form.bedrooms ?? 0}
             onChange={(v) => setField('bedrooms', v)}
@@ -845,32 +983,44 @@ function InmobiliariaForm({ form, setField }: FormProps) {
         </Field>
       </RowFields>
 
-      <Field label="Título">
-        <Input
-          placeholder="Ej: Piso 3 hab. centro Malabo"
-          value={form.title}
-          onChangeText={(v) => setField('title', v)}
-        />
-      </Field>
+      <RowFields>
+        <Field label="Planta" style={{ flex: 1 }}>
+          <Stepper
+            value={form.floor ?? 0}
+            onChange={(v) => setField('floor', v)}
+          />
+        </Field>
+        <Field label="Superficie (m²)" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.surface}
+            onChangeText={(v) => setField('surface', onlyNumeric(v))}
+            keyboardType="numeric"
+          />
+        </Field>
+      </RowFields>
 
-      <Field label="Descripción">
-        <Textarea
-          placeholder="Superficie, planta, año, características…"
-          value={form.description}
-          onChangeText={(v) => setField('description', v)}
-        />
-      </Field>
+      <RowFields>
+        <Field label="Precio (XAF)" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.price}
+            onChangeText={(v) => setField('price', onlyNumeric(v))}
+            keyboardType="numeric"
+          />
+        </Field>
+        <Field label="Descuento (%)" style={{ flex: 1 }}>
+          <Input
+            placeholder="0"
+            value={form.discount}
+            onChangeText={(v) => setField('discount', onlyNumeric(v))}
+            keyboardType="numeric"
+            maxLength={2}
+          />
+        </Field>
+      </RowFields>
 
-      <Field label="Precio (XAF)">
-        <Input
-          placeholder="0"
-          value={form.price}
-          onChangeText={(v) => setField('price', onlyNumeric(v))}
-          keyboardType="numeric"
-        />
-      </Field>
-
-      <Field label="Dirección">
+      <Field label="Dirección" required error={e && !form.address}>
         <Input
           placeholder="Calle, barrio, referencia"
           value={form.address}
@@ -878,33 +1028,22 @@ function InmobiliariaForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Ciudad">
-        <Select
-          options={CITIES}
+      <Field label="Ubicación (Ciudad)" required error={e && !form.city}>
+        <Input
+          placeholder="Ej: Malabo"
           value={form.city}
-          onChange={(v) => setField('city', v)}
-          placeholder="Selecciona la ciudad"
-          title="Ciudad"
+          onChangeText={(v) => setField('city', v)}
         />
       </Field>
     </>
   );
 }
 
-function EmpleoForm({ form, setField }: FormProps) {
+function EmpleoForm({ form, setField, showErrors }: FormProps) {
+  const e = showErrors;
   return (
     <>
-      <Field label="Categoría">
-        <Select
-          options={JOB_CATEGORIES}
-          value={form.category}
-          onChange={(v) => setField('category', v)}
-          placeholder="¿Buscas u ofreces?"
-          title="Categoría"
-        />
-      </Field>
-
-      <Field label="Título">
+      <Field label="Título" required error={e && !form.title}>
         <Input
           placeholder="Ej: Camarero/a a media jornada"
           value={form.title}
@@ -912,7 +1051,7 @@ function EmpleoForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Descripción">
+      <Field label="Descripción" required error={e && !form.description}>
         <Textarea
           placeholder="Requisitos, salario, horarios, contacto…"
           value={form.description}
@@ -928,13 +1067,11 @@ function EmpleoForm({ form, setField }: FormProps) {
         />
       </Field>
 
-      <Field label="Ciudad">
-        <Select
-          options={CITIES}
+      <Field label="Ubicación (Ciudad)" required error={e && !form.city}>
+        <Input
+          placeholder="Ej: Malabo"
           value={form.city}
-          onChange={(v) => setField('city', v)}
-          placeholder="Selecciona la ciudad"
-          title="Ciudad"
+          onChangeText={(v) => setField('city', v)}
         />
       </Field>
     </>
@@ -955,7 +1092,7 @@ function getPreviewFields(
     out.push({ label, value: String(raw) });
   };
   const fmtPrice = (v: unknown) =>
-    v ? `${Number(v).toLocaleString('es-GQ')} XAF` : undefined;
+    v ? fmtPriceCompact(Number(v)) : undefined;
 
   add('Categoría', form.categoryLabel);
 
@@ -967,48 +1104,48 @@ function getPreviewFields(
       add('Estado', form.condition);
       add('Precio', fmtPrice(form.price));
       add('Descuento', form.discount ? `${form.discount}%` : undefined);
-      add('Ciudad', form.city);
+      add('Ubicación (Ciudad)', form.city);
       add('Descripción', form.description);
       break;
     case 'vehiculos':
-      add('Tipo de vehículo', form.vehicleType);
+      add('Operación', form.operation);
       add('Marca', form.brand);
       add('Modelo', form.model);
       add('Año', form.year);
+      add('Kilometraje', form.kilometrage);
       add('Cambio', form.transmission);
       add('Motor', form.engine);
       add('Estado', form.condition);
       add('Título', form.title);
       add('Precio', fmtPrice(form.price));
       add('Descuento', form.discount ? `${form.discount}%` : undefined);
-      add('Ciudad', form.city);
+      add('Ubicación (Ciudad)', form.city);
       add('Descripción', form.description);
       break;
     case 'servicios':
-      add('Servicio', form.service);
-      add('Modalidad', form.category);
+      add('Modalidad', form.offerType);
       add('Título', form.title);
       add('Precio', fmtPrice(form.price));
-      add('Ciudad', form.city);
+      add('Ubicación (Ciudad)', form.city);
       add('Descripción', form.description);
       break;
     case 'inmobiliaria':
       add('Operación', form.operation);
-      add('Tipo de inmueble', form.propertyType);
       add('Estado', form.condition);
       add('Habitaciones', form.bedrooms > 0 ? form.bedrooms : undefined);
       add('Baños', form.bathrooms > 0 ? form.bathrooms : undefined);
+      add('Planta', form.floor > 0 ? form.floor : undefined);
+      add('Superficie', form.surface ? `${form.surface} m²` : undefined);
       add('Título', form.title);
       add('Precio', fmtPrice(form.price));
       add('Dirección', form.address);
-      add('Ciudad', form.city);
+      add('Ubicación (Ciudad)', form.city);
       add('Descripción', form.description);
       break;
     case 'empleo':
-      add('Modalidad', form.category);
       add('Título', form.title);
       add('Enlace web', form.link);
-      add('Ciudad', form.city);
+      add('Ubicación (Ciudad)', form.city);
       add('Descripción', form.description);
       break;
   }
@@ -1024,6 +1161,7 @@ function PreviewModal({
   onClose,
   onPublish,
   loading,
+  isEdit,
 }: {
   visible: boolean;
   kind: Kind;
@@ -1031,6 +1169,7 @@ function PreviewModal({
   onClose: () => void;
   onPublish: () => void;
   loading?: boolean;
+  isEdit?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -1166,12 +1305,12 @@ function PreviewModal({
             return (
               <View style={styles.pvPriceRow}>
                 <Text style={styles.pvPrice}>
-                  {final.toLocaleString('es-GQ')} XAF
+                  {fmtPriceCompact(final)}
                 </Text>
                 {hasDiscount && (
                   <>
                     <Text style={styles.pvPriceOriginal}>
-                      {raw.toLocaleString('es-GQ')} XAF
+                      {fmtPriceCompact(raw)}
                     </Text>
                     <View style={styles.pvDiscountBadge}>
                       <Text style={styles.pvDiscountText}>-{disc}%</Text>
@@ -1231,7 +1370,7 @@ function PreviewModal({
             { paddingBottom: Math.max(insets.bottom, 12) },
           ]}>
           <RipplePress
-            style={styles.publishBtn}
+            style={[styles.publishBtn, loading && { opacity: 0.5 }]}
             borderRadius={14}
             rippleColor="rgba(255,255,255,0.25)"
             onPress={() => {
@@ -1240,7 +1379,7 @@ function PreviewModal({
             {loading ? (
               <Spinner color="#ffffff" />
             ) : (
-              <Text style={styles.publishBtnText}>Publicar anuncio</Text>
+              <Text style={styles.publishBtnText}>{isEdit ? 'Guardar cambios' : 'Publicar anuncio'}</Text>
             )}
           </RipplePress>
         </View>
@@ -1257,16 +1396,26 @@ function Field({
   label,
   children,
   style,
+  required,
+  error,
 }: {
   label: string;
   children: React.ReactNode;
   style?: any;
+  required?: boolean;
+  error?: boolean;
 }) {
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
     <View style={[{ marginBottom: 18 }, style]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
+      <Text style={styles.fieldLabel}>
+        {label}
+        {required && <Text style={{ color: colors.error }}> *</Text>}
+      </Text>
+      <View style={error ? styles.fieldError : undefined}>
+        {children}
+      </View>
     </View>
   );
 }
@@ -1434,9 +1583,11 @@ function RowFields({ children }: { children: React.ReactNode }) {
 function PhotoPicker({
   photos,
   setPhotos,
+  showErrors,
 }: {
   photos: string[];
   setPhotos: (p: string[]) => void;
+  showErrors?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -1511,8 +1662,12 @@ function PhotoPicker({
   return (
     <View style={{ marginBottom: 22 }}>
       <View style={styles.photoHeader}>
-        <Text style={styles.fieldLabel}>Fotos</Text>
-        <Text style={styles.photoCount}>{photos.length}/{MAX_PHOTOS}</Text>
+        <Text style={styles.fieldLabel}>
+          Fotos<Text style={{ color: colors.error }}> *</Text>
+        </Text>
+        <Text style={[styles.photoCount, showErrors && photos.length === 0 && { color: colors.error }]}>
+          {photos.length}/{MAX_PHOTOS}
+        </Text>
       </View>
       <ScrollView
         horizontal
@@ -1537,7 +1692,7 @@ function PhotoPicker({
         ))}
         {photos.length < MAX_PHOTOS && (
           <TouchableOpacity
-            style={styles.photoAdd}
+            style={[styles.photoAdd, showErrors && photos.length === 0 && { borderColor: colors.error }]}
             activeOpacity={0.85}
             onPress={addPhoto}>
             <Camera size={22} color={colors.primary} strokeWidth={1.5} />
@@ -1649,6 +1804,11 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.onSurfaceVariant,
     marginBottom: 8,
     letterSpacing: 0.1,
+  },
+  fieldError: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.error,
   },
   input: {
     backgroundColor: colors.surfaceContainerLow,
@@ -1902,7 +2062,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   pvPrice: {
     fontFamily: 'Manrope-Bold',
-    fontSize: 32,
+    fontSize: 28,
     color: colors.primary,
     letterSpacing: -0.5,
   },

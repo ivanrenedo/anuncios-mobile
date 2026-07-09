@@ -20,7 +20,7 @@ import { useProducts } from '@/hooks/useProducts';
 import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SIDEBAR_WIDTH = 116;
+const SIDEBAR_WIDTH = 120;
 const RIGHT_WIDTH = SCREEN_WIDTH - SIDEBAR_WIDTH;
 const TILE_GAP = 12;
 const TILE_WIDTH = (RIGHT_WIDTH - 16 * 2 - TILE_GAP * 2) / 3;

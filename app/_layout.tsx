@@ -20,6 +20,8 @@ import { apolloClient } from '@/lib/apollo';
 import { ProfileProvider } from '@/hooks/useProfile';
 import { AuthProvider } from '@/hooks/useAuth';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useFavoritesSync } from '@/hooks/useFavorites';
+import { usePhoneGate } from '@/hooks/usePhoneGate';
 import { ThemeProvider, useTheme } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -27,6 +29,8 @@ SplashScreen.preventAutoHideAsync();
 function RootNavigator() {
   const { colors, isDark } = useTheme();
   usePushNotifications();
+  useFavoritesSync();
+  usePhoneGate();
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <Stack
@@ -49,7 +53,23 @@ function RootNavigator() {
           options={{ animation: 'none' }}
         />
         <Stack.Screen
+          name="verify-phone"
+          options={{ animation: 'none', gestureEnabled: false }}
+        />
+        <Stack.Screen
           name="login"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="help"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="privacy"
           options={{ animation: 'none' }}
         />
         <Stack.Screen name="+not-found" />

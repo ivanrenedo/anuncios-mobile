@@ -9,9 +9,12 @@ import {
   NativeScrollEvent,
   StyleSheet,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
+import { resolveImage } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDE_WIDTH = SCREEN_WIDTH - 32;
@@ -20,7 +23,20 @@ const ITEM_WIDTH = SLIDE_WIDTH + SLIDE_GAP;
 const AUTOPLAY_MS = 4500;
 const IMAGE_OVERFLOW = SLIDE_WIDTH * 0.18;
 
-const slides = [
+interface Slide {
+  id: string;
+  badge: string;
+  badgeColor: string;
+  title: string;
+  subtitle: string;
+  buttonLabel: string;
+  buttonTextColor: string;
+  image: string;
+  linkType?: 'none' | 'product' | 'category' | 'url';
+  linkValue?: string;
+}
+
+const DEFAULT_SLIDES: Slide[] = [
   {
     id: '1',
     badge: 'PROMO',
@@ -89,7 +105,35 @@ const slides = [
   },
 ];
 
-export default function PromoCarousel() {
+interface PromoCarouselProps {
+  config?: any;
+  onSlidePress?: () => void;
+}
+
+export default function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
+  const router = useRouter();
+  const slides: Slide[] = (config?.slides as Slide[] | undefined)?.length
+    ? config.slides
+    : DEFAULT_SLIDES;
+
+  const handleSlidePress = (slide: Slide) => {
+    const value = slide.linkValue?.trim();
+    if (!value) return;
+    onSlidePress?.();
+    switch (slide.linkType) {
+      case 'product':
+        router.push({ pathname: '/product/[id]', params: { id: value } });
+        break;
+      case 'category':
+        router.push({ pathname: '/(tabs)/explore', params: { filterCat: value } });
+        break;
+      case 'url':
+        Linking.openURL(value).catch(() => {});
+        break;
+      default:
+        break;
+    }
+  };
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -184,7 +228,7 @@ export default function PromoCarousel() {
               key={slide.id}
               style={[styles.slide, { transform: [{ scale }], opacity }]}>
               <Animated.Image
-                source={{ uri: slide.image }}
+                source={{ uri: resolveImage(slide.image) }}
                 style={[
                   styles.image,
                   { transform: [{ translateX: imageTranslateX }] },
@@ -211,7 +255,10 @@ export default function PromoCarousel() {
                 </View>
                 <Text style={styles.title}>{slide.title}</Text>
                 <Text style={styles.subtitle}>{slide.subtitle}</Text>
-                <TouchableOpacity style={styles.button} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={styles.button}
+                  activeOpacity={0.85}
+                  onPress={() => handleSlidePress(slide)}>
                   <Text
                     style={[styles.buttonText, { color: slide.buttonTextColor }]}>
                     {slide.buttonLabel}

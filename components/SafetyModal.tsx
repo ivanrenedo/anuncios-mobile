@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void;
   phoneNumber?: string;
   whatsappNumber?: string;
+  whatsappMessage?: string;
 }
 
 function WhatsAppSvg() {
@@ -74,8 +75,9 @@ export default function SafetyModal({
   visible,
   mode,
   onClose,
-  phoneNumber = '+2402223456',
-  whatsappNumber = '2402223456',
+  phoneNumber,
+  whatsappNumber,
+  whatsappMessage,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -157,7 +159,10 @@ export default function SafetyModal({
   const handleContinue = () => {
     onClose();
     if (mode === 'whatsapp') {
-      setTimeout(() => Linking.openURL(`https://wa.me/${whatsappNumber}`), 300);
+      const waUrl = whatsappMessage
+        ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
+        : `https://wa.me/${whatsappNumber}`;
+      setTimeout(() => Linking.openURL(waUrl), 300);
     } else if (mode === 'call') {
       setTimeout(() => Linking.openURL(`tel:${phoneNumber}`), 300);
     }

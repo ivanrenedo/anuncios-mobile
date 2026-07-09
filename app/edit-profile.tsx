@@ -5,12 +5,12 @@ import {
   Image,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +27,15 @@ import {
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
+import { uploadImage } from '@/lib/upload';
 import Skeleton from '@/components/Skeleton';
+
+let ImagePicker: typeof import('expo-image-picker') | null = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch {
+  ImagePicker = null;
+}
 
 interface FormState {
   name: string;
@@ -56,6 +64,8 @@ export default function EditProfileScreen() {
     cover_url: '',
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<'avatar' | 'cover' | null>(null);
+  const [removed, setRemoved] = useState<{ avatar?: boolean; cover?: boolean }>({});
   const [error, setError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
 
@@ -75,11 +85,85 @@ export default function EditProfileScreen() {
 
   const update_ = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
 
+  const pickAndUpload = async (target: 'avatar' | 'cover', source: 'library' | 'camera') => {
+    if (!ImagePicker) {
+      Alert.alert('Función no disponible', 'Actualiza la app para cambiar fotos.');
+      return;
+    }
+    if (source === 'library') {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permiso necesario', 'Concede acceso a tus fotos.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: target === 'avatar' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
+      if (res.canceled) return;
+      await uploadAndApply(target, res.assets[0].uri);
+    } else {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permiso necesario', 'Concede acceso a la cámara.');
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: target === 'avatar' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
+      if (res.canceled) return;
+      await uploadAndApply(target, res.assets[0].uri);
+    }
+  };
+
+  const uploadAndApply = async (target: 'avatar' | 'cover', localUri: string) => {
+    setUploading(target);
+    try {
+      const url = await uploadImage(localUri);
+      update_(target === 'avatar' ? { avatar_url: url } : { cover_url: url });
+      setRemoved((p) => ({ ...p, [target]: false }));
+    } catch (err: any) {
+      console.log('[EditProfile] upload error:', err);
+      Alert.alert('Error', err?.message || 'No se pudo subir la imagen. Inténtalo de nuevo.');
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const removePhoto = (target: 'avatar' | 'cover') => {
+    update_(target === 'avatar' ? { avatar_url: '' } : { cover_url: '' });
+    setRemoved((p) => ({ ...p, [target]: true }));
+  };
+
+  const showPhotoPicker = (target: 'avatar' | 'cover') => {
+    const isRemoved = target === 'avatar' ? removed.avatar : removed.cover;
+    const currentUrl = target === 'avatar' ? form.avatar_url : form.cover_url;
+    const hasPhoto = !isRemoved && !!currentUrl;
+    const buttons: any[] = [
+      { text: 'Hacer una foto', onPress: () => pickAndUpload(target, 'camera') },
+      { text: 'Elegir de la galería', onPress: () => pickAndUpload(target, 'library') },
+    ];
+    if (hasPhoto) {
+      buttons.push({ text: 'Eliminar foto', style: 'destructive', onPress: () => removePhoto(target) });
+    }
+    buttons.push({ text: 'Cancelar', style: 'cancel' });
+
+    Alert.alert(
+      target === 'avatar' ? 'Foto de perfil' : 'Portada',
+      undefined,
+      buttons,
+    );
+  };
+
   const validate = (): string | null => {
     if (!form.name.trim()) return 'El nombre es obligatorio';
     if (form.name.length > 60) return 'El nombre es demasiado largo';
     if (!form.location.trim()) return 'La ubicación es obligatoria';
-    if (form.bio.length > 200) return 'La biografía no puede superar 200 caracteres';
+    if (form.bio.length > 350) return 'La biografía no puede superar 350 caracteres';
     if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) return 'Email no válido';
     return null;
   };
@@ -97,7 +181,6 @@ export default function EditProfileScreen() {
       location: form.location.trim(),
       bio: form.bio.trim(),
       email: form.email.trim(),
-      phone: form.phone.trim(),
       avatar_url: form.avatar_url.trim(),
       cover_url: form.cover_url.trim(),
     });
@@ -107,7 +190,10 @@ export default function EditProfileScreen() {
       return;
     }
     setSavedOk(true);
-    setTimeout(() => router.back(), 600);
+    setTimeout(() => {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/profile' as any);
+    }, 600);
   };
 
   if (loading || !profile) {
@@ -132,14 +218,12 @@ export default function EditProfileScreen() {
     );
   }
 
-  const bioRemaining = 200 - form.bio.length;
+  const bioRemaining = 350 - form.bio.length;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.root}>
+    <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top, height: 52 + insets.top }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile' as any)} activeOpacity={0.8}>
           <ChevronLeft size={22} color={colors.onSurface} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Editar perfil</Text>
@@ -158,31 +242,61 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
+        enableOnAndroid>
         {/* Cover preview */}
-        <View style={styles.coverWrap}>
-          <Image source={{ uri: form.cover_url || profile.cover_url }} style={styles.cover} />
+        <TouchableOpacity
+          style={styles.coverWrap}
+          activeOpacity={0.85}
+          onPress={() => showPhotoPicker('cover')}
+          disabled={uploading !== null}>
+          {!removed.cover && (form.cover_url || profile.cover_url) ? (
+            <Image source={{ uri: form.cover_url || profile.cover_url }} style={styles.cover} />
+          ) : (
+            <View style={[styles.cover, { backgroundColor: colors.surfaceContainerLow }]} />
+          )}
           <LinearGradient
             colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.55)']}
             style={StyleSheet.absoluteFillObject}
           />
           <View style={styles.coverEditBtn}>
-            <Camera size={16} color="#ffffff" strokeWidth={2} />
-            <Text style={styles.coverEditText}>Cambiar portada</Text>
+            {uploading === 'cover' ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <>
+                <Camera size={16} color="#ffffff" strokeWidth={2} />
+                <Text style={styles.coverEditText}>Cambiar portada</Text>
+              </>
+            )}
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Avatar preview */}
         <View style={styles.avatarRow}>
-          <View style={styles.avatarWrap}>
-            <Image source={{ uri: form.avatar_url || profile.avatar_url }} style={styles.avatar} />
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            activeOpacity={0.85}
+            onPress={() => showPhotoPicker('avatar')}
+            disabled={uploading !== null}>
+            {!removed.avatar && (form.avatar_url || profile.avatar_url) ? (
+              <Image source={{ uri: form.avatar_url || profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerLow, alignItems: 'center', justifyContent: 'center' }]}>
+                <UserIcon size={32} color={colors.onSurfaceVariant} strokeWidth={1.2} />
+              </View>
+            )}
             <View style={styles.avatarEditBadge}>
-              <Camera size={14} color="#ffffff" strokeWidth={2} />
+              {uploading === 'avatar' ? (
+                <ActivityIndicator color="#ffffff" size={12} />
+              ) : (
+                <Camera size={14} color="#ffffff" strokeWidth={2} />
+              )}
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Error banner */}
@@ -229,7 +343,7 @@ export default function EditProfileScreen() {
               placeholderTextColor={colors.onSurfaceVariant + '99'}
               multiline
               numberOfLines={4}
-              maxLength={220}
+              maxLength={370}
             />
           </View>
         </View>
@@ -244,17 +358,36 @@ export default function EditProfileScreen() {
             onChangeText={(v) => update_({ email: v })}
             placeholder="tu@email.com"
             keyboardType="email-address"
+            editable={false}
             autoCapitalize="none"
           />
 
-          <Field
-            icon={Phone}
-            label="Teléfono"
-            value={form.phone}
-            onChangeText={(v) => update_({ phone: v })}
-            placeholder="+240 ..."
-            keyboardType="phone-pad"
-          />
+          <View style={styles.field}>
+            <View style={styles.labelRow}>
+              <Phone size={14} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+              <Text style={styles.label}>Teléfono</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.input, { flex: 1, justifyContent: 'center', opacity: 0.7 }]}>
+                <Text style={{ fontFamily: 'Manrope-Regular', fontSize: 15, color: colors.onSurface }}>
+                  {form.phone || 'Sin teléfono'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  backgroundColor: colors.primary,
+                }}
+                activeOpacity={0.85}
+                onPress={() => router.push('/verify-phone' as any)}>
+                <Text style={{ fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' }}>
+                  {form.phone ? 'Cambiar' : 'Verificar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -268,8 +401,8 @@ export default function EditProfileScreen() {
             <Text style={styles.bigSaveBtnText}>Guardar cambios</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -277,6 +410,7 @@ interface FieldProps {
   icon: React.ElementType;
   label: string;
   value: string;
+  editable?: boolean;
   onChangeText: (v: string) => void;
   placeholder?: string;
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
@@ -288,6 +422,7 @@ function Field({
   label,
   value,
   onChangeText,
+  editable=true,
   placeholder,
   keyboardType = 'default',
   autoCapitalize = 'sentences',
@@ -301,8 +436,9 @@ function Field({
         <Text style={styles.label}>{label}</Text>
       </View>
       <TextInput
-        style={styles.input}
+        style={[styles.input, !editable && { opacity: 0.5, backgroundColor: colors.surfaceContainerLow, color: colors.onSurfaceVariant }]}
         value={value}
+        editable={editable}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.onSurfaceVariant + '99'}

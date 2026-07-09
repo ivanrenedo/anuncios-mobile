@@ -4,13 +4,15 @@ import {
   Text,
   Image,
   ScrollView,
+  RefreshControl,
   StyleSheet,
-  Dimensions,
   Animated,
   Modal,
   Pressable,
   TouchableOpacity,
-  Share,
+  TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -21,16 +23,13 @@ import {
   ChevronRight,
   BadgeCheck,
   Share2,
-  Bell,
+  Mail,
+  Phone,
   Lock,
   HelpCircle,
   LogOut,
   Package,
-  Tag,
   Pencil,
-  TrendingUp,
-  Award,
-  Zap,
   Trash2,
   ShieldCheck,
   FileText,
@@ -39,38 +38,46 @@ import {
   UserPlus,
   UserCheck,
   LogIn,
+  X,
+  Search,
+  ArrowDownUp,
+  ChevronDown,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import ProductCard from '@/components/ProductCard';
+import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
 import Skeleton from '@/components/Skeleton';
 import SettingsModal, { Row, Section } from '@/components/SettingsModal';
-import { useProfile } from '@/hooks/useProfile';
+import { useProfile, useDeleteAccount } from '@/hooks/useProfile';
 import { useAuth } from '@/hooks/useAuth';
-import { useProductsBySeller } from '@/hooks/useProducts';
+import { useProductsBySeller, useDeleteProduct } from '@/hooks/useProducts';
 import { useReviewsBySeller, useSellerRating } from '@/hooks/useReviews';
-import { useFollowers, useFollowersCount, useFollowingCount } from '@/hooks/useFollowers';
+import { useFollowers, useFollowing, useFollowersCount, useFollowingCount, useFollowToggle } from '@/hooks/useFollowers';
 import { API_URL } from '@/lib/config';
+import { useShare } from '@/hooks/useShare';
+import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
 
-const TABS = ['Anuncios', 'Valoraciones', 'Seguidores'] as const;
+const PREVIEW_LIMIT = 6;
+const FOLLOWER_LIMIT = 8;
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `hace ${mins} min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `hace ${days} días`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 4) return `hace ${weeks} semanas`;
-  const months = Math.floor(days / 30);
-  return `hace ${months} meses`;
+
+function timeAgo(iso?: string): string {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'hace un momento';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} d`;
+  const mo = Math.floor(d / 30);
+  return `hace ${mo} meses`;
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -93,38 +100,91 @@ function StarRating({ rating }: { rating: number }) {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { profile, loading } = useProfile();
+  const { profile, loading, refresh } = useProfile();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated, signOut, user } = useAuth();
   const userId = user?.id || profile?.id || '';
-  const { products: myProducts } = useProductsBySeller(userId);
-  const { reviews: myReviews } = useReviewsBySeller(userId);
+  const { products: myProducts, refetch: refetchProducts } = useProductsBySeller(userId);
+  const { reviews: myReviews, refetch: refetchReviews } = useReviewsBySeller(userId);
   const { average: avgRating, count: ratingCount } = useSellerRating(userId);
-  const { followers: myFollowers } = useFollowers(userId);
+  const { followers: myFollowers, refetch: refetchFollowers } = useFollowers(userId);
+  const { following: myFollowing, refetch: refetchFollowing } = useFollowing(userId);
   const { count: followersCountNum } = useFollowersCount(userId);
   const { count: followingCountNum } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
-  const [followingBack, setFollowingBack] = useState<Record<string, boolean>>({});
+  const { follow, unfollow } = useFollowToggle();
+  const [refreshing, setRefreshing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'logout' | 'delete' | null>(null);
+  const [allProductsOpen, setAllProductsOpen] = useState(false);
+  const [allFollowersOpen, setAllFollowersOpen] = useState(false);
+  const [allFollowingOpen, setAllFollowingOpen] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioLines, setBioLines] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+  const [productPageSize, setProductPageSize] = useState(10);
+  const [followerSearch, setFollowerSearch] = useState('');
+  const [followerPageSize, setFollowerPageSize] = useState(10);
+  const [followerSort, setFollowerSort] = useState<'recent' | 'oldest'>('recent');
+  const [followingSearch, setFollowingSearch] = useState('');
+  const [followingPageSize, setFollowingPageSize] = useState(10);
+  const [followingSort, setFollowingSort] = useState<'recent' | 'oldest'>('recent');
+  const [allReviewsOpen, setAllReviewsOpen] = useState(false);
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [reviewPageSize, setReviewPageSize] = useState(10);
+  const [reviewSort, setReviewSort] = useState<'recent' | 'oldest' | 'best' | 'worst'>('recent');
+  const [reviewSortOpen, setReviewSortOpen] = useState(false);
+  const { remove: deleteProduct } = useDeleteProduct();
+  const { deleteAccount, loading: deletingAccount } = useDeleteAccount();
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const toggleLike = (id: string) => setLiked((prev) => ({ ...prev, [id]: !prev[id] }));
-  const toggleFollow = (id: string) =>
-    setFollowingBack((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  const onShareProfile = async () => {
+  const onRefresh = async () => {
+    setRefreshing(true);
     try {
-      await Share.share({
-        title: 'Market EG',
-        message: `Mira el perfil de ${profile?.name ?? 'este vendedor'} en Market EG.`,
-      });
-    } catch {
-      // user dismissed / share unavailable
-    }
+      await Promise.all([refresh(), refetchProducts(), refetchReviews(), refetchFollowers(), refetchFollowing(), refetchVerification()]);
+    } catch {}
+    setRefreshing(false);
+  };
+
+  
+
+  const toggleFollow = async (userId: string) => {
+    try {
+      if (followingUserIds.has(userId)) {
+        await unfollow(userId);
+      } else {
+        await follow(userId);
+      }
+    } catch {}
+  };
+
+  const { share } = useShare();
+  const onShareProfile = () =>
+    share({ type: 'profile', id: userId, name: profile?.name ?? 'este vendedor' });
+
+  const { request: verificationRequest, refetch: refetchVerification } = useVerificationRequest();
+  const { requestVerification, loading: requestingVerification } = useRequestVerification();
+
+  const confirmDelete = (id: string, title: string) => {
+    Alert.alert(
+      'Eliminar anuncio',
+      `¿Eliminar "${title}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(id);
+            try { await deleteProduct(id); } catch {}
+            setDeletingId(null);
+          },
+        },
+      ],
+    );
   };
 
   const productItems = myProducts.map((p: any) => {
@@ -132,12 +192,21 @@ export default function ProfileScreen() {
     return {
       id: p.id,
       title: p.title,
-      price: `${Number(p.price).toLocaleString('es')} XAF`,
+      price: fmtPrice(Number(p.price)),
       location: p.city || '',
       status: p.status || 'active',
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
+      postedAgo: timeAgo(p.createdAt),
     };
   });
+
+  const filteredProducts = productSearch.trim()
+    ? productItems.filter((p: any) =>
+        p.title.toLowerCase().includes(productSearch.trim().toLowerCase()),
+      )
+    : productItems;
+  const paginatedProducts = filteredProducts.slice(0, productPageSize);
+  const hasMoreProducts = filteredProducts.length > productPageSize;
 
   const reviewItems = myReviews.map((r: any) => ({
     id: r.id,
@@ -146,16 +215,72 @@ export default function ProfileScreen() {
     rating: r.rating,
     text: r.text || '',
     date: r.createdAt ? timeAgo(r.createdAt) : '',
+    createdAt: r.createdAt || '',
   }));
 
-  const followerItems = myFollowers.map((f: any) => ({
+  const followerItems = (myFollowers ?? []).map((f: any) => ({
     id: f.id,
+    userId: f.follower?.id || '',
     name: f.follower?.name || '',
     avatar: f.follower?.avatarUrl || '',
     verified: f.follower?.verified ?? false,
     location: f.follower?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
+    createdAt: f.createdAt || '',
   }));
+
+  const followingItems = (myFollowing ?? []).map((f: any) => ({
+    id: f.id,
+    userId: f.followed?.id || '',
+    name: f.followed?.name || '',
+    avatar: f.followed?.avatarUrl || '',
+    verified: f.followed?.verified ?? false,
+    location: f.followed?.location || '',
+    since: f.createdAt ? timeAgo(f.createdAt) : '',
+    createdAt: f.createdAt || '',
+  }));
+
+  const followingUserIds = new Set(followingItems.map((f: any) => f.userId));
+
+  const sortItems = (items: any[], sort: 'recent' | 'oldest') =>
+    [...items].sort((a, b) => {
+      const da = new Date(a.createdAt).getTime() || 0;
+      const db = new Date(b.createdAt).getTime() || 0;
+      return sort === 'recent' ? db - da : da - db;
+    });
+
+  const filteredFollowers = (() => {
+    let list = followerSearch.trim()
+      ? followerItems.filter((f: any) => f.name.toLowerCase().includes(followerSearch.trim().toLowerCase()))
+      : followerItems;
+    return sortItems(list, followerSort);
+  })();
+  const paginatedFollowers = filteredFollowers.slice(0, followerPageSize);
+  const hasMoreFollowers = filteredFollowers.length > followerPageSize;
+
+  const filteredFollowing = (() => {
+    let list = followingSearch.trim()
+      ? followingItems.filter((f: any) => f.name.toLowerCase().includes(followingSearch.trim().toLowerCase()))
+      : followingItems;
+    return sortItems(list, followingSort);
+  })();
+  const paginatedFollowing = filteredFollowing.slice(0, followingPageSize);
+  const hasMoreFollowing = filteredFollowing.length > followingPageSize;
+
+  const filteredReviews = (() => {
+    let list = reviewSearch.trim()
+      ? reviewItems.filter((r: any) => r.author.toLowerCase().includes(reviewSearch.trim().toLowerCase()))
+      : reviewItems;
+    return [...list].sort((a, b) => {
+      if (reviewSort === 'best') return b.rating - a.rating;
+      if (reviewSort === 'worst') return a.rating - b.rating;
+      const da = new Date(a.createdAt).getTime() || 0;
+      const db = new Date(b.createdAt).getTime() || 0;
+      return reviewSort === 'recent' ? db - da : da - db;
+    });
+  })();
+  const paginatedReviews = filteredReviews.slice(0, reviewPageSize);
+  const hasMoreReviews = filteredReviews.length > reviewPageSize;
 
   const renderPairs = (items: any[]) => {
     const pairs: any[][] = [];
@@ -258,7 +383,8 @@ export default function ProfileScreen() {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
         )}
-        contentContainerStyle={{ paddingBottom: 40 }}>
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Cover */}
         <View style={styles.coverWrap}>
           <Animated.Image
@@ -288,9 +414,11 @@ export default function ProfileScreen() {
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
             <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-            <View style={styles.verifiedBadge}>
-              <BadgeCheck size={16} color="#ffffff" fill={colors.primary} strokeWidth={0} />
-            </View>
+            {profile.verified && (
+              <View style={styles.verifiedBadge}>
+                <BadgeCheck size={16} color="#ffffff" fill={colors.primary} />
+              </View>
+            )}
           </View>
           <View style={styles.avatarActions}>
             <RipplePress
@@ -316,10 +444,12 @@ export default function ProfileScreen() {
         <View style={styles.nameBlock}>
           <View style={styles.nameRow}>
             <Text style={styles.name}>{profile.name}</Text>
-            <View style={styles.verifiedChip}>
-              <BadgeCheck size={11} color={colors.primary} strokeWidth={2} />
-              <Text style={styles.verifiedChipText}>Verificado</Text>
-            </View>
+            {profile.verified && (
+              <View style={styles.verifiedChip}>
+                <BadgeCheck size={11} color={colors.primary} strokeWidth={2} />
+                <Text style={styles.verifiedChipText}>Verificado</Text>
+              </View>
+            )}
           </View>
           <View style={styles.locationRow}>
             <MapPin size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
@@ -327,62 +457,109 @@ export default function ProfileScreen() {
             <Text style={styles.dot}>·</Text>
             <Text style={styles.locationText}>Desde {memberSince}</Text>
           </View>
-          {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-        </View>
-
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          {[
-            { value: String(myProducts.length), label: 'Anuncios' },
-            { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración' },
-            { value: String(followersCountNum), label: 'Seguidores' },
-            { value: String(followingCountNum), label: 'Siguiendo' },
-          ].map(({ value, label }, i, arr) => (
-            <View
-              key={label}
-              style={[styles.statItem, i === arr.length - 1 && { borderRightWidth: 0 }]}>
-              <Text style={styles.statValue}>{value}</Text>
-              <Text style={styles.statLabel}>{label}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Tab selector */}
-        <View style={styles.tabBar}>
-          {TABS.map((tab, i) => (
-            <RipplePress
-              key={tab}
-              style={[styles.tab, activeTab === i && styles.tabActive]}
-              onPress={() => setActiveTab(i)}
-              borderRadius={9}
-              rippleColor={colors.primary + '18'}>
-              <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>
-                {tab}
+          {profile.bio ? (
+            <>
+              <Text
+                style={styles.bio}
+                numberOfLines={bioLines !== null && !bioExpanded ? 5 : undefined}
+                onTextLayout={(e) => {
+                  if (bioLines === null) setBioLines(e.nativeEvent.lines.length);
+                }}>
+                {profile.bio}
               </Text>
-            </RipplePress>
+              {bioLines !== null && bioLines > 5 && (
+                <TouchableOpacity activeOpacity={0.7} onPress={() => setBioExpanded(!bioExpanded)}>
+                  <Text style={styles.bioToggle}>{bioExpanded ? 'Ver menos' : 'Ver más'}</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : null}
+
+          {(profile.show_email || profile.show_phone) && (
+            <View style={styles.contactRow}>
+              {profile.show_email && profile.email ? (
+                <View style={styles.contactItem}>
+                  <Mail size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                  <Text style={styles.contactText}>{profile.email}</Text>
+                </View>
+              ) : null}
+              {profile.show_phone && profile.phone ? (
+                <View style={styles.contactItem}>
+                  <Phone size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                  <Text style={styles.contactText}>{profile.phone}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+        </View>
+
+        {/* Stat tabs */}
+        <View style={styles.statTabs}>
+          {[
+            { value: fmtNumber(myProducts.length), label: 'Anuncios' },
+            { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración' },
+            { value: fmtNumber(followersCountNum), label: 'Seguidores' },
+            { value: fmtNumber(followingCountNum), label: 'Siguiendo' },
+          ].map(({ value, label }, i) => (
+            <TouchableOpacity
+              key={label}
+              style={[styles.statTab, activeTab === i && styles.statTabActive]}
+              onPress={() => setActiveTab(i)}
+              activeOpacity={0.7}>
+              <Text style={[styles.statTabValue, activeTab === i && styles.statTabValueActive]}>{value}</Text>
+              <Text style={styles.statTabLabel}>{label}</Text>
+            </TouchableOpacity>
           ))}
         </View>
 
         {/* Tab content */}
         {activeTab === 0 ? (
           <View style={styles.grid}>
-            {renderPairs(productItems).map((pair, rowIdx) => (
+            {renderPairs(productItems.slice(0, PREVIEW_LIMIT)).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item: any) => (
-                  <ProductCard
-                    key={item.id}
-                    item={item}
-                    liked={!!liked[item.id]}
-                    onLike={() => toggleLike(item.id)}
-                    onPress={() =>
-                      router.push({ pathname: '/product/[id]', params: { id: item.id } })
-                    }
-                    sold={item.status === 'sold'}
-                  />
+                  <View key={item.id} style={styles.cardWrap}>
+                    <ProductCard
+                      item={item}
+                      onPress={() =>
+                        router.push({ pathname: '/product/[id]', params: { id: item.id } })
+                      }
+                    />
+                    {deletingId === item.id && (
+                      <View style={styles.deletingOverlay}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      </View>
+                    )}
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={styles.cardActionBtn}
+                        activeOpacity={0.8}
+                        onPress={() => router.push({ pathname: '/(tabs)/post', params: { editId: item.id } })}>
+                        <Pencil size={13} color="#ffffff" strokeWidth={2} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.cardActionBtn, styles.cardActionDanger]}
+                        activeOpacity={0.8}
+                        disabled={deletingId !== null}
+                        onPress={() => confirmDelete(item.id, item.title)}>
+                        <Trash2 size={13} color="#ffffff" strokeWidth={2} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 ))}
                 {pair.length === 1 && <View style={styles.cardPlaceholder} />}
               </View>
             ))}
+            {productItems.length > PREVIEW_LIMIT && (
+              <TouchableOpacity
+                style={styles.seeAllBottom}
+                activeOpacity={0.7}
+                onPress={() => setAllProductsOpen(true)}>
+                <Text style={styles.seeAllText}>Ver todos los anuncios</Text>
+                <Text style={styles.seeAllCount}>({productItems.length})</Text>
+                <ChevronRight size={14} color={colors.primary} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
             {productItems.length === 0 && (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
@@ -405,29 +582,42 @@ export default function ProfileScreen() {
                 <Text style={styles.emptyText}>Aún no tienes valoraciones</Text>
               </View>
             ) : (
-              reviewItems.map((rev: any) => (
-                <View key={rev.id} style={styles.reviewCard}>
-                  <View style={styles.reviewHeader}>
-                    <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.reviewAuthor}>{rev.author}</Text>
-                      <StarRating rating={rev.rating} />
+              <>
+                {reviewItems.slice(0, FOLLOWER_LIMIT).map((rev: any) => (
+                  <View key={rev.id} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reviewAuthor}>{rev.author}</Text>
+                        <StarRating rating={rev.rating} />
+                      </View>
+                      <Text style={styles.reviewDate}>{rev.date}</Text>
                     </View>
-                    <Text style={styles.reviewDate}>{rev.date}</Text>
+                    <Text style={styles.reviewText}>{rev.text}</Text>
                   </View>
-                  <Text style={styles.reviewText}>{rev.text}</Text>
-                </View>
-              ))
+                ))}
+                {reviewItems.length > FOLLOWER_LIMIT && (
+                  <RipplePress
+                    style={styles.seeAllBottom}
+                    borderRadius={14}
+                    rippleColor={colors.primary + '18'}
+                    onPress={() => setAllReviewsOpen(true)}>
+                    <Text style={styles.seeAllText}>Ver todas las valoraciones</Text>
+                    <Text style={styles.seeAllCount}>({reviewItems.length})</Text>
+                    <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
+                  </RipplePress>
+                )}
+              </>
             )}
           </View>
-        ) : (
+        ) : activeTab === 2 ? (
           <View style={styles.followersList}>
             <View style={styles.followersHeader}>
               <View style={styles.followersIconWrap}>
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.followersTitle}>{followersCountNum} seguidores</Text>
+                <Text style={styles.followersTitle}>{fmtNumber(followersCountNum)} seguidores</Text>
                 <Text style={styles.followersMeta}>Personas que confían en este perfil</Text>
               </View>
             </View>
@@ -437,83 +627,231 @@ export default function ProfileScreen() {
                 <Text style={styles.emptyText}>Aún no tienes seguidores</Text>
               </View>
             ) : (
-              <View style={styles.followersCard}>
-                {followerItems.map((f: any, i: number) => {
-                  const isFollowing = !!followingBack[f.id];
-                  const last = i === followerItems.length - 1;
-                  return (
-                    <View
-                      key={f.id}
-                      style={[styles.followerRow, !last && styles.followerRowBorder]}>
-                      <View style={styles.followerAvatarWrap}>
-                        <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
-                        {f.verified && (
-                          <View style={styles.followerVerified}>
-                            <BadgeCheck
-                              size={12}
-                              color="#ffffff"
-                              fill={colors.primary}
-                              strokeWidth={0}
-                            />
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.followerInfo}>
-                        <Text style={styles.followerName} numberOfLines={1}>
-                          {f.name}
-                        </Text>
-                        <View style={styles.followerMetaRow}>
-                          <MapPin
-                            size={10}
-                            color={colors.onSurfaceVariant + '99'}
-                            strokeWidth={1.5}
-                          />
-                          <Text style={styles.followerMeta} numberOfLines={1}>
-                            {f.location} · {f.since}
-                          </Text>
+              <>
+                <View style={styles.followersCard}>
+                  {followerItems.slice(0, FOLLOWER_LIMIT).map((f: any, i: number) => {
+                    const isFollowingUser = followingUserIds.has(f.userId);
+                    const visible = followerItems.slice(0, FOLLOWER_LIMIT);
+                    const last = i === visible.length - 1;
+                    return (
+                      <TouchableOpacity
+                        key={f.id}
+                        activeOpacity={0.7}
+                        onPress={() => f.userId && router.push(`/user/${f.userId}`)}
+                        style={[styles.followerRow, !last && styles.followerRowBorder]}>
+                        <View style={styles.followerAvatarWrap}>
+                          <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
+                          {f.verified && (
+                            <View style={styles.followerVerified}>
+                              <BadgeCheck
+                                size={12}
+                                color="#ffffff"
+                                fill={colors.primary}
+                                strokeWidth={0}
+                              />
+                            </View>
+                          )}
                         </View>
-                      </View>
-                      <RipplePress
-                        style={[
-                          styles.followBtn,
-                          isFollowing && styles.followBtnActive,
-                        ]}
-                        borderRadius={999}
-                        rippleColor={
-                          isFollowing
-                            ? colors.outlineVariant + '55'
-                            : 'rgba(255,255,255,0.25)'
-                        }
-                        onPress={() => toggleFollow(f.id)}>
-                        {isFollowing ? (
-                          <>
-                            <UserCheck
-                              size={14}
-                              color={colors.onSurface}
-                              strokeWidth={1.8}
+                        <View style={styles.followerInfo}>
+                          <Text style={styles.followerName} numberOfLines={1}>
+                            {f.name}
+                          </Text>
+                          <View style={styles.followerMetaRow}>
+                            <MapPin
+                              size={10}
+                              color={colors.onSurfaceVariant + '99'}
+                              strokeWidth={1.5}
                             />
-                            <Text style={styles.followBtnTextActive}>Siguiendo</Text>
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
-                            <Text style={styles.followBtnText}>Seguir</Text>
-                          </>
-                        )}
-                      </RipplePress>
-                    </View>
-                  );
-                })}
-              </View>
+                            <Text style={styles.followerMeta} numberOfLines={1}>
+                              {f.location} · {f.since}
+                            </Text>
+                          </View>
+                        </View>
+                        <RipplePress
+                          style={[
+                            styles.followBtn,
+                            isFollowingUser && styles.followBtnActive,
+                          ]}
+                          borderRadius={999}
+                          rippleColor={
+                            isFollowingUser
+                              ? colors.outlineVariant + '55'
+                              : 'rgba(255,255,255,0.25)'
+                          }
+                          onPress={() => toggleFollow(f.userId)}>
+                          {isFollowingUser ? (
+                            <>
+                              <UserCheck
+                                size={14}
+                                color={colors.onSurface}
+                                strokeWidth={1.8}
+                              />
+                              <Text style={styles.followBtnTextActive}>Siguiendo</Text>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
+                              <Text style={styles.followBtnText}>Seguir</Text>
+                            </>
+                          )}
+                        </RipplePress>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {followerItems.length > FOLLOWER_LIMIT && (
+                  <TouchableOpacity
+                    style={styles.seeAllBottom}
+                    activeOpacity={0.7}
+                    onPress={() => setAllFollowersOpen(true)}>
+                    <Text style={styles.seeAllText}>Ver todos los seguidores</Text>
+                    <Text style={styles.seeAllCount}>({followersCountNum})</Text>
+                    <ChevronRight size={14} color={colors.primary} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
-        )}
+        ) : activeTab === 3 ? (
+          <View style={styles.followersList}>
+            <View style={styles.followersHeader}>
+              <View style={styles.followersIconWrap}>
+                <UserCheck size={20} color={colors.primary} strokeWidth={1.8} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.followersTitle}>{fmtNumber(followingCountNum)} siguiendo</Text>
+                <Text style={styles.followersMeta}>Personas que sigues</Text>
+              </View>
+            </View>
+            {followingItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Users size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>Aún no sigues a nadie</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.followersCard}>
+                  {followingItems.slice(0, FOLLOWER_LIMIT).map((f: any, i: number) => {
+                    const visible = followingItems.slice(0, FOLLOWER_LIMIT);
+                    const last = i === visible.length - 1;
+                    return (
+                      <TouchableOpacity
+                        key={f.id}
+                        activeOpacity={0.7}
+                        onPress={() => f.userId && router.push(`/user/${f.userId}`)}
+                        style={[styles.followerRow, !last && styles.followerRowBorder]}>
+                        <View style={styles.followerAvatarWrap}>
+                          <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
+                          {f.verified && (
+                            <View style={styles.followerVerified}>
+                              <BadgeCheck
+                                size={12}
+                                color="#ffffff"
+                                fill={colors.primary}
+                              />
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.followerInfo}>
+                          <Text style={styles.followerName} numberOfLines={1}>
+                            {f.name}
+                          </Text>
+                          <View style={styles.followerMetaRow}>
+                            <MapPin
+                              size={10}
+                              color={colors.onSurfaceVariant + '99'}
+                              strokeWidth={1.5}
+                            />
+                            <Text style={styles.followerMeta} numberOfLines={1}>
+                              {f.location} · {f.since}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {followingItems.length > FOLLOWER_LIMIT && (
+                  <TouchableOpacity
+                    style={styles.seeAllBottom}
+                    activeOpacity={0.7}
+                    onPress={() => setAllFollowingOpen(true)}>
+                    <Text style={styles.seeAllText}>Ver todos los que sigues</Text>
+                    <Text style={styles.seeAllCount}>({followingCountNum})</Text>
+                    <ChevronRight size={14} color={colors.primary} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        ) : null}
+        {/* Verification */}
+        {!profile.verified && (() => {
+          const cooldownDays = verificationRequest?.status === 'rejected' && verificationRequest.reviewedAt
+            ? Math.ceil(7 - (Date.now() - new Date(verificationRequest.reviewedAt).getTime()) / 86_400_000)
+            : 0;
+          const onCooldown = cooldownDays > 0;
+
+          return (
+            <Section title="Verificación">
+              <Row
+                icon={BadgeCheck}
+                label={
+                  verificationRequest?.status === 'pending'
+                    ? 'Verificación en revisión'
+                    : onCooldown
+                      ? `Reintentar en ${cooldownDays} día${cooldownDays === 1 ? '' : 's'}`
+                      : verificationRequest?.status === 'rejected'
+                        ? 'Reintentar verificación'
+                        : 'Verificar mi cuenta'
+                }
+                value={verificationRequest?.status === 'pending' ? 'Pendiente' : undefined}
+                onPress={() => {
+                  if (verificationRequest?.status === 'pending') return;
+                  if (onCooldown) {
+                    Alert.alert('Espera un poco', `Podrás reintentar en ${cooldownDays} día${cooldownDays === 1 ? '' : 's'}.`);
+                    return;
+                  }
+                  const missing: string[] = [];
+                  if (!profile.phone) missing.push('teléfono verificado');
+                  if (!profile.email) missing.push('email confirmado');
+                  if (!profile.avatar_url) missing.push('foto de perfil');
+                  if (!profile.name || profile.name.trim().length < 3) missing.push('nombre completo');
+                  if (missing.length > 0) {
+                    Alert.alert('Completa tu perfil', `Para verificarte necesitas: ${missing.join(', ')}.`);
+                    return;
+                  }
+                  Alert.alert(
+                    'Solicitar verificación',
+                    'Tu perfil será revisado por nuestro equipo. Recibirás una notificación con el resultado.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Solicitar',
+                        onPress: async () => {
+                          try {
+                            await requestVerification();
+                            Alert.alert('Solicitud enviada', 'Te notificaremos cuando sea revisada.');
+                          } catch (e: any) {
+                            Alert.alert('Error', e?.message || 'No se pudo enviar la solicitud.');
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+                last
+              />
+            </Section>
+          );
+        })()}
+
         {/* Support */}
         <Section title="Soporte y legal">
           <Row icon={ShieldCheck} label="Centro de seguridad" onPress={() => setcenterSafetyOpen(true)} />
-          <Row icon={HelpCircle} label="Centro de ayuda" onPress={() => {}} />
-          <Row icon={FileText} label="Términos y condiciones" onPress={() => {}} />
-          <Row icon={Lock} label="Política de privacidad" onPress={() => {}} last />
+          <Row icon={HelpCircle} label="Centro de ayuda" onPress={() => router.push('/help')} />
+          <Row icon={FileText} label="Términos y condiciones" onPress={() => router.push('/terms')} />
+          <Row icon={Lock} label="Política de privacidad" onPress={() => router.push('/privacy')} last />
         </Section>
 
         {/* Danger zone */}
@@ -541,6 +879,488 @@ export default function ProfileScreen() {
         visible={centerSafetyOpen}
         onClose={() => setcenterSafetyOpen(false)}
       />
+
+      {/* All products modal */}
+      <Modal
+        visible={allProductsOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
+        <View style={[styles.allProductsModal, { paddingTop: insets.top }]}>
+          <View style={styles.allProductsHeader}>
+            <Text style={styles.allProductsTitle}>
+              Mis anuncios ({productItems.length})
+            </Text>
+            <TouchableOpacity
+              style={styles.allProductsClose}
+              activeOpacity={0.7}
+              onPress={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
+              <X size={20} color={colors.onSurface} strokeWidth={1.8} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.productSearchWrap}>
+            <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+            <TextInput
+              style={styles.productSearchInput}
+              placeholder="Buscar por título..."
+              placeholderTextColor={colors.onSurfaceVariant + '66'}
+              value={productSearch}
+              onChangeText={(t) => { setProductSearch(t); setProductPageSize(10); }}
+            />
+            {productSearch.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => { setProductSearch(''); setProductPageSize(10); }}>
+                <X size={16} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.allProductsGrid}
+            showsVerticalScrollIndicator={false}>
+            {paginatedProducts.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>
+                  {productSearch.trim() ? 'Sin resultados' : 'Sin anuncios publicados'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {renderPairs(paginatedProducts).map((pair, rowIdx) => (
+                  <View key={rowIdx} style={styles.gridRow}>
+                    {pair.map((item: any) => (
+                      <View key={item.id} style={styles.cardWrap}>
+                        <ProductCard
+                          item={item}
+                          onPress={() => {
+                            setAllProductsOpen(false);
+                            router.push({ pathname: '/product/[id]', params: { id: item.id } });
+                          }}
+                        />
+                        {deletingId === item.id && (
+                          <View style={styles.deletingOverlay}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          </View>
+                        )}
+                        <View style={styles.cardActions}>
+                          <TouchableOpacity
+                            style={styles.cardActionBtn}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              setAllProductsOpen(false);
+                              router.push({ pathname: '/(tabs)/post', params: { editId: item.id } });
+                            }}>
+                            <Pencil size={13} color="#ffffff" strokeWidth={2} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.cardActionBtn, styles.cardActionDanger]}
+                            activeOpacity={0.8}
+                            disabled={deletingId !== null}
+                            onPress={() => confirmDelete(item.id, item.title)}>
+                            <Trash2 size={13} color="#ffffff" strokeWidth={2} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                    {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                  </View>
+                ))}
+                {hasMoreProducts && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    activeOpacity={0.8}
+                    onPress={() => setProductPageSize((s) => s + 10)}>
+                    <Text style={styles.loadMoreText}>
+                      Ver más ({filteredProducts.length - productPageSize} restantes)
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* All followers modal */}
+      <Modal
+        visible={allFollowersOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setAllFollowersOpen(false); setFollowerSearch(''); setFollowerPageSize(10); setFollowerSort('recent'); }}>
+        <View style={[styles.allProductsModal, { paddingTop: insets.top }]}>
+          <View style={styles.allProductsHeader}>
+            <Text style={styles.allProductsTitle}>
+              Seguidores ({followersCountNum})
+            </Text>
+            <TouchableOpacity
+              style={styles.allProductsClose}
+              activeOpacity={0.7}
+              onPress={() => { setAllFollowersOpen(false); setFollowerSearch(''); setFollowerPageSize(10); setFollowerSort('recent'); }}>
+              <X size={20} color={colors.onSurface} strokeWidth={1.8} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.productSearchWrap}>
+            <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+            <TextInput
+              style={styles.productSearchInput}
+              placeholder="Buscar por nombre..."
+              placeholderTextColor={colors.onSurfaceVariant + '66'}
+              value={followerSearch}
+              onChangeText={(t) => { setFollowerSearch(t); setFollowerPageSize(10); }}
+            />
+            {followerSearch.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => { setFollowerSearch(''); setFollowerPageSize(10); }}>
+                <X size={16} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.sortRow}>
+            <ArrowDownUp size={14} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.sortChip, followerSort === 'recent' && styles.sortChipActive]}
+              onPress={() => setFollowerSort('recent')}>
+              <Text style={[styles.sortChipText, followerSort === 'recent' && styles.sortChipTextActive]}>Recientes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.sortChip, followerSort === 'oldest' && styles.sortChipActive]}
+              onPress={() => setFollowerSort('oldest')}>
+              <Text style={[styles.sortChipText, followerSort === 'oldest' && styles.sortChipTextActive]}>Antiguos</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ padding: 16 }}
+            showsVerticalScrollIndicator={false}>
+            {paginatedFollowers.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Users size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>
+                  {followerSearch.trim() ? 'Sin resultados' : 'Aún no tienes seguidores'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.followersCard}>
+                {paginatedFollowers.map((f: any, i: number) => {
+                  const isFollowingUser = followingUserIds.has(f.userId);
+                  const last = i === paginatedFollowers.length - 1;
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setAllFollowersOpen(false);
+                        if (f.userId) router.push(`/user/${f.userId}`);
+                      }}
+                      style={[styles.followerRow, !last && styles.followerRowBorder]}>
+                      <View style={styles.followerAvatarWrap}>
+                        <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
+                        {f.verified && (
+                          <View style={styles.followerVerified}>
+                            <BadgeCheck
+                              size={12}
+                              color="#ffffff"
+                              fill={colors.primary}
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.followerInfo}>
+                        <Text style={styles.followerName} numberOfLines={1}>
+                          {f.name}
+                        </Text>
+                        <View style={styles.followerMetaRow}>
+                          <MapPin
+                            size={10}
+                            color={colors.onSurfaceVariant + '99'}
+                            strokeWidth={1.5}
+                          />
+                          <Text style={styles.followerMeta} numberOfLines={1}>
+                            {f.location} · {f.since}
+                          </Text>
+                        </View>
+                      </View>
+                      <RipplePress
+                        style={[
+                          styles.followBtn,
+                          isFollowingUser && styles.followBtnActive,
+                        ]}
+                        borderRadius={999}
+                        rippleColor={
+                          isFollowingUser
+                            ? colors.outlineVariant + '55'
+                            : 'rgba(255,255,255,0.25)'
+                        }
+                        onPress={() => toggleFollow(f.userId)}>
+                        {isFollowingUser ? (
+                          <>
+                            <UserCheck
+                              size={14}
+                              color={colors.onSurface}
+                              strokeWidth={1.8}
+                            />
+                            <Text style={styles.followBtnTextActive}>Siguiendo</Text>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
+                            <Text style={styles.followBtnText}>Seguir</Text>
+                          </>
+                        )}
+                      </RipplePress>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            {hasMoreFollowers && (
+              <TouchableOpacity
+                style={[styles.loadMoreBtn, { marginTop: 12 }]}
+                activeOpacity={0.8}
+                onPress={() => setFollowerPageSize((s) => s + 10)}>
+                <Text style={styles.loadMoreText}>
+                  Ver más ({filteredFollowers.length - followerPageSize} restantes)
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* All following modal */}
+      <Modal
+        visible={allFollowingOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setAllFollowingOpen(false); setFollowingSearch(''); setFollowingPageSize(10); setFollowingSort('recent'); }}>
+        <View style={[styles.allProductsModal, { paddingTop: insets.top }]}>
+          <View style={styles.allProductsHeader}>
+            <Text style={styles.allProductsTitle}>
+              Siguiendo ({followingCountNum})
+            </Text>
+            <TouchableOpacity
+              style={styles.allProductsClose}
+              activeOpacity={0.7}
+              onPress={() => { setAllFollowingOpen(false); setFollowingSearch(''); setFollowingPageSize(10); setFollowingSort('recent'); }}>
+              <X size={20} color={colors.onSurface} strokeWidth={1.8} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.productSearchWrap}>
+            <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+            <TextInput
+              style={styles.productSearchInput}
+              placeholder="Buscar por nombre..."
+              placeholderTextColor={colors.onSurfaceVariant + '66'}
+              value={followingSearch}
+              onChangeText={(t) => { setFollowingSearch(t); setFollowingPageSize(10); }}
+            />
+            {followingSearch.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => { setFollowingSearch(''); setFollowingPageSize(10); }}>
+                <X size={16} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.sortRow}>
+            <ArrowDownUp size={14} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.sortChip, followingSort === 'recent' && styles.sortChipActive]}
+              onPress={() => setFollowingSort('recent')}>
+              <Text style={[styles.sortChipText, followingSort === 'recent' && styles.sortChipTextActive]}>Recientes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.sortChip, followingSort === 'oldest' && styles.sortChipActive]}
+              onPress={() => setFollowingSort('oldest')}>
+              <Text style={[styles.sortChipText, followingSort === 'oldest' && styles.sortChipTextActive]}>Antiguos</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ padding: 16 }}
+            showsVerticalScrollIndicator={false}>
+            {paginatedFollowing.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Users size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>
+                  {followingSearch.trim() ? 'Sin resultados' : 'Aún no sigues a nadie'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.followersCard}>
+                {paginatedFollowing.map((f: any, i: number) => {
+                  const last = i === paginatedFollowing.length - 1;
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setAllFollowingOpen(false);
+                        if (f.userId) router.push(`/user/${f.userId}`);
+                      }}
+                      style={[styles.followerRow, !last && styles.followerRowBorder]}>
+                      <View style={styles.followerAvatarWrap}>
+                        <Image source={{ uri: f.avatar }} style={styles.followerAvatar} />
+                        {f.verified && (
+                          <View style={styles.followerVerified}>
+                            <BadgeCheck
+                              size={12}
+                              color="#ffffff"
+                              fill={colors.primary}
+                            />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.followerInfo}>
+                        <Text style={styles.followerName} numberOfLines={1}>
+                          {f.name}
+                        </Text>
+                        <View style={styles.followerMetaRow}>
+                          <MapPin
+                            size={10}
+                            color={colors.onSurfaceVariant + '99'}
+                            strokeWidth={1.5}
+                          />
+                          <Text style={styles.followerMeta} numberOfLines={1}>
+                            {f.location} · {f.since}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+            {hasMoreFollowing && (
+              <TouchableOpacity
+                style={[styles.loadMoreBtn, { marginTop: 12 }]}
+                activeOpacity={0.8}
+                onPress={() => setFollowingPageSize((s) => s + 10)}>
+                <Text style={styles.loadMoreText}>
+                  Ver más ({filteredFollowing.length - followingPageSize} restantes)
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* All reviews modal */}
+      <Modal
+        visible={allReviewsOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setAllReviewsOpen(false); setReviewSearch(''); setReviewPageSize(10); setReviewSort('recent'); setReviewSortOpen(false); }}>
+        <View style={[styles.allProductsModal, { paddingTop: insets.top }]}>
+          <View style={styles.allProductsHeader}>
+            <Text style={styles.allProductsTitle}>
+              Valoraciones ({reviewItems.length})
+            </Text>
+            <TouchableOpacity
+              style={styles.allProductsClose}
+              activeOpacity={0.7}
+              onPress={() => { setAllReviewsOpen(false); setReviewSearch(''); setReviewPageSize(10); setReviewSort('recent'); setReviewSortOpen(false); }}>
+              <X size={20} color={colors.onSurface} strokeWidth={1.8} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.productSearchWrap}>
+            <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+            <TextInput
+              style={styles.productSearchInput}
+              placeholder="Buscar por autor..."
+              placeholderTextColor={colors.onSurfaceVariant + '66'}
+              value={reviewSearch}
+              onChangeText={(t) => { setReviewSearch(t); setReviewPageSize(10); }}
+            />
+            {reviewSearch.length > 0 && (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => { setReviewSearch(''); setReviewPageSize(10); }}>
+                <X size={16} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.selectWrap}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.selectBtn}
+              onPress={() => setReviewSortOpen((o) => !o)}>
+              <ArrowDownUp size={14} color={colors.primary} strokeWidth={1.8} />
+              <Text style={styles.selectBtnText}>
+                {{ recent: 'Más recientes', oldest: 'Más antiguos', best: 'Mejor valoración', worst: 'Peor valoración' }[reviewSort]}
+              </Text>
+              <ChevronDown
+                size={16}
+                color={colors.onSurfaceVariant}
+                strokeWidth={1.8}
+                style={reviewSortOpen ? { transform: [{ rotate: '180deg' }] } : undefined}
+              />
+            </TouchableOpacity>
+            {reviewSortOpen && (
+              <View style={styles.selectDropdown}>
+                {([
+                  { key: 'recent', label: 'Más recientes' },
+                  { key: 'oldest', label: 'Más antiguos' },
+                  { key: 'best', label: 'Mejor valoración' },
+                  { key: 'worst', label: 'Peor valoración' },
+                ] as const).map((opt, i, arr) => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    activeOpacity={0.7}
+                    style={[styles.selectOption, i < arr.length - 1 && styles.selectOptionBorder]}
+                    onPress={() => { setReviewSort(opt.key); setReviewSortOpen(false); }}>
+                    <Text style={[styles.selectOptionText, reviewSort === opt.key && styles.selectOptionTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+          <View style={[styles.ratingHeader, { marginHorizontal: 16, marginTop: 12 }]}>
+            <Text style={styles.ratingValue}>{avgRating > 0 ? avgRating.toFixed(1) : '-'}</Text>
+            <View>
+              <StarRating rating={Math.round(avgRating)} />
+              <Text style={styles.ratingMeta}>Basado en {ratingCount} valoraciones</Text>
+            </View>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}>
+            {paginatedReviews.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Star size={40} color={colors.outlineVariant} strokeWidth={1} />
+                <Text style={styles.emptyText}>
+                  {reviewSearch.trim() ? 'Sin resultados' : 'Aún no tienes valoraciones'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {paginatedReviews.map((rev: any) => (
+                  <View key={rev.id} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reviewAuthor}>{rev.author}</Text>
+                        <StarRating rating={rev.rating} />
+                      </View>
+                      <Text style={styles.reviewDate}>{rev.date}</Text>
+                    </View>
+                    <Text style={styles.reviewText}>{rev.text}</Text>
+                  </View>
+                ))}
+                {hasMoreReviews && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    activeOpacity={0.8}
+                    onPress={() => setReviewPageSize((s) => s + 10)}>
+                    <Text style={styles.loadMoreText}>
+                      Ver más ({filteredReviews.length - reviewPageSize} restantes)
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Confirmation modal */}
       <Modal
         transparent
@@ -589,14 +1409,29 @@ export default function ProfileScreen() {
                       confirmAction === 'delete' ? colors.error : colors.tertiary,
                   },
                 ]}
-                onPress={() => {
-                  if (confirmAction === 'logout') signOut();
-                  setConfirmAction(null);
+                disabled={deletingAccount}
+                onPress={async () => {
+                  if (confirmAction === 'delete') {
+                    const result = await deleteAccount();
+                    setConfirmAction(null);
+                    if (result.ok) {
+                      signOut();
+                    } else {
+                      Alert.alert('Error', result.error);
+                    }
+                  } else {
+                    signOut();
+                    setConfirmAction(null);
+                  }
                 }}
                 activeOpacity={0.85}>
-                <Text style={styles.confirmActionText}>
-                  {confirmAction === 'delete' ? 'Eliminar' : 'Cerrar sesión'}
-                </Text>
+                {deletingAccount ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.confirmActionText}>
+                    {confirmAction === 'delete' ? 'Eliminar' : 'Cerrar sesión'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -785,6 +1620,26 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 20,
     marginTop: 8,
   },
+  bioToggle: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+    color: colors.primary,
+    marginTop: 4,
+  },
+  contactRow: {
+    gap: 6,
+    marginTop: 10,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  contactText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+  },
   badgesRow: {
     paddingHorizontal: 16,
     gap: 8,
@@ -803,81 +1658,42 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 11,
     letterSpacing: 0.2,
   },
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 22,
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: 16,
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '33',
-    overflow: 'hidden',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRightWidth: 0.5,
-    borderRightColor: colors.outlineVariant + '33',
-  },
-  statValue: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 20,
-    color: colors.primary,
-    lineHeight: 26,
-  },
-  statLabel: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 11,
-    color: colors.onSurfaceVariant,
-    marginTop: 2,
-  },
-  tabBar: {
+  statTabs: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 16,
     backgroundColor: colors.surfaceContainerLow,
     borderRadius: 12,
-    padding: 4,
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '33',
+    padding: 3,
   },
-  tab: {
+  statTab: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 9,
     alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  tabActive: {
-    backgroundColor: colors.surfaceContainerLowest,
+  statTabActive: {
+    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  tabText: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 13,
-    color: colors.onSurfaceVariant,
-  },
-  tabTextActive: {
-    fontFamily: 'Manrope-SemiBold',
-    color: colors.onSurface,
-  },
-  tabBadge: {
-    backgroundColor: colors.primaryContainer,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  tabBadgeText: {
+  statTabValue: {
     fontFamily: 'Manrope-Bold',
+    fontSize: 17,
+    color: colors.onSurface,
+    lineHeight: 22,
+  },
+  statTabValueActive: {
+    color: colors.primary,
+  },
+  statTabLabel: {
+    fontFamily: 'Manrope-Regular',
     fontSize: 10,
-    color: colors.onPrimaryContainer,
+    color: colors.onSurfaceVariant,
+    marginTop: 1,
   },
   grid: {
     paddingHorizontal: 16,
@@ -890,6 +1706,200 @@ const makeStyles = (colors: ThemeColors) =>
   },
   cardPlaceholder: {
     flex: 1,
+  },
+  seeAllBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '66',
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  seeAllText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+    color: colors.primary,
+  },
+  seeAllCount: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+  },
+  cardWrap: {
+    flex: 1,
+    position: 'relative',
+  },
+  cardActions: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+    zIndex: 5,
+  },
+  cardActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardActionDanger: {
+    backgroundColor: 'rgba(163,45,45,0.75)',
+  },
+  deletingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  allProductsModal: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  allProductsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.outlineVariant + '4d',
+  },
+  allProductsTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 18,
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  allProductsClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceContainerLow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allProductsGrid: {
+    padding: 16,
+    gap: 12,
+    paddingBottom: 40,
+  },
+  productSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+  },
+  productSearchInput: {
+    flex: 1,
+    fontFamily: 'Manrope-Regular',
+    fontSize: 14,
+    color: colors.onSurface,
+    padding: 0,
+  },
+  loadMoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+  },
+  loadMoreText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+    color: colors.primary,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceContainerLow,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+  },
+  sortChipActive: {
+    backgroundColor: colors.primary + '18',
+    borderColor: colors.primary + '44',
+  },
+  sortChipText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+  },
+  sortChipTextActive: {
+    color: colors.primary,
+  },
+  selectWrap: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    zIndex: 10,
+  },
+  selectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+  },
+  selectBtnText: {
+    flex: 1,
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+    color: colors.onSurface,
+  },
+  selectDropdown: {
+    marginTop: 4,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+    overflow: 'hidden',
+  },
+  selectOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  selectOptionBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.outlineVariant + '22',
+  },
+  selectOptionText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 13,
+    color: colors.onSurfaceVariant,
+  },
+  selectOptionTextActive: {
+    fontFamily: 'Manrope-SemiBold',
+    color: colors.primary,
   },
   emptyState: {
     alignItems: 'center',

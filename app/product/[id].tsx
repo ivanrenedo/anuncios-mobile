@@ -5,14 +5,13 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   StyleSheet,
   Dimensions,
+  Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Share,
-  ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -27,18 +26,61 @@ import {
   BadgeCheck,
   Flag,
   PackageX,
+  Bed,
+  Bath,
+  Ruler,
+  Building,
+  Calendar,
+  Gauge,
+  Fuel,
+  Cog,
+  Car,
+  Wrench,
+  ExternalLink,
+  Briefcase,
+  Eye,
+  Clock,
 } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductImage from '@/components/ProductImage';
 import SafetyModal, { SafetyModalMode } from '@/components/SafetyModal';
 import ReportSheet from '@/components/ReportSheet';
-import { useProduct, useViewProduct } from '@/hooks/useProducts';
-import { useToggleFavorite, useIsFavorited } from '@/hooks/useFavorites';
+import { useProduct, useViewProduct, useProductsByCategory } from '@/hooks/useProducts';
+import { useSellerRating } from '@/hooks/useReviews';
+import { useFavoriteToggle } from '@/hooks/useFavorites';
 import { useAuth } from '@/hooks/useAuth';
-import { API_URL } from '@/lib/config';
+import { API_URL, SHARE_URL } from '@/lib/config';
+import { useShare } from '@/hooks/useShare';
+import Skeleton from '@/components/Skeleton';
+import { fmtPrice, type ProductCardItem } from '@/components/ProductCard';
+import ProductRail from '@/components/ProductRail';
+import { getViewerKey } from '@/lib/viewer';
+import ImageViewing from 'react-native-image-viewing';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+function toCardItem(p: any): ProductCardItem {
+  const img = p.images?.[0]?.url || '';
+  return {
+    id: p.id,
+    title: p.title,
+    price: fmtPrice(Number(p.price)),
+    priceRaw: Number(p.price),
+    location: p.city,
+    seller: p.seller?.name,
+    sellerId: p.seller?.id,
+    avatar: p.seller?.avatarUrl,
+    verified: p.seller?.verified,
+    image: img.startsWith('/') ? `${API_URL}${img}` : img,
+    condition: p.condition,
+    discount: p.discount,
+    categoryLabel: p.category?.label,
+    operation: p.propertyDetail?.operation ?? p.vehicleDetail?.operation,
+    offerType: p.serviceDetail?.offerType,
+    postedAgo: timeAgo(p.createdAt),
+  };
+}
 
 function WhatsAppSvg() {
   return (
@@ -73,46 +115,41 @@ export default function ProductDetailScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { product: apiProduct, loading } = useProduct(id || '');
+  const { product: apiProduct, loading, refetch: refetchProduct } = useProduct(id || '');
   const { trackView } = useViewProduct();
-  const { toggle: toggleFav } = useToggleFavorite();
-  const { isFavorited } = useIsFavorited(id || '');
-  const { isAuthenticated } = useAuth();
-  // Category-specific detail tables (vehicle/property/service/job/marketplace).
-  // Stored on publish and fetched in GET_PRODUCT, rendered here as a spec sheet.
-  const detailPairs: { label: string; value: string }[] = [];
-  if (apiProduct) {
-    const push = (label: string, value: any) => {
-      if (value !== null && value !== undefined && String(value).trim() !== '') {
-        detailPairs.push({ label, value: String(value) });
-      }
-    };
-    const m = apiProduct.marketplaceDetail;
-    if (m) { push('Marca', m.brand); push('Modelo', m.model); }
-    const v = apiProduct.vehicleDetail;
-    if (v) {
-      push('Tipo', v.vehicleType); push('Marca', v.brand); push('Modelo', v.model);
-      push('Año', v.year); push('Transmisión', v.transmission); push('Motor', v.engine);
-    }
-    const p = apiProduct.propertyDetail;
-    if (p) {
-      push('Operación', p.operation); push('Tipo', p.propertyType);
-      push('Dormitorios', p.bedrooms); push('Baños', p.bathrooms); push('Dirección', p.address);
-    }
-    const s = apiProduct.serviceDetail;
-    if (s) { push('Tipo de servicio', s.serviceType); push('Modalidad', s.offerType); }
-    const j = apiProduct.jobDetail;
-    if (j) { push('Tipo de empleo', j.jobType); push('Enlace', j.link); }
-  }
+  const { isFavorite, toggleFavorite } = useFavoriteToggle();
+  const { isAuthenticated, user: me } = useAuth();
+  const { average: sellerAvg, count: sellerReviewCount } = useSellerRating(apiProduct?.seller?.id || '');
+  const categoryId = apiProduct?.category?.id || '';
+  const { products: relatedRaw, loading: relatedLoading } = useProductsByCategory(categoryId, 11);
+  const relatedItems = relatedRaw
+    .filter((p: any) => p.id !== id)
+    .slice(0, 10)
+    .map(toCardItem);
+  const mkt = apiProduct?.marketplaceDetail;
+  const veh = apiProduct?.vehicleDetail;
+  const prop = apiProduct?.propertyDetail;
+  const svc = apiProduct?.serviceDetail;
+  const job = apiProduct?.jobDetail;
+  const operationLabel = veh?.operation || prop?.operation || null;
 
+  const [refreshing, setRefreshing] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
-  const [liked, setLiked] = useState(isFavorited);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [modal, setModal] = useState<SafetyModalMode | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descNeedsToggle, setDescNeedsToggle] = useState<boolean | null>(null);
 
-  // Track view on mount
+  // Track view once per listing — the ref guard survives re-mounts and any
+  // double-invoked effect, and the backend also dedups per visitor (6h window).
+  const tracked = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (id) trackView(id);
+    if (!id || tracked.current === id) return;
+    tracked.current = id;
+    getViewerKey()
+      .then((key) => trackView(id, key))
+      .catch(() => {});
   }, [id]);
 
   // Loading / not-found states — no local mock fallback anymore.
@@ -120,15 +157,25 @@ export default function ProductDetailScreen() {
     return (
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} activeOpacity={0.8}>
             <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Cargando…</Text>
           <View style={styles.headerBtn} />
         </View>
-        <View style={styles.centerFill}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 44 + insets.top }}>
+          <Skeleton style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.85, borderRadius: 0 }} />
+          <View style={{ padding: 16, gap: 12 }}>
+            <Skeleton style={{ height: 24, width: '75%', borderRadius: 8 }} />
+            <Skeleton style={{ height: 30, width: '45%', borderRadius: 8 }} />
+            <Skeleton style={{ height: 14, width: '30%', borderRadius: 6 }} />
+            <View style={{ height: 8 }} />
+            <Skeleton style={{ height: 80, borderRadius: 16 }} />
+            <View style={{ height: 4 }} />
+            <Skeleton style={{ height: 16, width: '100%', borderRadius: 6 }} />
+            <Skeleton style={{ height: 16, width: '90%', borderRadius: 6 }} />
+            <Skeleton style={{ height: 16, width: '60%', borderRadius: 6 }} />
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -136,7 +183,7 @@ export default function ProductDetailScreen() {
     return (
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} activeOpacity={0.8}>
             <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>No disponible</Text>
@@ -152,6 +199,7 @@ export default function ProductDetailScreen() {
   }
 
   const sellerId = apiProduct.seller?.id;
+  const liked = isFavorite(id || '');
 
   const images: string[] = apiProduct.images?.length
     ? apiProduct.images.map((img: any) =>
@@ -161,25 +209,25 @@ export default function ProductDetailScreen() {
 
   const priceNum = Number(apiProduct.price);
   const discountPct = apiProduct.discount ?? 0;
+  const hasDiscount = priceNum > 0 && discountPct > 0 && discountPct < 100;
   const product = {
     id: apiProduct.id,
     title: apiProduct.title,
     subtitle: apiProduct.category?.label || '',
-    price: `${priceNum.toLocaleString('es')} XAF`,
-    originalPrice:
-      discountPct > 0
-        ? `${Math.round(priceNum / (1 - discountPct / 100)).toLocaleString('es')} XAF`
-        : undefined,
-    discount: discountPct > 0 ? `-${discountPct}%` : undefined,
+    price: hasDiscount
+      ? fmtPrice(Math.round(priceNum * (1 - discountPct / 100)))
+      : fmtPrice(priceNum),
+    originalPrice: hasDiscount ? fmtPrice(priceNum) : undefined,
+    discount: hasDiscount ? `-${discountPct}%` : undefined,
     condition: apiProduct.condition || '',
     description: apiProduct.description || 'Sin descripción.',
     images,
     seller: {
       name: apiProduct.seller?.name || 'Vendedor',
       avatar: apiProduct.seller?.avatarUrl || undefined,
-      rating: 0,
-      sales: 0,
+      rating: sellerAvg,
       verified: apiProduct.seller?.verified ?? false,
+      phone: apiProduct.seller?.phone || undefined
     },
     location: apiProduct.city || 'Guinea Ecuatorial',
     postedAgo: timeAgo(apiProduct.createdAt),
@@ -194,22 +242,21 @@ export default function ProductDetailScreen() {
     setActiveImage(index);
   };
 
-  const onShare = async () => {
-    try {
-      await Share.share({
-        title: 'Market EG',
-        message: `Mira este anuncio en Market EG: ${product.title} — ${product.price}`,
-      });
-    } catch {
-      // user dismissed / share unavailable
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try { await refetchProduct(); } catch {}
+    setRefreshing(false);
   };
+
+  const { share } = useShare();
+  const onShare = () =>
+    share({ type: 'product', id: product.id, title: product.title, price: product.price });
 
   return (
     <View style={styles.root}>
       {/* Sticky header */}
       <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} activeOpacity={0.8}>
           <ChevronLeft size={22} color={colors.primary} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{product.title}</Text>
@@ -225,7 +272,8 @@ export default function ProductDetailScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 44 + insets.top, paddingBottom: 100 + insets.bottom }}>
+        contentContainerStyle={{ paddingTop: 44 + insets.top, paddingBottom: 100 + insets.bottom }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Gallery */}
         <View style={styles.galleryContainer}>
           <ScrollView
@@ -237,7 +285,12 @@ export default function ProductDetailScreen() {
             style={styles.galleryScroll}>
             {product.images.length > 0 ? (
               product.images.map((uri: string, i: number) => (
-                <Image key={i} source={{ uri }} style={styles.galleryImage} />
+                <TouchableOpacity
+                  key={i}
+                  activeOpacity={0.9}
+                  onPress={() => { setActiveImage(i); setGalleryOpen(true); }}>
+                  <Image source={{ uri }} style={styles.galleryImage} />
+                </TouchableOpacity>
               ))
             ) : (
               <ProductImage uri={null} style={styles.galleryImage} iconSize={48} />
@@ -247,7 +300,7 @@ export default function ProductDetailScreen() {
           {/* Favorite */}
           <TouchableOpacity
             style={styles.likeBtn}
-            onPress={() => { setLiked((v: boolean) => !v); if (id) toggleFav(id); }}
+            onPress={() => { if (id) toggleFavorite(id); }}
             activeOpacity={0.85}>
             <Heart
               size={20}
@@ -275,11 +328,32 @@ export default function ProductDetailScreen() {
 
         {/* Product info */}
         <View style={styles.section}>
-          <View style={styles.conditionBadge}>
-            <Text style={styles.conditionText}>{product.condition}</Text>
-          </View>
           <Text style={styles.title}>{product.title}</Text>
-          <Text style={styles.subtitle}>{product.subtitle}</Text>
+
+          <View style={styles.tagLine}>
+            <Text style={styles.tagText}>{product.subtitle}</Text>
+            {(operationLabel || svc?.offerType) && (
+              <>
+                <View style={styles.tagDot} />
+                <Text style={[
+                  styles.tagText,
+                  styles.tagOp,
+                  veh && { color: '#8c5000' },
+                  svc && { color: '#006b5e' },
+                ]}>
+                  {svc?.offerType || operationLabel}
+                </Text>
+              </>
+            )}
+            {product.condition ? (
+              <>
+                <View style={styles.tagDot} />
+                <Text style={styles.tagText}>{product.condition}</Text>
+              </>
+            ) : null}
+          </View>
+          
+          {priceNum > 0 && (
           <View style={styles.priceRow}>
             <Text style={styles.price}>{product.price}</Text>
             {product.originalPrice && (
@@ -291,49 +365,82 @@ export default function ProductDetailScreen() {
               </View>
             )}
           </View>
-        </View>
+          )}
 
-        {/* Seller card */}
-        <View style={styles.section}>
-          <View style={styles.sellerCard}>
-            <View style={styles.sellerAvatarWrap}>
-              <Image source={{ uri: product.seller.avatar }} style={styles.sellerAvatar} />
-              {product.seller.verified && (
-                <View style={styles.sellerVerified}>
-                  <BadgeCheck size={14} color="#ffffff" fill={colors.primary} strokeWidth={0} />
-                </View>
-              )}
+          {/* Location + meta inline */}
+          <View style={styles.metaInlineRow}>
+            <View style={styles.metaInlineItem}>
+              <MapPin size={13} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              {prop && prop.address && ( <Text style={styles.metaInlineText}>{prop.address}&nbsp;,</Text>)}
+              <Text style={styles.metaInlineText}>{product.location}</Text>
             </View>
-            <View style={styles.sellerInfo}>
-              <Text style={styles.sellerName}>{product.seller.name}</Text>
-              <View style={styles.sellerRatingRow}>
-                <Star
-                  size={12}
-                  color={colors.tertiaryContainer}
-                  fill={colors.tertiaryContainer}
-                  strokeWidth={0}
-                />
-                <Text style={styles.sellerRating}>{product.seller.rating.toFixed(1)}</Text>
-                <Text style={styles.sellerSales}>({product.seller.sales} ventas)</Text>
-              </View>
+            <View style={styles.metaInlineItem}>
+              <Eye size={13} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              <Text style={styles.metaInlineText}>{product.views}</Text>
             </View>
+            <View style={styles.metaInlineItem}>
+              <Heart size={13} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              <Text style={styles.metaInlineText}>{product.favorites}</Text>
+            </View>
+            <View style={styles.metaInlineItem}>
+              <Clock size={13} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+              <Text style={styles.metaInlineText}>{product.postedAgo}</Text>
+            </View>
+          </View>
+
+          {/* Seller mini */}
+          {sellerId !== me?.id && (
             <TouchableOpacity
-              style={styles.profileBtn}
-              activeOpacity={0.8}
+              style={styles.sellerMini}
+              activeOpacity={0.7}
               disabled={!sellerId}
               onPress={() =>
                 sellerId &&
                 router.push({ pathname: '/user/[id]', params: { id: sellerId } })
               }>
-              <Text style={styles.profileBtnText}>Ver perfil</Text>
+              <View style={styles.sellerMiniAvatarWrap}>
+                <Image source={{ uri: product.seller.avatar }} style={styles.sellerMiniAvatar} />
+                {product.seller.verified && (
+                  <View style={styles.sellerMiniVerified}>
+                    <BadgeCheck size={11} color="#ffffff" fill={colors.primary} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.sellerMiniInfo}>
+                <Text style={styles.sellerMiniName}>{product.seller.name}</Text>
+                <View style={styles.sellerMiniRatingRow}>
+                  <Star size={11} color={colors.tertiaryContainer} fill={colors.tertiaryContainer} strokeWidth={0} />
+                  <Text style={styles.sellerMiniRating}>{product.seller.rating.toFixed(1)}</Text>
+                </View>
+              </View>
+              <ChevronRight size={16} color={colors.onSurfaceVariant + '88'} strokeWidth={1.8} />
             </TouchableOpacity>
-          </View>
+          )}
+          
         </View>
 
         {/* Description */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Descripción</Text>
-          <Text style={styles.description}>{product.description}</Text>
+          <Text
+            style={styles.description}
+            numberOfLines={descExpanded ? undefined : 6}
+            onTextLayout={(e) => {
+              if (descNeedsToggle === null && e.nativeEvent.lines.length >= 6)
+                setDescNeedsToggle(true);
+            }}>
+            {product.description}
+          </Text>
+          {descNeedsToggle && (
+            <TouchableOpacity
+              style={styles.descToggle}
+              activeOpacity={0.7}
+              onPress={() => setDescExpanded((v) => !v)}>
+              <Text style={styles.descToggleText}>
+                {descExpanded ? 'Ver menos' : 'Ver más'}
+              </Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.attrGrid}>
             {product.attributes.map((attr: { label: string; value: string }) => (
               <View key={attr.label} style={styles.attrCard}>
@@ -344,104 +451,183 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        {/* Category-specific spec sheet */}
-        {detailPairs.length > 0 && (
+        {/* ── Marketplace detail ── */}
+        {mkt && (mkt.brand || mkt.model) && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ficha técnica</Text>
-            <View style={styles.attrGrid}>
-              {detailPairs.map((attr, i) => (
-                <View key={`${attr.label}-${i}`} style={styles.attrCard}>
-                  <Text style={styles.attrLabel}>{attr.label}</Text>
-                  <Text style={styles.attrValue}>{attr.value}</Text>
+            <Text style={styles.sectionTitle}>Detalles del producto</Text>
+            <View style={styles.specGrid}>
+              {mkt.brand ? (
+                <View style={styles.specCell}>
+                  <Text style={styles.specCellLabel}>Marca</Text>
+                  <Text style={styles.specCellValue}>{mkt.brand}</Text>
                 </View>
-              ))}
+              ) : null}
+              {mkt.model ? (
+                <View style={styles.specCell}>
+                  <Text style={styles.specCellLabel}>Modelo</Text>
+                  <Text style={styles.specCellValue}>{mkt.model}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         )}
 
-        {/* Safety tip */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.safetyCard}
-            onPress={() => setModal('tips')}
-            activeOpacity={0.85}>
-            <View style={styles.safetyIcon}>
-              <Shield size={20} color={colors.tertiary} strokeWidth={1.5} />
+        {/* ── Vehicle detail ── */}
+        {veh && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ficha técnica</Text>
+            <View style={styles.specGrid}>
+              {veh.year != null && (
+                <View style={styles.specIconCell}>
+                  <Calendar size={16} color="#8c5000" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Año</Text>
+                    <Text style={styles.specCellValue}>{veh.year}</Text>
+                  </View>
+                </View>
+              )}
+              {veh.kilometrage != null && (
+                <View style={styles.specIconCell}>
+                  <Gauge size={16} color="#8c5000" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Kilometraje</Text>
+                    <Text style={styles.specCellValue}>{Number(veh.kilometrage).toLocaleString()} km</Text>
+                  </View>
+                </View>
+              )}
+              {veh.engine ? (
+                <View style={styles.specIconCell}>
+                  <Fuel size={16} color="#8c5000" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Motor</Text>
+                    <Text style={styles.specCellValue}>{veh.engine}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {veh.transmission ? (
+                <View style={styles.specIconCell}>
+                  <Cog size={16} color="#8c5000" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Transmisión</Text>
+                    <Text style={styles.specCellValue}>{veh.transmission}</Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.safetyTitle}>Consejos de Seguridad</Text>
-              <Text style={styles.safetyText}>
-                <Text style={styles.safetyBold}>Pago en persona únicamente.</Text>
-                {' '}Nunca envíes dinero por adelantado. Toca para ver más consejos.
-              </Text>
-            </View>
-            <ChevronRight size={18} color={colors.tertiary + '99'} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Map */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ubicación del vendedor</Text>
-          <View style={styles.mapWrap}>
-            <Image
-              source={{
-                uri: 'https://images.pexels.com/photos/3408744/pexels-photo-3408744.jpeg?auto=compress&cs=tinysrgb&w=800',
-              }}
-              style={styles.mapImage}
-            />
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.25)']}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <View style={styles.mapPinWrap}>
-              <View style={styles.mapPinOuter}>
-                <View style={styles.mapPinInner} />
+            {(veh.brand || veh.model) && (
+              <View style={styles.specGrid}>
+                {veh.brand ? (
+                  <View style={styles.specCell}>
+                    <Text style={styles.specCellLabel}>Marca</Text>
+                    <Text style={styles.specCellValue}>{veh.brand}</Text>
+                  </View>
+                ) : null}
+                {veh.model ? (
+                  <View style={styles.specCell}>
+                    <Text style={styles.specCellLabel}>Modelo</Text>
+                    <Text style={styles.specCellValue}>{veh.model}</Text>
+                  </View>
+                ) : null}
               </View>
-            </View>
-            <View style={styles.mapLabelWrap}>
-              <MapPin size={13} color={colors.primary} strokeWidth={2} />
-              <Text style={styles.mapLabelText}>{product.location}</Text>
-            </View>
+            )}
           </View>
-        </View>
+        )}
 
-        {/* Meta */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Publicado {product.postedAgo}</Text>
-          <View style={styles.metaRow}>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>{product.views} vistas</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>{product.favorites} en favoritos</Text>
+        {/* ── Property detail ── */}
+        {prop && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Características</Text>
+            <View style={styles.specGrid}>
+              {prop.bedrooms > 0 && (
+                <View style={styles.specIconCell}>
+                  <Bed size={16} color="#5F5E5A" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Dormitorios</Text>
+                    <Text style={styles.specCellValue}>{prop.bedrooms}</Text>
+                  </View>
+                </View>
+              )}
+              {prop.bathrooms > 0 && (
+                <View style={styles.specIconCell}>
+                  <Bath size={16} color="#5F5E5A" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Baños</Text>
+                    <Text style={styles.specCellValue}>{prop.bathrooms}</Text>
+                  </View>
+                </View>
+              )}
+              {prop.surface > 0 && (
+                <View style={styles.specIconCell}>
+                  <Ruler size={16} color="#5F5E5A" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Superficie</Text>
+                    <Text style={styles.specCellValue}>{prop.surface} m²</Text>
+                  </View>
+                </View>
+              )}
+              {prop.floor > 0 && (
+                <View style={styles.specIconCell}>
+                  <Building size={16} color="#5F5E5A" strokeWidth={1.5} />
+                  <View>
+                    <Text style={styles.specCellLabel}>Planta</Text>
+                    <Text style={styles.specCellValue}>{prop.floor}ª</Text>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
-        </View>
+        )}
+
+        {/* ── Job detail ── */}
+        {job?.link && (
+          <TouchableOpacity
+            style={styles.jobLink}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(job.link!)}>
+            <ExternalLink size={14} color={colors.primary} strokeWidth={1.8} />
+            <Text style={styles.jobLinkText}>Ir al sitio web</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Reportar anuncio */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              paddingVertical: 12,
-            }}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (!isAuthenticated) {
-                router.push('/login');
-                return;
-              }
-              setReportOpen(true);
-            }}>
-            <Flag size={18} color={colors.error} strokeWidth={1.8} />
-            <Text style={{ fontFamily: 'Manrope-SemiBold', fontSize: 14, color: colors.error }}>
-              Reportar anuncio
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {sellerId !== me?.id && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 12,
+              }}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (!isAuthenticated) {
+                  router.push('/login');
+                  return;
+                }
+                setReportOpen(true);
+              }}>
+              <Flag size={18} color={colors.error} strokeWidth={1.8} />
+              <Text style={{ fontFamily: 'Manrope-SemiBold', fontSize: 14, color: colors.error }}>
+                Denunciar anuncio
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Related products */}
+        {(relatedItems.length > 0 || relatedLoading) && (
+          <View style={{ marginTop: 24 }}>
+            <ProductRail
+              title="Anuncios relacionados"
+              icon="tag"
+              items={relatedItems}
+              loading={relatedLoading}
+              cardWidth={160}
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* Bottom action bar */}
@@ -466,6 +652,9 @@ export default function ProductDetailScreen() {
         visible={modal !== null}
         mode={modal ?? 'tips'}
         onClose={() => setModal(null)}
+        phoneNumber={product.seller.phone}
+        whatsappNumber={product.seller.phone?.replace(/[^0-9]/g, '')}
+        whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/p/${product.id}`}
       />
 
       <ReportSheet
@@ -473,6 +662,23 @@ export default function ProductDetailScreen() {
         onClose={() => setReportOpen(false)}
         type="product"
         targetId={id || ''}
+      />
+
+      <ImageViewing
+        images={product.images.map((uri: string) => ({ uri }))}
+        imageIndex={activeImage}
+        visible={galleryOpen}
+        onRequestClose={() => setGalleryOpen(false)}
+        HeaderComponent={() => (
+          <View style={{ paddingTop: insets.top + 8, paddingRight: 16, alignItems: 'flex-end' }}>
+            <TouchableOpacity
+              onPress={() => setGalleryOpen(false)}
+              activeOpacity={0.8}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: '600', lineHeight: 20 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       />
     </View>
   );
@@ -591,44 +797,43 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 16,
       paddingTop: 24,
     },
-    conditionBadge: {
-      alignSelf: 'flex-start',
-      backgroundColor: colors.primary + '1a',
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderRadius: 8,
-      marginBottom: 10,
+    tagLine: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
     },
-    conditionText: {
-      fontFamily: 'Manrope-Bold',
-      fontSize: 11,
-      color: colors.primary,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
+    tagDot: {
+      width: 3,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: colors.onSurfaceVariant + '66',
+    },
+    tagText: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 13,
+      color: colors.onSurfaceVariant,
+    },
+    tagOp: {
+      fontFamily: 'Manrope-SemiBold',
     },
     title: {
       fontFamily: 'Manrope-Bold',
-      fontSize: 26,
+      fontSize: 24,
       color: colors.onSurface,
       lineHeight: 32,
       letterSpacing: -0.3,
-    },
-    subtitle: {
-      fontFamily: 'Manrope-Regular',
-      fontSize: 15,
-      color: colors.onSurfaceVariant,
-      lineHeight: 22,
-      marginTop: 6,
     },
     priceRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      marginTop: 16,
+      marginTop: 10,
     },
     price: {
       fontFamily: 'Manrope-Bold',
-      fontSize: 32,
+      fontSize: 28,
       color: colors.primary,
       letterSpacing: -0.5,
     },
@@ -649,77 +854,68 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 12,
       color: colors.error,
     },
-    sellerCard: {
+    metaInlineRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: 12,
-      backgroundColor: colors.surfaceContainerLowest,
-      borderRadius: 16,
-      padding: 14,
-      borderWidth: 0.5,
-      borderColor: colors.outlineVariant + '4d',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.06,
-      shadowRadius: 12,
-      elevation: 3,
+      marginTop: 4,
     },
-    sellerAvatarWrap: {
+    metaInlineItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    metaInlineText: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 13,
+      color: colors.onSurfaceVariant + '99',
+    },
+    sellerMini: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 12,
+    },
+    sellerMiniAvatarWrap: {
       position: 'relative',
     },
-    sellerAvatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+    sellerMiniAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       borderWidth: 0.5,
       borderColor: colors.outlineVariant + '33',
     },
-    sellerVerified: {
+    sellerMiniVerified: {
       position: 'absolute',
-      bottom: -2,
-      right: -2,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      bottom: -1,
+      right: -1,
+      width: 14,
+      height: 14,
+      borderRadius: 7,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    sellerInfo: {
+    sellerMiniInfo: {
       flex: 1,
     },
-    sellerName: {
+    sellerMiniName: {
       fontFamily: 'Manrope-SemiBold',
-      fontSize: 15,
+      fontSize: 13,
       color: colors.onSurface,
-      lineHeight: 20,
     },
-    sellerRatingRow: {
+    sellerMiniRatingRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
-      marginTop: 3,
+      gap: 3,
+      marginTop: 1,
     },
-    sellerRating: {
-      fontFamily: 'Manrope-Bold',
-      fontSize: 13,
-      color: colors.tertiary,
-    },
-    sellerSales: {
-      fontFamily: 'Manrope-Regular',
-      fontSize: 12,
-      color: colors.onSurfaceVariant,
-    },
-    profileBtn: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: colors.surfaceContainerHigh,
-    },
-    profileBtnText: {
+    sellerMiniRating: {
       fontFamily: 'Manrope-SemiBold',
-      fontSize: 13,
-      color: colors.primary,
+      fontSize: 11,
+      color: colors.tertiary,
     },
     sectionTitle: {
       fontFamily: 'Manrope-SemiBold',
@@ -733,6 +929,14 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 15,
       color: colors.onSurfaceVariant,
       lineHeight: 24,
+    },
+    descToggle: {
+      marginTop: 6,
+    },
+    descToggleText: {
+      fontFamily: 'Manrope-SemiBold',
+      fontSize: 14,
+      color: colors.primary,
     },
     attrGrid: {
       flexDirection: 'row',
@@ -760,6 +964,79 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 15,
       color: colors.onSurface,
       lineHeight: 20,
+    },
+    specGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+    },
+    specCell: {
+      width: '47%',
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      padding: 12,
+    },
+    specIconCell: {
+      width: '47%',
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    specCellLabel: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+    },
+    specCellValue: {
+      fontFamily: 'Manrope-SemiBold',
+      fontSize: 14,
+      color: colors.onSurface,
+      marginTop: 2,
+    },
+    addressRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+    },
+    addressText: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 13,
+      color: colors.onSurfaceVariant,
+      flex: 1,
+    },
+    svcCard: {
+      backgroundColor: '#006b5e0d',
+      borderLeftWidth: 3,
+      borderLeftColor: '#006b5e',
+      padding: 12,
+      borderRadius: 0,
+    },
+    svcCardValue: {
+      fontFamily: 'Manrope-SemiBold',
+      fontSize: 15,
+      color: colors.onSurface,
+      marginTop: 2,
+    },
+    jobLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    jobLinkText: {
+      fontFamily: 'Manrope-SemiBold',
+      fontSize: 14,
+      color: colors.primary,
     },
     safetyCard: {
       flexDirection: 'row',
@@ -796,79 +1073,6 @@ const makeStyles = (colors: ThemeColors) =>
     safetyBold: {
       fontFamily: 'Manrope-Bold',
       color: colors.onSurface,
-    },
-    mapWrap: {
-      borderRadius: 16,
-      overflow: 'hidden',
-      height: 192,
-      borderWidth: 0.5,
-      borderColor: colors.outlineVariant + '4d',
-      position: 'relative',
-    },
-    mapImage: {
-      width: '100%',
-      height: '100%',
-    },
-    mapPinWrap: {
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      marginLeft: -12,
-      marginTop: -28,
-      alignItems: 'center',
-    },
-    mapPinOuter: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
-      elevation: 6,
-    },
-    mapPinInner: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: '#ffffff',
-    },
-    mapLabelWrap: {
-      position: 'absolute',
-      bottom: 12,
-      left: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      backgroundColor: colors.surfaceContainerLowest + 'ee',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 20,
-    },
-    mapLabelText: {
-      fontFamily: 'Manrope-SemiBold',
-      fontSize: 12,
-      color: colors.onSurface,
-    },
-    metaRow: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    metaChip: {
-      backgroundColor: colors.surfaceContainerLow,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      borderWidth: 0.5,
-      borderColor: colors.outlineVariant + '33',
-    },
-    metaChipText: {
-      fontFamily: 'Manrope-Regular',
-      fontSize: 12,
-      color: colors.onSurfaceVariant,
     },
     footer: {
       position: 'absolute',

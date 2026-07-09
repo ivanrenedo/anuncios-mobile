@@ -1,4 +1,4 @@
-import { UPLOAD_URL } from './config';
+import { UPLOAD_URL, resolveImage } from './config';
 import { getToken } from './apollo';
 
 export async function uploadImage(uri: string): Promise<string> {
@@ -7,20 +7,28 @@ export async function uploadImage(uri: string): Promise<string> {
   const match = /\.(\w+)$/.exec(name);
   const type = match ? `image/${match[1]}` : 'image/jpeg';
 
+  console.log('[Upload] uri:', uri);
+  console.log('[Upload] endpoint:', `${UPLOAD_URL}/image`);
+  console.log('[Upload] token?', !!token);
+  console.log('[Upload] file:', { uri, name, type });
+
   const form = new FormData();
   form.append('file', { uri, name, type } as any);
 
   const res = await fetch(`${UPLOAD_URL}/image`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
 
-  const data = await res.json();
-  return data.url;
+  const text = await res.text();
+  console.log('[Upload] status:', res.status);
+  console.log('[Upload] response:', text);
+
+  if (!res.ok) throw new Error(`Upload failed: ${res.status} ${text}`);
+
+  const data = JSON.parse(text);
+  return resolveImage(data.url);
 }
 
 export async function uploadImages(uris: string[]): Promise<string[]> {
@@ -36,13 +44,10 @@ export async function uploadImages(uris: string[]): Promise<string[]> {
 
   const res = await fetch(`${UPLOAD_URL}/images`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
 
   const data = await res.json();
-  return data.urls;
+  return (data.urls as string[]).map(resolveImage);
 }

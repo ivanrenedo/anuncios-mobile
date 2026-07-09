@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useQuery, useLazyQuery, useMutation } from '@apollo/client/react';
 // Apollo 4.x types `data` as `{}` unless a generic is given; these hooks shape
 // the result themselves, so `<any>` keeps the existing loosely-typed style.
 import {
@@ -15,11 +15,21 @@ import {
   VIEW_PRODUCT,
 } from '@/graphql/mutations';
 
+// Refetch by operation NAME so every active product list refreshes regardless
+// of its variables (take/skip, sellerId, categoryId…). This is what makes a new
+// or edited product show up instantly without remounting the screen.
+const PRODUCT_LISTS = [
+  'Products',
+  'ProductsBySeller',
+  'ProductsByCategory',
+  'SearchProducts',
+];
+
 export function useProducts(take = 20, skip = 0) {
-  const { data, loading, error, refetch } = useQuery<any>(GET_PRODUCTS, {
+  const { data, previousData, loading, error, refetch } = useQuery<any>(GET_PRODUCTS, {
     variables: { take, skip },
   });
-  return { products: data?.products ?? [], loading, error, refetch };
+  return { products: data?.products ?? previousData?.products ?? [], loading, error, refetch };
 }
 
 export function useProduct(id: string) {
@@ -31,9 +41,7 @@ export function useProduct(id: string) {
 }
 
 export function useSearchProducts() {
-  const { data, loading, error, refetch } = useQuery<any>(SEARCH_PRODUCTS, {
-    skip: true,
-  });
+  const [execute, { data, loading, error }] = useLazyQuery<any>(SEARCH_PRODUCTS);
 
   const search = (input: {
     query?: string;
@@ -45,7 +53,7 @@ export function useSearchProducts() {
     sortBy?: string;
     take?: number;
     skip?: number;
-  }) => refetch({ input });
+  }) => execute({ variables: { input } });
 
   return { results: data?.searchProducts ?? [], loading, error, search };
 }
@@ -68,14 +76,18 @@ export function useProductsBySeller(sellerId: string) {
 
 export function useCreateProduct() {
   const [mutate, { loading, error }] = useMutation(CREATE_PRODUCT, {
-    refetchQueries: [{ query: GET_PRODUCTS }],
+    refetchQueries: PRODUCT_LISTS,
+    awaitRefetchQueries: true,
   });
   const create = (input: any) => mutate({ variables: { input } });
   return { create, loading, error };
 }
 
 export function useUpdateProduct() {
-  const [mutate, { loading, error }] = useMutation(UPDATE_PRODUCT);
+  const [mutate, { loading, error }] = useMutation(UPDATE_PRODUCT, {
+    refetchQueries: [...PRODUCT_LISTS, 'Product'],
+    awaitRefetchQueries: true,
+  });
   const update = (id: string, input: any) =>
     mutate({ variables: { id, input } });
   return { update, loading, error };
@@ -83,7 +95,8 @@ export function useUpdateProduct() {
 
 export function useDeleteProduct() {
   const [mutate, { loading, error }] = useMutation(DELETE_PRODUCT, {
-    refetchQueries: [{ query: GET_PRODUCTS }],
+    refetchQueries: PRODUCT_LISTS,
+    awaitRefetchQueries: true,
   });
   const remove = (id: string) => mutate({ variables: { id } });
   return { remove, loading, error };
@@ -91,6 +104,7 @@ export function useDeleteProduct() {
 
 export function useViewProduct() {
   const [mutate] = useMutation(VIEW_PRODUCT);
-  const trackView = (id: string) => mutate({ variables: { id } });
+  const trackView = (id: string, viewerKey?: string) =>
+    mutate({ variables: { id, viewerKey } });
   return { trackView };
 }

@@ -1,11 +1,17 @@
 import { Tabs } from 'expo-router';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Image, StyleSheet, Platform } from 'react-native';
 import { Home, Heart, Plus, LayoutGrid, User } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { useProfile } from '@/hooks/useProfile';
+import { API_URL } from '@/lib/config';
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { profile } = useProfile();
+  const avatarUri = profile?.avatar_url
+    ? profile.avatar_url.startsWith('/') ? `${API_URL}${profile.avatar_url}` : profile.avatar_url
+    : null;
   return (
     <Tabs
       screenOptions={{
@@ -74,14 +80,24 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, size, focused }) => (
-            <User
-              size={size}
-              color={color}
-              fill={focused ? color : 'transparent'}
-              strokeWidth={focused ? 0 : 1.5}
-            />
-          ),
+          tabBarIcon: ({ color, size, focused }) =>
+            avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={[
+                  styles.profileAvatar,
+                  { width: size, height: size },
+                  focused && { borderColor: colors.secondary, borderWidth: 2 },
+                ]}
+              />
+            ) : (
+              <User
+                size={size}
+                color={color}
+                fill={focused ? color : 'transparent'}
+                strokeWidth={focused ? 0 : 1.5}
+              />
+            ),
         }}
       />
     </Tabs>
@@ -103,6 +119,11 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Regular',
     fontSize: 10,
     marginTop: 2,
+  },
+  profileAvatar: {
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   postButton: {
     width: 48,

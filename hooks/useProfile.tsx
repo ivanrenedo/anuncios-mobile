@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apolloClient } from '@/lib/apollo';
 import { ME } from '@/graphql/queries';
-import { UPDATE_USER } from '@/graphql/mutations';
+import { UPDATE_USER, DELETE_MY_ACCOUNT } from '@/graphql/mutations';
 import { getErrorMessage, isGraphQLError } from '@/lib/errors';
 import { useAuth } from './useAuth';
 
@@ -15,6 +15,7 @@ export interface Profile {
   bio: string;
   avatar_url: string;
   cover_url: string;
+  verified: boolean;
   email: string;
   phone: string;
   language: string;
@@ -37,6 +38,7 @@ const DEFAULT_PROFILE: Profile = {
   bio: '',
   avatar_url: '',
   cover_url: '',
+  verified: false,
   email: '',
   phone: '',
   language: 'es',
@@ -60,6 +62,7 @@ function apiToProfile(u: any): Profile {
     bio: u.bio || '',
     avatar_url: u.avatarUrl || '',
     cover_url: u.coverUrl || '',
+    verified: u.verified ?? false,
     email: u.email || '',
     phone: u.phone || '',
     language: u.language || 'es',
@@ -174,4 +177,23 @@ export function useProfile() {
   const ctx = useContext(ProfileContext);
   if (!ctx) throw new Error('useProfile must be used inside ProfileProvider');
   return ctx;
+}
+
+export function useDeleteAccount() {
+  const [loading, setLoading] = useState(false);
+
+  const deleteAccount = async () => {
+    setLoading(true);
+    try {
+      await apolloClient.mutate({ mutation: DELETE_MY_ACCOUNT });
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: getErrorMessage(err, 'No se pudo eliminar la cuenta.') };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { deleteAccount, loading };
 }

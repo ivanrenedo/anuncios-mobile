@@ -120,10 +120,52 @@ export function usePushNotifications() {
     const sub = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data as any;
-        if (data?.productId) {
-          router.push({ pathname: '/product/[id]', params: { id: String(data.productId) } });
-        } else if (data?.userId) {
-          router.push({ pathname: '/user/[id]', params: { id: String(data.userId) } });
+        const type = data?.type as string | undefined;
+
+        switch (type) {
+          case 'like':
+          case 'price':
+            if (data?.productId) {
+              router.push({ pathname: '/product/[id]', params: { id: String(data.productId) } });
+            }
+            break;
+          case 'follow':
+            if (data?.productId) {
+              router.push({ pathname: '/product/[id]', params: { id: String(data.productId) } });
+            } else if (data?.userId) {
+              router.push({ pathname: '/user/[id]', params: { id: String(data.userId) } });
+            }
+            break;
+          case 'review':
+            if (data?.userId) {
+              router.push({ pathname: '/user/[id]', params: { id: String(data.userId) } });
+            }
+            break;
+          case 'report':
+            if (data?.productId) {
+              router.push({ pathname: '/product/[id]', params: { id: String(data.productId) } });
+            } else if (data?.userId) {
+              router.push({ pathname: '/user/[id]', params: { id: String(data.userId) } });
+            }
+            break;
+          case 'marketing':
+            if (data?.sectionId || data?.filterCat) {
+              router.push({
+                pathname: '/(tabs)/explore',
+                params: {
+                  ...(data.sectionId && { sectionId: String(data.sectionId) }),
+                  ...(data.filterCat && { filterCat: String(data.filterCat) }),
+                },
+              });
+            }
+            break;
+          default:
+            if (data?.productId) {
+              router.push({ pathname: '/product/[id]', params: { id: String(data.productId) } });
+            } else if (data?.userId) {
+              router.push({ pathname: '/user/[id]', params: { id: String(data.userId) } });
+            }
+            break;
         }
       },
     );

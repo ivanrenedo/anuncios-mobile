@@ -9,8 +9,11 @@ import {
   Modal,
   Animated,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   X,
   Bell,
@@ -23,10 +26,14 @@ import {
   Flag,
   UserPlus,
   Megaphone,
+  Star,
+  Info,
 } from 'lucide-react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import { useNotifications, useMarkNotificationRead, useMarkAllRead, useDeleteNotification } from '@/hooks/useNotifications';
+import { resolveImage } from '@/lib/config';
+import Skeleton from '@/components/Skeleton';
+import { useNotifications, useMarkNotificationRead, useMarkAllRead, useDeleteNotification, useDeleteAllNotifications } from '@/hooks/useNotifications';
 
 type NotifType =
   | 'like'
@@ -36,7 +43,10 @@ type NotifType =
   | 'verified'
   | 'report'
   | 'follow'
-  | 'marketing';
+  | 'marketing'
+  | 'review'
+  | 'system'
+  | 'security';
 
 interface Notif {
   id: string;
@@ -46,6 +56,10 @@ interface Notif {
   time: string;
   read: boolean;
   avatar?: string;
+  relatedProductId?: string;
+  relatedUserId?: string;
+  sectionId?: string;
+  filterCat?: string;
 }
 
 const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: string }> = {
@@ -57,6 +71,9 @@ const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: 
   report:  { icon: Flag,          bg: colors.error + '15',    color: colors.error },
   follow:  { icon: UserPlus,      bg: colors.secondary + '18',color: colors.secondary },
   marketing:{ icon: Megaphone,    bg: colors.tertiary + '15', color: colors.tertiary },
+  review:   { icon: Star,         bg: colors.tertiary + '15', color: colors.tertiary },
+  system:   { icon: Info,         bg: colors.secondary + '18',color: colors.secondary },
+  security: { icon: Flag,         bg: colors.error + '15',    color: colors.error },
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -68,15 +85,18 @@ interface Props {
 
 export default function NotificationsModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const translateX = useRef(new Animated.Value(-SCREEN_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
-  const { notifications: apiNotifs } = useNotifications();
+  const { notifications: apiNotifs, loading: notifsLoading } = useNotifications();
   const { markRead: apiMarkRead } = useMarkNotificationRead();
   const { markAllRead: apiMarkAllRead } = useMarkAllRead();
   const { remove: apiRemove } = useDeleteNotification();
+  const { deleteAll: apiDeleteAll, loading: deletingAll } = useDeleteAllNotifications();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const notifs: Notif[] = apiNotifs.map((n: any) => ({
     id: n.id,
@@ -86,6 +106,10 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     time: n.createdAt ? new Date(n.createdAt).toLocaleDateString('es') : n.time || '',
     read: n.read ?? false,
     avatar: n.avatar,
+    relatedProductId: n.relatedProductId ?? undefined,
+    relatedUserId: n.relatedUserId ?? undefined,
+    sectionId: n.sectionId ?? undefined,
+    filterCat: n.filterCat ?? undefined,
   }));
 
   useEffect(() => {
@@ -122,8 +146,72 @@ export default function NotificationsModal({ visible, onClose }: Props) {
 
   const unreadCount = notifs.filter((n) => !n.read).length;
   const markAllRead = () => { apiMarkAllRead(); };
-  const dismiss = (id: string) => { apiRemove(id); };
+  const dismiss = async (id: string) => {
+    setDeletingId(id);
+    try { await apiRemove(id); } finally { setDeletingId(null); }
+  };
   const markRead = (id: string) => { apiMarkRead(id); };
+
+  const handleNotifPress = (notif: Notif) => {
+    if (!notif.read) apiMarkRead(notif.id);
+
+    switch (notif.type) {
+      case 'like':
+      case 'price':
+        if (notif.relatedProductId) {
+          onClose();
+          router.push({ pathname: '/product/[id]', params: { id: notif.relatedProductId } });
+        }
+        break;
+      case 'follow':
+        if (notif.relatedProductId) {
+          onClose();
+          router.push({ pathname: '/product/[id]', params: { id: notif.relatedProductId } });
+        } else if (notif.relatedUserId) {
+          onClose();
+          router.push({ pathname: '/user/[id]', params: { id: notif.relatedUserId } });
+        }
+        break;
+      case 'review':
+        if (notif.relatedUserId) {
+          onClose();
+          router.push({ pathname: '/user/[id]', params: { id: notif.relatedUserId } });
+        }
+        break;
+      case 'report':
+        if (notif.relatedProductId) {
+          onClose();
+          router.push({ pathname: '/product/[id]', params: { id: notif.relatedProductId } });
+        } else if (notif.relatedUserId) {
+          onClose();
+          router.push({ pathname: '/user/[id]', params: { id: notif.relatedUserId } });
+        }
+        break;
+      case 'marketing':
+        if (notif.sectionId || notif.filterCat) {
+          onClose();
+          router.push({
+            pathname: '/(tabs)/explore',
+            params: {
+              ...(notif.sectionId && { sectionId: notif.sectionId }),
+              ...(notif.filterCat && { filterCat: notif.filterCat }),
+            },
+          });
+        }
+        break;
+    }
+  };
+
+  const clearAll = () => {
+    Alert.alert(
+      'Borrar notificaciones',
+      '¿Seguro que quieres borrar todas tus notificaciones? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Borrar', style: 'destructive', onPress: () => apiDeleteAll() },
+      ],
+    );
+  };
 
   if (!mounted && !visible) return null;
 
@@ -158,13 +246,23 @@ export default function NotificationsModal({ visible, onClose }: Props) {
               </View>
             )}
           </View>
-          {unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
-              <Text style={styles.markAllText}>Leer todo</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.markAllBtn} />
-          )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {notifs.length > 0 && (
+              <TouchableOpacity
+                onPress={clearAll}
+                activeOpacity={0.7}
+                disabled={deletingAll}
+                style={styles.closeBtn}
+                accessibilityLabel="Borrar todas las notificaciones">
+                {deletingAll ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Trash2 size={18} color={colors.error} strokeWidth={2} />
+                )}
+              </TouchableOpacity>
+            )}
+            
+          </View>
         </View>
 
         {/* List */}
@@ -172,7 +270,26 @@ export default function NotificationsModal({ visible, onClose }: Props) {
           showsVerticalScrollIndicator={false}
           style={styles.list}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 8 }}>
-          {notifs.length === 0 ? (
+            {unreadCount > 0 ? (
+              <TouchableOpacity onPress={markAllRead} activeOpacity={0.7} style={styles.markAllBtn}>
+                <Text style={styles.markAllText}>Leer todo</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.markAllBtn} />
+            )}
+          {notifsLoading && notifs.length === 0 ? (
+            <View style={{ gap: 16, paddingHorizontal: 16, paddingTop: 8 }}>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <View key={i} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  <Skeleton style={{ width: 44, height: 44, borderRadius: 22 }} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <Skeleton style={{ height: 14, width: '70%', borderRadius: 6 }} />
+                    <Skeleton style={{ height: 12, width: '90%', borderRadius: 6 }} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : notifs.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
                 <Bell size={36} color={colors.primary + '66'} strokeWidth={1} />
@@ -193,19 +310,26 @@ export default function NotificationsModal({ visible, onClose }: Props) {
                     <TouchableOpacity
                       style={styles.swipeDelete}
                       activeOpacity={0.85}
+                      disabled={deletingId === notif.id}
                       onPress={() => dismiss(notif.id)}>
-                      <Trash2 size={22} color="#ffffff" strokeWidth={2} />
-                      <Text style={styles.swipeDeleteText}>Eliminar</Text>
+                      {deletingId === notif.id ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <>
+                          <Trash2 size={22} color="#ffffff" strokeWidth={2} />
+                          <Text style={styles.swipeDeleteText}>Eliminar</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   )}>
                   <TouchableOpacity
                     style={[styles.item, !notif.read && styles.itemUnread]}
                     activeOpacity={0.85}
-                    onPress={() => markRead(notif.id)}>
+                    onPress={() => handleNotifPress(notif)}>
                   <View style={styles.itemLeft}>
                     {notif.avatar ? (
                       <View style={styles.avatarWrap}>
-                        <Image source={{ uri: notif.avatar }} style={styles.avatar} />
+                        <Image source={{ uri: resolveImage(notif.avatar) }} style={styles.avatar} />
                         <View style={[styles.avatarBadge, { backgroundColor: bg }]}>
                           <Icon size={10} color={color} strokeWidth={2} />
                         </View>
@@ -220,7 +344,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
                     <Text style={[styles.itemTitle, !notif.read && styles.itemTitleUnread]}>
                       {notif.title}
                     </Text>
-                    <Text style={styles.itemDesc} numberOfLines={2}>{notif.body}</Text>
+                    <Text style={styles.itemDesc}>{notif.body}</Text>
                     <Text style={styles.itemTime}>{notif.time}</Text>
                   </View>
                   <View style={styles.itemRight}>
@@ -300,14 +424,17 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
   },
   markAllBtn: {
-    width: 70,
+    width: '100%',
+    paddingHorizontal: 8,
+    paddingBottom: 16,
+    paddingTop: 8,
+    display: 'flex',
     alignItems: 'flex-end',
-    paddingVertical: 4,
   },
   markAllText: {
     fontFamily: 'Manrope-SemiBold',
     fontSize: 13,
-    color: colors.secondary,
+    color: colors.secondary
   },
   list: {
     flex: 1,
