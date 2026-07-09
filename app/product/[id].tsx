@@ -119,9 +119,9 @@ export default function ProductDetailScreen() {
   const { trackView } = useViewProduct();
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const { isAuthenticated, user: me } = useAuth();
-  const { average: sellerAvg, count: sellerReviewCount } = useSellerRating(apiProduct?.seller?.id || '');
+  const { average: sellerAvg, count: sellerReviewCount, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
   const categoryId = apiProduct?.category?.id || '';
-  const { products: relatedRaw, loading: relatedLoading } = useProductsByCategory(categoryId, 11);
+  const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useProductsByCategory(categoryId, 11);
   const relatedItems = relatedRaw
     .filter((p: any) => p.id !== id)
     .slice(0, 10)
@@ -244,7 +244,7 @@ export default function ProductDetailScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    try { await refetchProduct(); } catch {}
+    try { await Promise.all([refetchProduct(), refetchRating(), refetchRelated()]); } catch {}
     setRefreshing(false);
   };
 

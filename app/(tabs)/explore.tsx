@@ -174,7 +174,7 @@ export default function ExploreScreen() {
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
-  const { data: sectionsData } = useQuery(GET_FILTERABLE_SECTIONS, { fetchPolicy: 'cache-and-network' });
+  const { data: sectionsData, refetch: refetchSections } = useQuery(GET_FILTERABLE_SECTIONS, { fetchPolicy: 'cache-and-network' });
   const filterableSections: { id: string; title: string; icon?: string; filter: any }[] =
     (sectionsData as any)?.filterableSections ?? [];
 
@@ -183,6 +183,7 @@ export default function ExploreScreen() {
     {
       variables: { sectionId: activeSectionId!, take: 50 },
       skip: !activeSectionId,
+      fetchPolicy: 'cache-and-network',
     },
   );
   const sectionProducts = activeSectionId
@@ -422,7 +423,7 @@ export default function ExploreScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    try { await refetchProducts(); } catch {}
+     try { await Promise.all([refetchProducts(), refetchSections()]); } catch {}
     setRefreshing(false);
   };
 

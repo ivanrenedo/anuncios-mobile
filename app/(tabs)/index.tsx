@@ -143,7 +143,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated, user } = useAuth();
-  const { count: unreadCount } = useUnreadCount();
+  const { count: unreadCount, refetch: refetchUnread } = useUnreadCount();
   const { products: myProducts } = useProductsBySeller(user?.id || '');
   const scrollY = useRef(new Animated.Value(0)).current;
   const [notifVisible, setNotifVisible] = useState(false);
@@ -168,11 +168,11 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      await Promise.all([refetch(), refetchUnread()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+  }, [refetch, refetchUnread]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface }]}>

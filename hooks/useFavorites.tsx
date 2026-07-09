@@ -9,6 +9,7 @@ export function useFavorites() {
   const { isAuthenticated } = useAuth();
   const { data, loading, error, refetch } = useQuery<any>(MY_FAVORITES, {
     skip: !isAuthenticated,
+    fetchPolicy: 'cache-and-network',
   });
   return { favorites: data?.myFavorites ?? [], loading, error, refetch };
 }
@@ -18,6 +19,7 @@ export function useIsFavorited(productId: string) {
   const { data, loading } = useQuery<any>(IS_FAVORITED, {
     variables: { productId },
     skip: !productId || !isAuthenticated,
+    fetchPolicy: 'cache-and-network',
   });
   return { isFavorited: data?.isFavorited ?? false, loading };
 }
@@ -41,7 +43,7 @@ export function useFavoritesSync() {
   const { isAuthenticated } = useAuth();
   const setFromServer = useFavoritesStore((s) => s.setFromServer);
   const clear = useFavoritesStore((s) => s.clear);
-  const { data } = useQuery<any>(MY_FAVORITES, { skip: !isAuthenticated });
+  const { data } = useQuery<any>(MY_FAVORITES, { skip: !isAuthenticated, fetchPolicy: 'cache-and-network' });
 
   useEffect(() => {
     if (!isAuthenticated) {

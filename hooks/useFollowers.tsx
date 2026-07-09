@@ -12,6 +12,7 @@ export function useFollowers(userId: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWERS, {
     variables: { userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   return { followers: data?.followers ?? [], loading, error, refetch };
 }
@@ -20,6 +21,7 @@ export function useFollowing(userId: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWING, {
     variables: { userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   return { following: data?.following ?? [], loading, error, refetch };
 }

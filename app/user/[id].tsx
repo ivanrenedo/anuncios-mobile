@@ -117,6 +117,7 @@ export default function PublicUserProfile() {
   const { data, loading, refetch: refetchUser } = useQuery<any>(GET_USER, {
     variables: { id: userId },
     skip: !userId,
+    fetchPolicy: 'cache-and-network',
   });
   const user = data?.user;
 

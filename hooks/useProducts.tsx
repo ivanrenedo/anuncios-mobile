@@ -28,6 +28,7 @@ const PRODUCT_LISTS = [
 export function useProducts(take = 20, skip = 0) {
   const { data, previousData, loading, error, refetch } = useQuery<any>(GET_PRODUCTS, {
     variables: { take, skip },
+    fetchPolicy: 'cache-and-network',
   });
   return { products: data?.products ?? previousData?.products ?? [], loading, error, refetch };
 }
@@ -36,6 +37,7 @@ export function useProduct(id: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_PRODUCT, {
     variables: { id },
     skip: !id,
+    fetchPolicy: 'cache-and-network',
   });
   return { product: data?.product ?? null, loading, error, refetch };
 }
@@ -62,6 +64,7 @@ export function useProductsByCategory(categoryId: string, take = 20, skip = 0) {
   const { data, loading, error, refetch } = useQuery<any>(PRODUCTS_BY_CATEGORY, {
     variables: { categoryId, take, skip },
     skip: !categoryId,
+    fetchPolicy: 'cache-and-network',
   });
   return { products: data?.productsByCategory ?? [], loading, error, refetch };
 }
@@ -70,6 +73,7 @@ export function useProductsBySeller(sellerId: string) {
   const { data, loading, error, refetch } = useQuery<any>(PRODUCTS_BY_SELLER, {
     variables: { sellerId },
     skip: !sellerId,
+    fetchPolicy: 'cache-and-network',
   });
   return { products: data?.productsBySeller ?? [], loading, error, refetch };
 }

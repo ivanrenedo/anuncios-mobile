@@ -12,6 +12,7 @@ export function useNotifications() {
   const { isAuthenticated } = useAuth();
   const { data, loading, error, refetch } = useQuery<any>(GET_NOTIFICATIONS, {
     skip: !isAuthenticated,
+    fetchPolicy: 'cache-and-network',
   });
   return { notifications: data?.notifications ?? [], loading, error, refetch };
 }
@@ -20,6 +21,7 @@ export function useUnreadCount() {
   const { isAuthenticated } = useAuth();
   const { data, loading, refetch } = useQuery<any>(UNREAD_COUNT, {
     skip: !isAuthenticated,
+    fetchPolicy: 'cache-and-network',
   });
   return { count: data?.unreadNotificationsCount ?? 0, loading, refetch };
 }
