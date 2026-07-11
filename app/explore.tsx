@@ -12,6 +12,7 @@ import {
   Animated,
   Switch,
   BackHandler,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -36,6 +37,7 @@ import {
   Wrench,
   LayoutGrid,
   Plus,
+  Bell,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
@@ -44,6 +46,9 @@ import SwipeableSheet from '@/components/SwipeableSheet';
 import Spinner from '@/components/Spinner';
 import { useCategoryTree } from '@/hooks/useCategories';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
+import { useAuth } from '@/hooks/useAuth';
+import { useSavedSearches } from '@/hooks/useSavedSearches';
+import { getErrorMessage } from '@/lib/errors';
 import { useQuery, useLazyQuery } from '@apollo/client/react';
 import { GET_FILTERABLE_SECTIONS, GET_SECTION_PRODUCTS, SEARCH_PRODUCTS } from '@/graphql/queries';
 import { API_URL } from '@/lib/config';
@@ -76,6 +81,7 @@ function toExploreItem(p: any) {
     seller: p.seller?.name || '',
     sellerId: p.seller?.id,
     verified: p.seller?.verified ?? false,
+    sellerPlan: p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     avatar: p.seller?.avatarUrl || '',
     category: p.category?.label || '',
@@ -86,6 +92,7 @@ function toExploreItem(p: any) {
     discount: p.discount,
     operation: p.propertyDetail?.operation,
     offerType: p.serviceDetail?.offerType,
+    isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     postedAgo: timeAgo(p.createdAt),
   };
 }
@@ -169,6 +176,8 @@ export default function ExploreScreen() {
   const [related, setRelated] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
+  const { isAuthenticated } = useAuth();
+  const { searches: savedSearches, save: saveSearch, remove: removeSavedSearch, saving: savingSearch } = useSavedSearches(isAuthenticated);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -220,7 +229,11 @@ export default function ExploreScreen() {
 
   // Resolve category → categoryId for the server query
   const activeCategoryId = activeCategory !== 'Todos'
-    ? tree.find((t: any) => t.label === activeCategory)?.id ?? undefined
+    ? (
+        tree.find((t: any) => t.label === activeCategory)?.id ??
+        tree.flatMap((t: any) => t.children ?? []).find((c: any) => c.label === activeCategory)?.id ??
+        undefined
+      )
     : undefined;
 
   // Build server search input from filter state
@@ -240,6 +253,53 @@ export default function ExploreScreen() {
     SEARCH_PRODUCTS,
     { variables: { input: searchInput }, fetchPolicy: 'cache-and-network', notifyOnNetworkStatusChange: true },
   );
+
+  // ── Saved searches (alerts) ────────────────────────────────────────────────
+  const hasSearchCriteria = !!(
+    query.trim() || activeCategoryId || cityFilter.trim() || priceMin || priceMax
+  );
+
+  const findCategory = (catId: string) =>
+    tree.find((t: any) => t.id === catId) ??
+    tree.flatMap((t: any) => t.children ?? []).find((c: any) => c.id === catId);
+
+  const savedSearchLabel = (s: any) => {
+    const parts: string[] = [];
+    if (s.query) parts.push(s.query);
+    if (s.categoryId) {
+      const cat = findCategory(s.categoryId);
+      if (cat) parts.push(cat.label);
+    }
+    if (s.city) parts.push(s.city);
+    return parts.join(' · ') || 'Alerta';
+  };
+
+  const onSaveSearch = async () => {
+    if (savingSearch) return;
+    try {
+      await saveSearch({
+        query: query.trim() || undefined,
+        categoryId: activeCategoryId,
+        city: cityFilter.trim() || undefined,
+        priceMin: priceMin ? parseInt(priceMin, 10) : undefined,
+        priceMax: priceMax ? parseInt(priceMax, 10) : undefined,
+      });
+      Alert.alert(
+        'Búsqueda guardada',
+        'Te avisaremos cuando se publique un anuncio que coincida.',
+      );
+    } catch (e) {
+      Alert.alert('No se pudo guardar', getErrorMessage(e));
+    }
+  };
+
+  const applySavedSearch = (s: any) => {
+    setQuery(s.query ?? '');
+    setCityFilter(s.city ?? '');
+    setPriceMin(s.priceMin != null ? String(Math.trunc(Number(s.priceMin))) : '');
+    setPriceMax(s.priceMax != null ? String(Math.trunc(Number(s.priceMax))) : '');
+    setActiveCategory(s.categoryId ? findCategory(s.categoryId)?.label ?? 'Todos' : 'Todos');
+  };
 
   const [fetchMore] = useLazyQuery<any>(SEARCH_PRODUCTS, {
     fetchPolicy: 'network-only',
@@ -568,6 +628,44 @@ export default function ExploreScreen() {
           </ScrollView>
         </View>
 
+        {/* Saved searches / alerts */}
+        {isAuthenticated && (hasSearchCriteria || savedSearches.length > 0) && (
+          <View style={[styles.section, { paddingTop: 0, paddingBottom: 0 }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {hasSearchCriteria && (
+                  <TouchableOpacity
+                    style={styles.saveSearchChip}
+                    activeOpacity={0.8}
+                    onPress={onSaveSearch}>
+                    <Bell size={12} color="#ffffff" strokeWidth={2} />
+                    <Text style={styles.saveSearchText}>
+                      {savingSearch ? 'Guardando…' : 'Guardar búsqueda'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {savedSearches.map((s: any) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[styles.trendingChip, styles.relatedChip]}
+                    activeOpacity={0.7}
+                    onPress={() => applySavedSearch(s)}>
+                    <Bell size={12} color={colors.primary} strokeWidth={1.8} />
+                    <Text style={[styles.trendingText, { color: colors.primary }]} numberOfLines={1}>
+                      {savedSearchLabel(s)}
+                    </Text>
+                    <TouchableOpacity
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                      onPress={() => removeSavedSearch(s.id)}>
+                      <X size={12} color={colors.onSurfaceVariant} strokeWidth={2} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
         {/* Related suggestions (coming from a subcategory) */}
         {related.length > 0 && (
           <View style={[styles.section, { paddingBottom: 0 }]}>
@@ -659,7 +757,7 @@ export default function ExploreScreen() {
         ) : null}
 
         {/* Load more */}
-        {(hasMore || loadingMore) && (
+        {!productsLoading && visibleProducts.length > 0 && (hasMore || loadingMore) && (
           <View style={styles.loadMoreWrap}>
             <RipplePress
               style={styles.loadMoreBtn}
@@ -1097,7 +1195,11 @@ export default function ExploreScreen() {
             {/* Footer: result count */}
             <View style={[styles.fdFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
               <RipplePress style={styles.fdApplyBtn} onPress={closeFilter} borderRadius={14} rippleColor="rgba(255,255,255,0.2)">
-                <Text style={styles.fdApplyText}>({visibleProducts.length}) anuncios</Text>
+                {productsLoading ? (
+                  <Spinner color="#ffffff" />
+                ) : (
+                  <Text style={styles.fdApplyText}>({visibleProducts.length}) anuncios</Text>
+                )}
               </RipplePress>
             </View>
           </Animated.View>
@@ -1657,6 +1759,20 @@ const makeStyles = (colors: ThemeColors) =>
   relatedChip: {
     backgroundColor: colors.primary + '0f',
     borderColor: colors.primary + '44',
+  },
+  saveSearchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+  },
+  saveSearchText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 13,
+    color: '#ffffff',
   },
   trendingText: {
     fontFamily: 'Manrope-Regular',

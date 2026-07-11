@@ -41,7 +41,8 @@ import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants
 import RipplePress from '@/components/RipplePress';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useCreateProduct, useUpdateProduct, useProduct } from '@/hooks/useProducts';
+import { useProfile } from '@/hooks/useProfile';
+import { useCreateProduct, useUpdateProduct, useProduct, useProductsBySeller } from '@/hooks/useProducts';
 import { useCategoryTree } from '@/hooks/useCategories';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { uploadImages } from '@/lib/upload';
@@ -173,7 +174,7 @@ function kindFromProduct(product: any): Kind {
 
 function prefillForm(product: any): FormState {
   return {
-    photos: product.images?.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((i: any) => resolveImage(i.url)) ?? [],
+    photos: product.images?.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((i: any) => resolveImage(i.url)).filter(Boolean) as string[] ?? [],
     categoryId: product.category?.id,
     categoryLabel: product.category?.label,
     title: product.title ?? '',
@@ -208,12 +209,17 @@ export default function PostScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const { isAuthenticated } = useAuth();
-  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const { isAuthenticated, user } = useAuth();
+  const { profile } = useProfile();
+  // `editId` from the /(tabs)/post?editId=… flow OR `id` when rendered by
+  // the /edit-listing/[id] route. Same form, two entry points.
+  const params = useLocalSearchParams<{ editId?: string; id?: string }>();
+  const editId = params.editId || params.id;
   const isEdit = !!editId;
   const { product: editProduct, loading: loadingProduct } = useProduct(editId ?? '');
   const { create, loading: creating } = useCreateProduct();
   const { update, loading: updating } = useUpdateProduct();
+  const { products: myProducts } = useProductsBySeller(user?.id ?? profile?.id ?? '');
   const publishing = isEdit ? updating : creating;
   const submittingRef = useRef(false);
   const [kind, setKind] = useState<Kind | null>(null);
@@ -263,13 +269,41 @@ export default function PostScreen() {
     setShowErrors(false);
     editPrefilled.current = false;
     if (isEdit) {
-      router.setParams({ editId: '' });
-      router.push('/(tabs)/profile')
+      // Edit was pushed on top of the caller (Perfil / Producto). Popping is
+      // the correct return — leaves the caller intact instead of jumping to a
+      // fresh Perfil tab that resets scroll.
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/profile' as any);
+    } else {
+      // Publish flow is on the Post tab — swap to Perfil without leaving the
+      // form on the back stack, so a swipe-back doesn't re-open it.
+      router.replace('/(tabs)/profile' as any);
     }
   };
 
+  const PLAN_NAMES: Record<string, string> = { FREE: 'Gratis', STAR: 'Estrella', PREMIUM: 'Premium' };
+
   const onPublish = async () => {
     if (submittingRef.current) return;
+
+    if (!isEdit) {
+      // Server-provided limit for the *effective* plan (expired plans count
+      // as FREE). Null means unlimited (PREMIUM).
+      const plan = profile?.effectivePlan ?? profile?.plan ?? 'FREE';
+      const limit = profile?.maxActiveProducts;
+      if (limit != null && myProducts.length >= limit) {
+        Alert.alert(
+          'Límite de anuncios alcanzado',
+          `Tu plan ${PLAN_NAMES[plan] ?? plan} permite hasta ${limit} anuncios activos. Mejora tu plan para publicar más.`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Ver planes', onPress: () => router.push('/plans') },
+          ],
+        );
+        return;
+      }
+    }
+
     submittingRef.current = true;
     try {
       let imageUrls: string[] = [];
@@ -405,6 +439,7 @@ export default function PostScreen() {
           photos={form.photos ?? []}
           setPhotos={(p) => setField('photos', p)}
           showErrors={showErrors}
+          maxPhotos={profile?.maxImagesPerProduct ?? MAX_PHOTOS}
         />
 
         <CategoryField form={form} setField={setField} kind={kind} showErrors={showErrors} />
@@ -1584,16 +1619,18 @@ function PhotoPicker({
   photos,
   setPhotos,
   showErrors,
+  maxPhotos = MAX_PHOTOS,
 }: {
   photos: string[];
   setPhotos: (p: string[]) => void;
   showErrors?: boolean;
+  maxPhotos?: number;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const addAssets = async (assets: ImagePickerAsset[]) => {
-    const room = MAX_PHOTOS - photos.length;
+    const room = maxPhotos - photos.length;
     const accepted: string[] = [];
     let tooBig = false;
     for (const a of assets.slice(0, room)) {
@@ -1607,7 +1644,7 @@ function PhotoPicker({
     if (tooBig) {
       Alert.alert('Foto demasiado grande', `Cada foto debe pesar menos de ${MAX_PHOTO_MB} MB.`);
     } else if (assets.length > room) {
-      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${MAX_PHOTOS} fotos por anuncio.`);
+      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${maxPhotos} fotos por anuncio.`);
     }
   };
 
@@ -1624,7 +1661,7 @@ function PhotoPicker({
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_PHOTOS - photos.length,
+      selectionLimit: maxPhotos - photos.length,
       quality: 0.7,
     });
     if (!res.canceled) await addAssets(res.assets);
@@ -1645,8 +1682,8 @@ function PhotoPicker({
   };
 
   const addPhoto = () => {
-    if (photos.length >= MAX_PHOTOS) {
-      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${MAX_PHOTOS} fotos por anuncio.`);
+    if (photos.length >= maxPhotos) {
+      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${maxPhotos} fotos por anuncio.`);
       return;
     }
     Alert.alert('Añadir foto', undefined, [
@@ -1666,7 +1703,7 @@ function PhotoPicker({
           Fotos<Text style={{ color: colors.error }}> *</Text>
         </Text>
         <Text style={[styles.photoCount, showErrors && photos.length === 0 && { color: colors.error }]}>
-          {photos.length}/{MAX_PHOTOS}
+          {photos.length}/{maxPhotos}
         </Text>
       </View>
       <ScrollView
@@ -1690,7 +1727,7 @@ function PhotoPicker({
             </TouchableOpacity>
           </View>
         ))}
-        {photos.length < MAX_PHOTOS && (
+        {photos.length < maxPhotos && (
           <TouchableOpacity
             style={[styles.photoAdd, showErrors && photos.length === 0 && { borderColor: colors.error }]}
             activeOpacity={0.85}

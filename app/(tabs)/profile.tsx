@@ -35,25 +35,31 @@ import {
   FileText,
   Users,
   User,
-  UserPlus,
   UserCheck,
   LogIn,
   X,
   Search,
   ArrowDownUp,
   ChevronDown,
+  Crown,
+  Zap,
+  CreditCard,
+  Eye,
+  Heart,
+  TrendingUp,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
 import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
 import Skeleton from '@/components/Skeleton';
+import Spinner from '@/components/Spinner';
 import SettingsModal, { Row, Section } from '@/components/SettingsModal';
 import { useProfile, useDeleteAccount } from '@/hooks/useProfile';
 import { useAuth } from '@/hooks/useAuth';
-import { useProductsBySeller, useDeleteProduct } from '@/hooks/useProducts';
+import { useProductsBySeller, useDeleteProduct, useMyViewsDaily } from '@/hooks/useProducts';
 import { useReviewsBySeller, useSellerRating } from '@/hooks/useReviews';
-import { useFollowers, useFollowing, useFollowersCount, useFollowingCount, useFollowToggle } from '@/hooks/useFollowers';
+import { useFollowers, useFollowing, useFollowersCount, useFollowingCount } from '@/hooks/useFollowers';
 import { API_URL } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
@@ -105,15 +111,14 @@ export default function ProfileScreen() {
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated, signOut, user } = useAuth();
   const userId = user?.id || profile?.id || '';
-  const { products: myProducts, refetch: refetchProducts } = useProductsBySeller(userId);
-  const { reviews: myReviews, refetch: refetchReviews } = useReviewsBySeller(userId);
-  const { average: avgRating, count: ratingCount } = useSellerRating(userId);
-  const { followers: myFollowers, refetch: refetchFollowers } = useFollowers(userId);
-  const { following: myFollowing, refetch: refetchFollowing } = useFollowing(userId);
+  const { products: myProducts, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+  const { reviews: myReviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
+  const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
+  const { followers: myFollowers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
+  const { following: myFollowing, loading: followingLoading, refetch: refetchFollowing } = useFollowing(userId);
   const { count: followersCountNum } = useFollowersCount(userId);
   const { count: followingCountNum } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
-  const { follow, unfollow } = useFollowToggle();
   const [refreshing, setRefreshing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
@@ -151,16 +156,6 @@ export default function ProfileScreen() {
 
   
 
-  const toggleFollow = async (userId: string) => {
-    try {
-      if (followingUserIds.has(userId)) {
-        await unfollow(userId);
-      } else {
-        await follow(userId);
-      }
-    } catch {}
-  };
-
   const { share } = useShare();
   const onShareProfile = () =>
     share({ type: 'profile', id: userId, name: profile?.name ?? 'este vendedor' });
@@ -197,8 +192,31 @@ export default function ProfileScreen() {
       status: p.status || 'active',
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       postedAgo: timeAgo(p.createdAt),
+      views: Number(p.views) || 0,
+      favorites: Number(p.favoritesCount) || 0,
+      contacts: Number(p.contacts) || 0,
+      impressions: Number(p.impressions) || 0,
+      isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     };
   });
+
+  // Effective plan comes from the server and accounts for expiry — an expired
+  // STAR/PREMIUM behaves as FREE. Fall back to raw plan for older backends.
+  const effectivePlan = profile?.effectivePlan ?? profile?.plan ?? 'FREE';
+  const hasStatsAccess = effectivePlan === 'STAR' || effectivePlan === 'PREMIUM';
+  // "Estadísticas completas" (top product + per-listing stats) is PREMIUM-only;
+  // STAR gets the aggregate totals.
+  const hasFullStats = effectivePlan === 'PREMIUM';
+  const totalViews = productItems.reduce((s: number, p: any) => s + p.views, 0);
+  const totalFavorites = productItems.reduce((s: number, p: any) => s + p.favorites, 0);
+  const totalContacts = productItems.reduce((s: number, p: any) => s + p.contacts, 0);
+  const totalImpressions = productItems.reduce((s: number, p: any) => s + p.impressions, 0);
+  const topProduct = productItems.reduce(
+    (best: any, p: any) => (p.views > (best?.views ?? 0) ? p : best),
+    null,
+  );
+  const { daily: viewsDaily } = useMyViewsDaily(hasFullStats);
+  const maxDaily = Math.max(1, ...viewsDaily.map((d: any) => d.count));
 
   const filteredProducts = productSearch.trim()
     ? productItems.filter((p: any) =>
@@ -224,6 +242,7 @@ export default function ProfileScreen() {
     name: f.follower?.name || '',
     avatar: f.follower?.avatarUrl || '',
     verified: f.follower?.verified ?? false,
+    plan: f.follower?.plan || 'FREE',
     location: f.follower?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
@@ -235,12 +254,11 @@ export default function ProfileScreen() {
     name: f.followed?.name || '',
     avatar: f.followed?.avatarUrl || '',
     verified: f.followed?.verified ?? false,
+    plan: f.followed?.plan || 'FREE',
     location: f.followed?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
   }));
-
-  const followingUserIds = new Set(followingItems.map((f: any) => f.userId));
 
   const sortItems = (items: any[], sort: 'recent' | 'oldest') =>
     [...items].sort((a, b) => {
@@ -387,13 +405,22 @@ export default function ProfileScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Cover */}
         <View style={styles.coverWrap}>
-          <Animated.Image
-            source={{ uri: profile.cover_url }}
-            style={[
-              styles.cover,
-              { transform: [{ translateY: coverParallax }, { scale: coverScale }] },
-            ]}
-          />
+          {profile.cover_url ? (
+            <Animated.Image
+              source={{ uri: profile.cover_url }}
+              style={[
+                styles.cover,
+                { transform: [{ translateY: coverParallax }, { scale: coverScale }] },
+              ]}
+            />
+          ) : (
+            <Animated.View
+              style={[
+                styles.cover,
+                { backgroundColor: colors.surfaceContainerHigh, transform: [{ translateY: coverParallax }, { scale: coverScale }] },
+              ]}
+            />
+          )}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.35)', colors.surface]}
             locations={[0, 0.55, 1]}
@@ -413,7 +440,13 @@ export default function ProfileScreen() {
         {/* Avatar bubble + edit button */}
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            {profile.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }]}>
+                <User size={32} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+              </View>
+            )}
             {profile.verified && (
               <View style={styles.verifiedBadge}>
                 <BadgeCheck size={16} color="#ffffff" fill={colors.primary} />
@@ -448,6 +481,18 @@ export default function ProfileScreen() {
               <View style={styles.verifiedChip}>
                 <BadgeCheck size={11} color={colors.primary} strokeWidth={2} />
                 <Text style={styles.verifiedChipText}>Verificado</Text>
+              </View>
+            )}
+            {profile.plan === 'STAR' && (
+              <View style={styles.planChipStar}>
+                <Star size={11} color="#F5A623" strokeWidth={2} fill="#F5A623" />
+                <Text style={styles.planChipStarText}>Estrella</Text>
+              </View>
+            )}
+            {profile.plan === 'PREMIUM' && (
+              <View style={styles.planChipPremium}>
+                <Crown size={11} color="#7C3AED" strokeWidth={2} fill="#7C3AED" />
+                <Text style={styles.planChipPremiumText}>Premium</Text>
               </View>
             )}
           </View>
@@ -496,17 +541,20 @@ export default function ProfileScreen() {
         {/* Stat tabs */}
         <View style={styles.statTabs}>
           {[
-            { value: fmtNumber(myProducts.length), label: 'Anuncios' },
-            { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración' },
-            { value: fmtNumber(followersCountNum), label: 'Seguidores' },
-            { value: fmtNumber(followingCountNum), label: 'Siguiendo' },
-          ].map(({ value, label }, i) => (
+            { value: fmtNumber(myProducts.length), label: 'Anuncios', isLoading: productsLoading },
+            { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración', isLoading: ratingLoading },
+            { value: fmtNumber(followersCountNum), label: 'Seguidores', isLoading: followersLoading },
+            { value: fmtNumber(followingCountNum), label: 'Siguiendo', isLoading: followingLoading },
+          ].map(({ value, label, isLoading }, i) => (
             <TouchableOpacity
               key={label}
               style={[styles.statTab, activeTab === i && styles.statTabActive]}
               onPress={() => setActiveTab(i)}
               activeOpacity={0.7}>
-              <Text style={[styles.statTabValue, activeTab === i && styles.statTabValueActive]}>{value}</Text>
+              {isLoading
+                ? <Spinner color={activeTab === i ? colors.primary : colors.onSurfaceVariant} size={14} />
+                : <Text style={[styles.statTabValue, activeTab === i && styles.statTabValueActive]}>{value}</Text>
+              }
               <Text style={styles.statTabLabel}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -514,7 +562,92 @@ export default function ProfileScreen() {
 
         {/* Tab content */}
         {activeTab === 0 ? (
-          <View style={styles.grid}>
+          productsLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.grid}>
+            {productItems.length > 0 && (hasStatsAccess ? (
+              <View style={styles.statsCard}>
+                <View style={styles.statsHeader}>
+                  <TrendingUp size={16} color={colors.primary} strokeWidth={1.8} />
+                  <Text style={styles.statsTitle}>Estadísticas</Text>
+                </View>
+                <View style={styles.statsRow}>
+                  <View style={styles.statsItem}>
+                    <Eye size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                    <Text style={styles.statsValue}>{fmtNumber(totalViews)}</Text>
+                    <Text style={styles.statsLabel}>Visitas</Text>
+                  </View>
+                  <View style={styles.statsDivider} />
+                  <View style={styles.statsItem}>
+                    <Heart size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                    <Text style={styles.statsValue}>{fmtNumber(totalFavorites)}</Text>
+                    <Text style={styles.statsLabel}>Favoritos</Text>
+                  </View>
+                  {hasFullStats && (
+                    <>
+                      <View style={styles.statsDivider} />
+                      <View style={styles.statsItem}>
+                        <Phone size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                        <Text style={styles.statsValue}>{fmtNumber(totalContacts)}</Text>
+                        <Text style={styles.statsLabel}>Contactos</Text>
+                      </View>
+                      <View style={styles.statsDivider} />
+                      <View style={styles.statsItem}>
+                        <Search size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                        <Text style={styles.statsValue}>{fmtNumber(totalImpressions)}</Text>
+                        <Text style={styles.statsLabel}>Búsquedas</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+                {hasFullStats && viewsDaily.length > 0 && (
+                  <View style={styles.statsChart}>
+                    <Text style={styles.statsChartTitle}>Visitas últimos 7 días</Text>
+                    <View style={styles.statsChartBars}>
+                      {viewsDaily.map((d: any) => (
+                        <View key={d.date} style={styles.statsChartCol}>
+                          <View style={styles.statsChartBarTrack}>
+                            <View
+                              style={[
+                                styles.statsChartBar,
+                                { height: `${Math.max(4, (d.count / maxDaily) * 100)}%` },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.statsChartDay}>
+                            {new Date(d.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'narrow' })}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                {hasFullStats && topProduct && topProduct.views > 0 && (
+                  <View style={styles.statsTopRow}>
+                    <Text style={styles.statsTopText} numberOfLines={1}>
+                      Más visto: <Text style={styles.statsTopName}>{topProduct.title}</Text>
+                      {' '}({fmtNumber(topProduct.views)} visitas)
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.statsLocked}
+                activeOpacity={0.8}
+                onPress={() => router.push('/plans')}>
+                <View style={styles.statsLockedIcon}>
+                  <Lock size={18} color={colors.primary} strokeWidth={1.8} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.statsLockedTitle}>Estadísticas de tus anuncios</Text>
+                  <Text style={styles.statsLockedDesc}>
+                    Visitas, favoritos y tu anuncio más popular. Disponible con el plan Estrella.
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
+              </TouchableOpacity>
+            ))}
             {renderPairs(productItems.slice(0, PREVIEW_LIMIT)).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item: any) => (
@@ -534,7 +667,7 @@ export default function ProfileScreen() {
                       <TouchableOpacity
                         style={styles.cardActionBtn}
                         activeOpacity={0.8}
-                        onPress={() => router.push({ pathname: '/(tabs)/post', params: { editId: item.id } })}>
+                        onPress={() => router.push({ pathname: '/edit-listing/[id]', params: { id: item.id } })}>
                         <Pencil size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -545,6 +678,14 @@ export default function ProfileScreen() {
                         <Trash2 size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
                     </View>
+                    {hasFullStats && (
+                      <View style={styles.cardStats}>
+                        <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                        <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
+                        <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                        <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
+                      </View>
+                    )}
                   </View>
                 ))}
                 {pair.length === 1 && <View style={styles.cardPlaceholder} />}
@@ -568,7 +709,9 @@ export default function ProfileScreen() {
             )}
           </View>
         ) : activeTab === 1 ? (
-          <View style={styles.reviewsList}>
+          reviewsLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.reviewsList}>
             <View style={styles.ratingHeader}>
               <Text style={styles.ratingValue}>{avgRating > 0 ? avgRating.toFixed(1) : '-'}</Text>
               <View>
@@ -611,7 +754,9 @@ export default function ProfileScreen() {
             )}
           </View>
         ) : activeTab === 2 ? (
-          <View style={styles.followersList}>
+          followersLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.followersList}>
             <View style={styles.followersHeader}>
               <View style={styles.followersIconWrap}>
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
@@ -630,7 +775,6 @@ export default function ProfileScreen() {
               <>
                 <View style={styles.followersCard}>
                   {followerItems.slice(0, FOLLOWER_LIMIT).map((f: any, i: number) => {
-                    const isFollowingUser = followingUserIds.has(f.userId);
                     const visible = followerItems.slice(0, FOLLOWER_LIMIT);
                     const last = i === visible.length - 1;
                     return (
@@ -647,15 +791,22 @@ export default function ProfileScreen() {
                                 size={12}
                                 color="#ffffff"
                                 fill={colors.primary}
-                                strokeWidth={0}
                               />
                             </View>
                           )}
                         </View>
                         <View style={styles.followerInfo}>
-                          <Text style={styles.followerName} numberOfLines={1}>
-                            {f.name}
-                          </Text>
+                          <View style={styles.followerNameRow}>
+                            <Text style={styles.followerName} numberOfLines={1}>
+                              {f.name}
+                            </Text>
+                            {f.plan === 'STAR' && (
+                              <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                            {f.plan === 'PREMIUM' && (
+                              <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                          </View>
                           <View style={styles.followerMetaRow}>
                             <MapPin
                               size={10}
@@ -667,34 +818,6 @@ export default function ProfileScreen() {
                             </Text>
                           </View>
                         </View>
-                        <RipplePress
-                          style={[
-                            styles.followBtn,
-                            isFollowingUser && styles.followBtnActive,
-                          ]}
-                          borderRadius={999}
-                          rippleColor={
-                            isFollowingUser
-                              ? colors.outlineVariant + '55'
-                              : 'rgba(255,255,255,0.25)'
-                          }
-                          onPress={() => toggleFollow(f.userId)}>
-                          {isFollowingUser ? (
-                            <>
-                              <UserCheck
-                                size={14}
-                                color={colors.onSurface}
-                                strokeWidth={1.8}
-                              />
-                              <Text style={styles.followBtnTextActive}>Siguiendo</Text>
-                            </>
-                          ) : (
-                            <>
-                              <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
-                              <Text style={styles.followBtnText}>Seguir</Text>
-                            </>
-                          )}
-                        </RipplePress>
                       </TouchableOpacity>
                     );
                   })}
@@ -713,7 +836,9 @@ export default function ProfileScreen() {
             )}
           </View>
         ) : activeTab === 3 ? (
-          <View style={styles.followersList}>
+          followingLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.followersList}>
             <View style={styles.followersHeader}>
               <View style={styles.followersIconWrap}>
                 <UserCheck size={20} color={colors.primary} strokeWidth={1.8} />
@@ -753,9 +878,17 @@ export default function ProfileScreen() {
                           )}
                         </View>
                         <View style={styles.followerInfo}>
-                          <Text style={styles.followerName} numberOfLines={1}>
-                            {f.name}
-                          </Text>
+                          <View style={styles.followerNameRow}>
+                            <Text style={styles.followerName} numberOfLines={1}>
+                              {f.name}
+                            </Text>
+                            {f.plan === 'STAR' && (
+                              <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                            {f.plan === 'PREMIUM' && (
+                              <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                          </View>
                           <View style={styles.followerMetaRow}>
                             <MapPin
                               size={10}
@@ -785,6 +918,33 @@ export default function ProfileScreen() {
             )}
           </View>
         ) : null}
+
+        {/* Plan upgrade banner */}
+        {profile.plan !== 'PREMIUM' && (
+          <View style={styles.upgradeBanner}>
+            <View style={styles.upgradeBannerIcon}>
+              <Zap size={22} color="#ffffff" strokeWidth={1.8} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.upgradeBannerTitle}>
+                {profile.plan === 'FREE' ? 'Haz crecer tu negocio' : 'Pasa a Premium'}
+              </Text>
+              <Text style={styles.upgradeBannerDesc}>
+                {profile.plan === 'FREE'
+                  ? 'Más anuncios, insignias y visibilidad desde 3.000 XAF/mes'
+                  : 'Anuncios ilimitados, prioridad en portada y estadísticas completas'}
+              </Text>
+            </View>
+            <RipplePress
+              style={styles.upgradeBannerBtn}
+              borderRadius={10}
+              rippleColor="rgba(255,255,255,0.25)"
+              onPress={() => router.push('/plans')}>
+              <Text style={styles.upgradeBannerBtnText}>Ver planes</Text>
+            </RipplePress>
+          </View>
+        )}
+        
         {/* Verification */}
         {!profile.verified && (() => {
           const cooldownDays = verificationRequest?.status === 'rejected' && verificationRequest.reviewedAt
@@ -845,6 +1005,17 @@ export default function ProfileScreen() {
             </Section>
           );
         })()}
+
+        {/* Mi plan */}
+        <Section title="Suscripción">
+          <Row
+            icon={CreditCard}
+            label="Mi plan"
+            value={profile.plan === 'FREE' ? 'Gratis' : profile.plan === 'STAR' ? 'Estrella' : 'Premium'}
+            onPress={() => router.push('/plans')}
+            last
+          />
+        </Section>
 
         {/* Support */}
         <Section title="Soporte y legal">
@@ -947,7 +1118,7 @@ export default function ProfileScreen() {
                             activeOpacity={0.8}
                             onPress={() => {
                               setAllProductsOpen(false);
-                              router.push({ pathname: '/(tabs)/post', params: { editId: item.id } });
+                              router.push({ pathname: '/edit-listing/[id]', params: { id: item.id } });
                             }}>
                             <Pencil size={13} color="#ffffff" strokeWidth={2} />
                           </TouchableOpacity>
@@ -959,6 +1130,14 @@ export default function ProfileScreen() {
                             <Trash2 size={13} color="#ffffff" strokeWidth={2} />
                           </TouchableOpacity>
                         </View>
+                        {hasFullStats && (
+                          <View style={styles.cardStats}>
+                            <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                            <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
+                            <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                            <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
+                          </View>
+                        )}
                       </View>
                     ))}
                     {pair.length === 1 && <View style={styles.cardPlaceholder} />}
@@ -1041,7 +1220,6 @@ export default function ProfileScreen() {
             ) : (
               <View style={styles.followersCard}>
                 {paginatedFollowers.map((f: any, i: number) => {
-                  const isFollowingUser = followingUserIds.has(f.userId);
                   const last = i === paginatedFollowers.length - 1;
                   return (
                     <TouchableOpacity
@@ -1065,9 +1243,17 @@ export default function ProfileScreen() {
                         )}
                       </View>
                       <View style={styles.followerInfo}>
-                        <Text style={styles.followerName} numberOfLines={1}>
-                          {f.name}
-                        </Text>
+                        <View style={styles.followerNameRow}>
+                          <Text style={styles.followerName} numberOfLines={1}>
+                            {f.name}
+                          </Text>
+                          {f.plan === 'STAR' && (
+                            <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                          {f.plan === 'PREMIUM' && (
+                            <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                        </View>
                         <View style={styles.followerMetaRow}>
                           <MapPin
                             size={10}
@@ -1079,34 +1265,6 @@ export default function ProfileScreen() {
                           </Text>
                         </View>
                       </View>
-                      <RipplePress
-                        style={[
-                          styles.followBtn,
-                          isFollowingUser && styles.followBtnActive,
-                        ]}
-                        borderRadius={999}
-                        rippleColor={
-                          isFollowingUser
-                            ? colors.outlineVariant + '55'
-                            : 'rgba(255,255,255,0.25)'
-                        }
-                        onPress={() => toggleFollow(f.userId)}>
-                        {isFollowingUser ? (
-                          <>
-                            <UserCheck
-                              size={14}
-                              color={colors.onSurface}
-                              strokeWidth={1.8}
-                            />
-                            <Text style={styles.followBtnTextActive}>Siguiendo</Text>
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus size={14} color="#ffffff" strokeWidth={1.8} />
-                            <Text style={styles.followBtnText}>Seguir</Text>
-                          </>
-                        )}
-                      </RipplePress>
                     </TouchableOpacity>
                   );
                 })}
@@ -1210,9 +1368,17 @@ export default function ProfileScreen() {
                         )}
                       </View>
                       <View style={styles.followerInfo}>
-                        <Text style={styles.followerName} numberOfLines={1}>
-                          {f.name}
-                        </Text>
+                        <View style={styles.followerNameRow}>
+                          <Text style={styles.followerName} numberOfLines={1}>
+                            {f.name}
+                          </Text>
+                          {f.plan === 'STAR' && (
+                            <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                          {f.plan === 'PREMIUM' && (
+                            <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                        </View>
                         <View style={styles.followerMetaRow}>
                           <MapPin
                             size={10}
@@ -1596,6 +1762,38 @@ const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
+  planChipStar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F5A623' + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  planChipStarText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 10,
+    color: '#F5A623',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  planChipPremium: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#7C3AED' + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  planChipPremiumText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 10,
+    color: '#7C3AED',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1901,6 +2099,11 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     color: colors.primary,
   },
+  spinnerWrap: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -2060,6 +2263,27 @@ const makeStyles = (colors: ThemeColors) =>
     flex: 1,
     gap: 3,
   },
+  followerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  planBadgeStar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#F5A623',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planBadgePremium: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   followerName: {
     fontFamily: 'Manrope-SemiBold',
     fontSize: 14,
@@ -2075,30 +2299,6 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 11,
     color: colors.onSurfaceVariant + '99',
     flexShrink: 1,
-  },
-  followBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 999,
-  },
-  followBtnActive: {
-    backgroundColor: colors.surfaceContainerHigh,
-    borderWidth: 0.5,
-    borderColor: colors.outlineVariant + '66',
-  },
-  followBtnText: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  followBtnTextActive: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 12,
-    color: colors.onSurface,
   },
   menuSection: {
     paddingHorizontal: 16,
@@ -2306,5 +2506,195 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Bold',
     fontSize: 16,
     color: '#ffffff',
+  },
+  upgradeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  upgradeBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradeBannerTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 15,
+    color: '#ffffff',
+    letterSpacing: -0.2,
+  },
+  upgradeBannerDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  upgradeBannerBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 10,
+  },
+  upgradeBannerBtnText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  statsCard: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '33',
+    gap: 12,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statsTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 14,
+    color: colors.onSurface,
+    letterSpacing: -0.2,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statsDivider: {
+    width: 0.5,
+    height: 36,
+    backgroundColor: colors.outlineVariant + '55',
+  },
+  statsValue: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 20,
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  statsLabel: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+  },
+  statsChart: {
+    borderTopWidth: 0.5,
+    borderTopColor: colors.outlineVariant + '33',
+    paddingTop: 10,
+    marginBottom: 10,
+  },
+  statsChartTitle: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    marginBottom: 8,
+  },
+  statsChartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+    height: 64,
+  },
+  statsChartCol: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+  },
+  statsChartBarTrack: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  statsChartBar: {
+    width: '70%',
+    borderRadius: 4,
+    backgroundColor: colors.primary + 'cc',
+    minHeight: 2,
+  },
+  statsChartDay: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 10,
+    color: colors.onSurfaceVariant + '99',
+    marginTop: 4,
+  },
+  statsTopRow: {
+    borderTopWidth: 0.5,
+    borderTopColor: colors.outlineVariant + '33',
+    paddingTop: 10,
+  },
+  statsTopText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+  },
+  statsTopName: {
+    fontFamily: 'Manrope-SemiBold',
+    color: colors.onSurface,
+  },
+  statsLocked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.primary + '08',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 0.5,
+    borderColor: colors.primary + '22',
+  },
+  statsLockedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsLockedTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 14,
+    color: colors.onSurface,
+    letterSpacing: -0.2,
+  },
+  statsLockedDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  cardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 6,
+    paddingHorizontal: 4,
+  },
+  cardStatsText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 11,
+    color: colors.onSurfaceVariant,
+    marginRight: 6,
   },
 });

@@ -1,13 +1,21 @@
 import { create } from 'zustand';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState } from 'react-native';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   GoogleSignin,
   isSuccessResponse,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
-import { apolloClient, setToken, removeToken, getToken } from '@/lib/apollo';
-import { GOOGLE_LOGIN } from '@/graphql/mutations';
+import {
+  apolloClient,
+  setToken,
+  removeToken,
+  getToken,
+  onAccountSuspended,
+  resetSuspendedAlert,
+} from '@/lib/apollo';
+import { GOOGLE_LOGIN, LOGOUT } from '@/graphql/mutations';
 import { ME } from '@/graphql/queries';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -37,6 +45,7 @@ if (Platform.OS !== 'web') {
 export interface AuthUser {
   id: string;
   name: string;
+  suspended: boolean;
   email: string;
   avatar: string;
   phone: string | null;
@@ -77,25 +86,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
       const token = await getToken();
+
       if (raw && token) {
         const cached = JSON.parse(raw) as AuthUser;
         try {
           // Validate the token *before* trusting the cached session. Otherwise a
           // stale/invalid token (e.g. after a DB reset) leaves the app in a
           // half-authenticated state that fires guarded queries → Unauthorized.
-          const { data }: any = await apolloClient.query({ query: ME });
+          const { data }: any = await apolloClient.query({
+            query: ME,
+          });
+
           if (data?.me?.permission === 'DENIED') {
             // Account blocked by an admin: surface it and end the session.
             Alert.alert(
               'Cuenta suspendida',
               'Tu cuenta ha sido suspendida. Si crees que es un error, contacta con soporte.',
             );
-            throw new Error('Account suspended');
           }
           if (data?.me) {
             const fresh: AuthUser = {
               id: data.me.id,
               name: data.me.name,
+              suspended: data.me.suspended,
               email: data.me.email,
               avatar: data.me.avatarUrl || cached.avatar,
               phone: data.me.phone || null,
@@ -113,7 +126,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           await removeToken();
         }
       }
-    } catch {
+    } catch (error) {
+      console.log({ error });
       /* ignore */
     } finally {
       set({ loading: false });
@@ -150,6 +164,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const authUser: AuthUser = {
         id: user.id,
         name: user.name,
+        suspended: user.suspended,
         email: user.email,
         avatar: user.avatarUrl || googleUser.avatar,
         phone: user.phone || null,
@@ -157,10 +172,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
       set({ user: authUser, isAuthenticated: true });
       await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      resetSuspendedAlert();
       return authUser;
     } catch (err) {
-      console.log('[Auth] Backend login error:', err);
-      // Surfaces the backend message (e.g. "Tu cuenta ha sido suspendida"); falls
       // back to a connection hint for network/timeout errors.
       Alert.alert(
         'No se pudo iniciar sesión',
@@ -185,29 +199,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         name: info.name,
         avatar: info.picture,
       });
-    } catch (err) {
-      console.log('[Auth] Web login error:', err);
-    }
+    } catch {}
   },
 
   signInWithGoogleNative: async () => {
-    // Timing probe: logs how long each phase takes so we can see *where* the
-    // delay is (Play Services init, the Google account picker / token exchange,
-    // or our backend mutation). Watch the Metro console for "[Auth timing]".
-    const t0 = Date.now();
-    const lap = (label: string, from: number) =>
-      console.log(`[Auth timing] ${label}: ${Date.now() - from}ms`);
     try {
       await GoogleSignin.hasPlayServices({
         showPlayServicesUpdateDialog: false,
       });
-      lap('hasPlayServices', t0);
-      const tPicker = Date.now();
-      // Cap the native flow: with the Credential Manager API the bottom sheet
-      // can render as an empty/black overlay and never resolve, hanging the
-      // promise indefinitely. Fail after 45s with a clear error instead.
       const googleResult = await withTimeout(GoogleSignin.signIn(), 45000);
-      lap('signIn (picker + Google token)', tPicker);
       if (isSuccessResponse(googleResult)) {
         const { user: gUser } = googleResult.data;
         const googleUser: GoogleUser = {
@@ -216,22 +216,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name: gUser.name || '',
           avatar: gUser.photo || '',
         };
-        const tBackend = Date.now();
-        const result = await get().loginWithBackend(googleUser);
-        lap('loginWithBackend (our API)', tBackend);
-        lap('TOTAL', t0);
-        if (result) {
-          console.log('[Auth] Login exitoso:', result.email);
-        }
-        // If result is null, loginWithBackend already surfaced the reason
-        // (suspended account or connection error). Don't fake an offline
-        // login — a session without a backend token only breaks every guarded
-        // query afterwards.
+        await get().loginWithBackend(googleUser);
       }
     } catch (err: any) {
-      // Silent only when the user explicitly cancels the picker.
       if (err?.code === statusCodes.SIGN_IN_CANCELLED) return;
-      console.log('[Auth] Google Sign-In error:', err?.code, err?.message);
       Alert.alert(
         'No se pudo iniciar sesión',
         `${err?.code ? `[${err.code}] ` : ''}${err?.message ?? String(err)}`,
@@ -249,6 +237,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    await apolloClient.mutate({ mutation: LOGOUT }).catch(() => {});
     if (Platform.OS !== 'web') {
       try {
         await GoogleSignin.signOut();
@@ -263,3 +252,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await apolloClient.clearStore();
   },
 }));
+
+onAccountSuspended(() => {
+  useAuthStore
+    .getState()
+    .signOut()
+    .finally(() => {
+      // Kick the user off whatever (possibly private) screen they were on.
+      router.replace('/(tabs)');
+    });
+});
+
+// Re-validate the session against the backend. A suspended ME query fails
+// with ForbiddenException, which the Apollo errorLink turns into the alert +
+// signOut above. Other failures (offline, expired token) are ignored here —
+// hydrate/refresh flows own those.
+function revalidateSession() {
+  if (!useAuthStore.getState().isAuthenticated) return;
+
+  apolloClient
+    .query({ query: ME, fetchPolicy: 'network-only' })
+    .catch(() => {});
+}
+
+// On foreground: a suspension applied while the app was backgrounded kicks
+// the user out on resume instead of waiting for their next action.
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') revalidateSession();
+});

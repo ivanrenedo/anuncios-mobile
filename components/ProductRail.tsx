@@ -7,12 +7,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Clock, Flame, Heart, Star, Tag, TrendingUp } from 'lucide-react-native';
+import { ChevronRight, Clock, Crown, Flame, Heart, Star, Tag, TrendingUp } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductCard, { ProductCardItem, ProductCardSkeleton } from '@/components/ProductCard';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
 
-const RAIL_GAP = 8;
+const RAIL_GAP = 12;
 
 interface Props {
   title: string;
@@ -27,7 +27,7 @@ interface Props {
 
 const ICON_MAP: Record<string, any> = {
   flame: Flame, clock: Clock, tag: Tag, star: Star,
-  "trending-up": TrendingUp, heart: Heart
+  crown: Crown, "trending-up": TrendingUp, heart: Heart
 };
 
 const ICON_COLOR: Record<string, string> = {
@@ -37,6 +37,7 @@ const ICON_COLOR: Record<string, string> = {
   heart: '#A32D2D',
   clock: '#854F0B',
   star: '#534AB7',
+  crown: '#7C3AED',
 };
 
 function getIcon(name?: string | null) {
@@ -139,7 +140,7 @@ export default function ProductRail({
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   section: {
-    marginBottom: 8,
+    marginBottom: 32,
   },
   header: {
     flexDirection: 'row',

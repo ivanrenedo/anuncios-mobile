@@ -65,12 +65,14 @@ function toCardItem(p: any): ProductCardItem {
     sellerId: p.seller?.id,
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
+    sellerPlan: p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
     categoryLabel: p.category?.label,
     operation: p.propertyDetail?.operation,
     offerType: p.serviceDetail?.offerType,
+    isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     postedAgo: timeAgo(p.createdAt),
   };
 }
@@ -177,7 +179,6 @@ export default function ProductGrid({
             <ProductCard
               key={item.id}
               item={item}
-              width={165}
               liked={isFavorite(item.id)}
               onLike={() => toggleFavorite(item.id)}
               onPress={() =>
@@ -217,6 +218,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     section: {
       paddingHorizontal: 16,
+      marginBottom: 12,
     },
     header: {
       flexDirection: 'row',
@@ -253,8 +255,8 @@ const makeStyles = (colors: ThemeColors) =>
     },
     row: {
       flexDirection: 'row',
-      gap: 8,
-      marginBottom: 16,
+      gap: 12,
+      marginBottom: 20,
     },
     placeholder: {
       flex: 1,

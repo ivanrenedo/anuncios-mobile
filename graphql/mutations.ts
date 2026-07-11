@@ -12,6 +12,12 @@ export const GOOGLE_LOGIN = gql`
   }
 `;
 
+export const LOGOUT = gql`
+  mutation Logout {
+    logout
+  }
+`;
+
 export const REFRESH_TOKEN = gql`
   mutation RefreshToken($token: String!) {
     refreshToken(token: $token) {
@@ -78,6 +84,24 @@ export const DELETE_PRODUCT = gql`
 export const VIEW_PRODUCT = gql`
   mutation ViewProduct($id: String!, $viewerKey: String) {
     viewProduct(id: $id, viewerKey: $viewerKey) { id views }
+  }
+`;
+
+export const CONTACT_PRODUCT = gql`
+  mutation ContactProduct($id: String!) {
+    contactProduct(id: $id) { id contacts }
+  }
+`;
+
+export const CREATE_SAVED_SEARCH = gql`
+  mutation CreateSavedSearch($input: CreateSavedSearchInput!) {
+    createSavedSearch(input: $input) { id }
+  }
+`;
+
+export const DELETE_SAVED_SEARCH = gql`
+  mutation DeleteSavedSearch($id: String!) {
+    deleteSavedSearch(id: $id) { id }
   }
 `;
 
@@ -213,10 +237,3 @@ export const REQUEST_VERIFICATION = gql`
   }
 `;
 
-// ─── Categories (menu tree) ──────────────────────────────────────────────────
-
-export const CREATE_CATEGORY = gql`
-  mutation CreateCategory($input: CreateCategoryInput!) {
-    createCategory(input: $input) { id slug label color icon parentId sortOrder }
-  }
-`;

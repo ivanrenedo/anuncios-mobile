@@ -18,9 +18,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFavorites, useFavoriteToggle } from '@/hooks/useFavorites';
 import { API_URL } from '@/lib/config';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - 12) / 2;
-
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -55,12 +52,14 @@ export default function SavedScreen() {
       sellerId: p.seller?.id,
       location: p.city,
       verified: p.seller?.verified,
+      sellerPlan: p.seller?.plan,
       avatar: p.seller?.avatarUrl,
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       priceValue: Number(p.price),
       discount: p.discount,
       operation: p.propertyDetail?.operation,
       offerType: p.serviceDetail?.offerType,
+      isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
       postedAgo: ago,
     };
   }), [favorites]);
@@ -167,7 +166,7 @@ export default function SavedScreen() {
                     }
                   />
                 )}
-                {pair[1] ? (
+                {pair[1] && (
                   <ProductCard 
                     item={pair[1]}
                     liked={isFavorite(pair[1]!.id)}
@@ -176,15 +175,6 @@ export default function SavedScreen() {
                       router.push({ pathname: '/product/[id]', params: { id: pair[1]!.id } })
                     }
                   />
-                ) : (
-                  <RipplePress
-                    style={styles.addCard}
-                    borderRadius={16}
-                    rippleColor={colors.primary + '15'}
-                    onPress={() => router.push('/(tabs)/explore')}>
-                    <Plus size={32} color={colors.outlineVariant} strokeWidth={1} />
-                    <Text style={styles.addCardText}>Añadir más{'\n'}favoritos</Text>
-                  </RipplePress>
                 )}
               </View>
             ))}
@@ -301,26 +291,6 @@ const makeStyles = (colors: ThemeColors) =>
   gridRow: {
     flexDirection: 'row',
     gap: 8,
-  },
-  addCard: {
-    flex: 1,
-    minHeight: 160,
-    backgroundColor: colors.surfaceContainer + '55',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.outlineVariant + '66',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 20,
-  },
-  addCardText: {
-    fontFamily: 'Manrope-Regular',
-    fontSize: 12,
-    color: colors.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 18,
   },
   emptyState: {
     alignItems: 'center',

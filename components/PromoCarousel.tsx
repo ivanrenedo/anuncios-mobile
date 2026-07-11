@@ -125,7 +125,7 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
         router.push({ pathname: '/product/[id]', params: { id: value } });
         break;
       case 'category':
-        router.push({ pathname: '/(tabs)/explore', params: { filterCat: value } });
+        router.push({ pathname: '/explore', params: { filterCat: value } });
         break;
       case 'url':
         Linking.openURL(value).catch(() => {});

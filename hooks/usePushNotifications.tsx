@@ -151,7 +151,7 @@ export function usePushNotifications() {
           case 'marketing':
             if (data?.sectionId || data?.filterCat) {
               router.push({
-                pathname: '/(tabs)/explore',
+                pathname: '/explore',
                 params: {
                   ...(data.sectionId && { sectionId: String(data.sectionId) }),
                   ...(data.filterCat && { filterCat: String(data.filterCat) }),

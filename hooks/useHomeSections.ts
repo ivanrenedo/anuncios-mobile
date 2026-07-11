@@ -14,7 +14,13 @@ export interface HomeSectionProduct {
   views?: number;
   favoritesCount?: number;
   createdAt: string;
-  seller?: { id: string; name: string; avatarUrl?: string; verified?: boolean };
+  seller?: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    verified?: boolean;
+    plan?: string;
+  };
   category?: { id: string; slug: string; label: string; color?: string };
   images?: { id: string; url: string; sortOrder: number }[];
 }

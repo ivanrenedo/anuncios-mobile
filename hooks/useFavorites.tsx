@@ -2,7 +2,7 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { useCallback, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { useFavoritesStore } from '@/store/favoritesStore';
-import { MY_FAVORITES, IS_FAVORITED } from '@/graphql/queries';
+import { MY_FAVORITES } from '@/graphql/queries';
 import { TOGGLE_FAVORITE } from '@/graphql/mutations';
 
 export function useFavorites() {
@@ -12,16 +12,6 @@ export function useFavorites() {
     fetchPolicy: 'cache-and-network',
   });
   return { favorites: data?.myFavorites ?? [], loading, error, refetch };
-}
-
-export function useIsFavorited(productId: string) {
-  const { isAuthenticated } = useAuth();
-  const { data, loading } = useQuery<any>(IS_FAVORITED, {
-    variables: { productId },
-    skip: !productId || !isAuthenticated,
-    fetchPolicy: 'cache-and-network',
-  });
-  return { isFavorited: data?.isFavorited ?? false, loading };
 }
 
 export function useToggleFavorite() {

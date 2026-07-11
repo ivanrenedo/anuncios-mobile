@@ -15,7 +15,14 @@ export const ME = gql`
       location
       verified
       permission
+      suspended
+      suspendedReason
       language
+      plan
+      planExpiresAt
+      effectivePlan
+      maxActiveProducts
+      maxImagesPerProduct
       notifMessages
       notifOffers
       notifMarketing
@@ -43,12 +50,15 @@ export const GET_PRODUCTS = gql`
       status
       views
       favoritesCount
+      bumpedAt
+      boostedUntil
       createdAt
       seller {
         id
         name
         avatarUrl
         verified
+        plan
         location
       }
       category {
@@ -115,12 +125,15 @@ export const GET_PRODUCT = gql`
       status
       views
       favoritesCount
+      bumpedAt
+      boostedUntil
       createdAt
       seller {
         id
         name
         avatarUrl
         verified
+        plan
         location
         bio
         phone
@@ -131,6 +144,7 @@ export const GET_PRODUCT = gql`
         slug
         label
         color
+        parentId
       }
       images {
         id
@@ -190,12 +204,15 @@ export const SEARCH_PRODUCTS = gql`
       status
       views
       favoritesCount
+      bumpedAt
+      boostedUntil
       createdAt
       seller {
         id
         name
         avatarUrl
         verified
+        plan
         location
       }
       category {
@@ -237,12 +254,15 @@ export const PRODUCTS_BY_CATEGORY = gql`
       city
       views
       favoritesCount
+      bumpedAt
+      boostedUntil
       createdAt
       seller {
         id
         name
         avatarUrl
         verified
+        plan
       }
       category {
         id
@@ -259,6 +279,29 @@ export const PRODUCTS_BY_CATEGORY = gql`
   }
 `;
 
+export const MY_SAVED_SEARCHES = gql`
+  query MySavedSearches {
+    mySavedSearches {
+      id
+      query
+      categoryId
+      city
+      priceMin
+      priceMax
+      createdAt
+    }
+  }
+`;
+
+export const MY_VIEWS_DAILY = gql`
+  query MyViewsDaily($days: Int) {
+    myViewsDaily(days: $days) {
+      date
+      count
+    }
+  }
+`;
+
 export const PRODUCTS_BY_SELLER = gql`
   query ProductsBySeller($sellerId: String!) {
     productsBySeller(sellerId: $sellerId) {
@@ -271,6 +314,10 @@ export const PRODUCTS_BY_SELLER = gql`
       status
       views
       favoritesCount
+      contacts
+      impressions
+      bumpedAt
+      boostedUntil
       createdAt
       category {
         id
@@ -325,53 +372,6 @@ export const CATEGORY_TREE = gql`
   }
 `;
 
-export const GET_CATEGORIES = gql`
-  query Categories {
-    categories {
-      id
-      slug
-      label
-      color
-      icon
-      parentId
-      sortOrder
-    }
-  }
-`;
-
-export const CATEGORY_BY_SLUG = gql`
-  query CategoryBySlug($slug: String!) {
-    categoryBySlug(slug: $slug) {
-      id
-      slug
-      label
-      color
-      icon
-      parentId
-      sortOrder
-      children {
-        id
-        slug
-        label
-        sortOrder
-      }
-    }
-  }
-`;
-
-export const CATEGORY_CHILDREN = gql`
-  query CategoryChildren($parentId: String!) {
-    categoryChildren(parentId: $parentId) {
-      id
-      slug
-      label
-      color
-      icon
-      sortOrder
-    }
-  }
-`;
-
 // ─── Favorites ───────────────────────────────────────────────────────────────
 
 export const MY_FAVORITES = gql`
@@ -388,12 +388,15 @@ export const MY_FAVORITES = gql`
         city
         views
         favoritesCount
+        bumpedAt
+        boostedUntil
         createdAt
         seller {
           id
           name
           avatarUrl
           verified
+          plan
         }
         category {
           id
@@ -417,12 +420,6 @@ export const MY_FAVORITES = gql`
         }
       }
     }
-  }
-`;
-
-export const IS_FAVORITED = gql`
-  query IsFavorited($productId: String!) {
-    isFavorited(productId: $productId)
   }
 `;
 
@@ -466,6 +463,7 @@ export const GET_FOLLOWERS = gql`
         avatarUrl
         verified
         location
+        plan
       }
     }
   }
@@ -482,6 +480,7 @@ export const GET_FOLLOWING = gql`
         avatarUrl
         verified
         location
+        plan
       }
     }
   }
@@ -554,12 +553,15 @@ export const GET_HOME_SECTIONS = gql`
         city
         views
         favoritesCount
+        bumpedAt
+        boostedUntil
         createdAt
         seller {
           id
           name
           avatarUrl
           verified
+          plan
         }
         category {
           id
@@ -610,12 +612,15 @@ export const GET_SECTION_PRODUCTS = gql`
       city
       views
       favoritesCount
+      bumpedAt
+      boostedUntil
       createdAt
       seller {
         id
         name
         avatarUrl
         verified
+        plan
       }
       category {
         id
@@ -655,6 +660,8 @@ export const GET_USER = gql`
       bio
       location
       verified
+      plan
+      planExpiresAt
       language
       showEmail
       showPhone

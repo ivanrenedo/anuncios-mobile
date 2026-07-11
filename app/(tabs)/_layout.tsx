@@ -48,8 +48,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* Explore stays as a route (search target) but hidden from the tab bar */}
-      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen
         name="post"
         options={{

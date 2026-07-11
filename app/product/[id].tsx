@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Dimensions,
   Linking,
+  Alert,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -19,6 +20,7 @@ import {
   ChevronRight,
   Share2,
   Star,
+  Crown,
   Shield,
   MapPin,
   Phone,
@@ -46,11 +48,12 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductImage from '@/components/ProductImage';
 import SafetyModal, { SafetyModalMode } from '@/components/SafetyModal';
 import ReportSheet from '@/components/ReportSheet';
-import { useProduct, useViewProduct, useProductsByCategory } from '@/hooks/useProducts';
+import { ArrowUpCircle, MessageCircle, Zap } from 'lucide-react-native';
+import { useProduct, useViewProduct, useContactProduct, useRelatedProducts } from '@/hooks/useProducts';
 import { useSellerRating } from '@/hooks/useReviews';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
 import { useAuth } from '@/hooks/useAuth';
-import { API_URL, SHARE_URL } from '@/lib/config';
+import { API_URL, SHARE_URL, WHATSAPP_NUMBER } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import Skeleton from '@/components/Skeleton';
 import { fmtPrice, type ProductCardItem } from '@/components/ProductCard';
@@ -72,12 +75,14 @@ function toCardItem(p: any): ProductCardItem {
     sellerId: p.seller?.id,
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
+    sellerPlan: p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
     categoryLabel: p.category?.label,
     operation: p.propertyDetail?.operation ?? p.vehicleDetail?.operation,
     offerType: p.serviceDetail?.offerType,
+    isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     postedAgo: timeAgo(p.createdAt),
   };
 }
@@ -117,11 +122,21 @@ export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { product: apiProduct, loading, refetch: refetchProduct } = useProduct(id || '');
   const { trackView } = useViewProduct();
+  const { trackContact } = useContactProduct();
+  // One contact stat per screen visit, no matter how many times the buttons
+  // are tapped (the safety modal invites re-taps).
+  const contactTracked = React.useRef<string | null>(null);
+  const registerContactOnce = () => {
+    if (!id || contactTracked.current === id) return;
+    contactTracked.current = id;
+    trackContact(id);
+  };
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const { isAuthenticated, user: me } = useAuth();
   const { average: sellerAvg, count: sellerReviewCount, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
   const categoryId = apiProduct?.category?.id || '';
-  const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useProductsByCategory(categoryId, 11);
+  const productTitle = apiProduct?.title || '';
+  const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useRelatedProducts(productTitle, categoryId);
   const relatedItems = relatedRaw
     .filter((p: any) => p.id !== id)
     .slice(0, 10)
@@ -140,6 +155,8 @@ export default function ProductDetailScreen() {
   const [reportOpen, setReportOpen] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [descNeedsToggle, setDescNeedsToggle] = useState<boolean | null>(null);
+
+  const contactNumber = WHATSAPP_NUMBER;
 
   // Track view once per listing — the ref guard survives re-mounts and any
   // double-invoked effect, and the backend also dedups per visitor (6h window).
@@ -227,12 +244,14 @@ export default function ProductDetailScreen() {
       avatar: apiProduct.seller?.avatarUrl || undefined,
       rating: sellerAvg,
       verified: apiProduct.seller?.verified ?? false,
+      plan: apiProduct.seller?.plan || 'FREE',
       phone: apiProduct.seller?.phone || undefined
     },
     location: apiProduct.city || 'Guinea Ecuatorial',
     postedAgo: timeAgo(apiProduct.createdAt),
     views: apiProduct.views ?? 0,
     favorites: apiProduct.favoritesCount ?? 0,
+    isBoosted: apiProduct.boostedUntil ? new Date(apiProduct.boostedUntil) > new Date() : false,
     attributes:
       apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || [],
   };
@@ -328,6 +347,12 @@ export default function ProductDetailScreen() {
 
         {/* Product info */}
         <View style={styles.section}>
+          {product.isBoosted && (
+            <View style={styles.boostedPill}>
+              <Zap size={12} color="#7C3AED" fill="#7C3AED" strokeWidth={2} />
+              <Text style={styles.boostedPillText}>Anuncio destacado</Text>
+            </View>
+          )}
           <Text style={styles.title}>{product.title}</Text>
 
           <View style={styles.tagLine}>
@@ -407,7 +432,19 @@ export default function ProductDetailScreen() {
                 )}
               </View>
               <View style={styles.sellerMiniInfo}>
-                <Text style={styles.sellerMiniName}>{product.seller.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.sellerMiniName}>{product.seller.name}</Text>
+                  {product.seller.plan === 'PREMIUM' && (
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' }}>
+                      <Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+                    </View>
+                  )}
+                  {product.seller.plan === 'STAR' && (
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#F5A623', alignItems: 'center', justifyContent: 'center' }}>
+                      <Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+                    </View>
+                  )}
+                </View>
                 <View style={styles.sellerMiniRatingRow}>
                   <Star size={11} color={colors.tertiaryContainer} fill={colors.tertiaryContainer} strokeWidth={0} />
                   <Text style={styles.sellerMiniRating}>{product.seller.rating.toFixed(1)}</Text>
@@ -589,6 +626,34 @@ export default function ProductDetailScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Destacar anuncio — CTA para el propietario */}
+        {sellerId === me?.id && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.boostCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                const msg = encodeURIComponent(
+                  `Hola, quiero destacar mi anuncio "${product.title}" (${SHARE_URL}/p/${product.id} durante 7 días.`,
+                );
+                Linking.openURL(`https://wa.me/${contactNumber}?text=${msg}`).catch(() =>
+                  Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
+                );
+              }}>
+              <View style={styles.boostIconWrap}>
+                <ArrowUpCircle size={20} color="#7C3AED" strokeWidth={1.8} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.boostTitle}>Destacar este anuncio</Text>
+                <Text style={styles.boostDesc}>
+                  Aparece en las primeras posiciones durante 7 días por solo 1.000 XAF
+                </Text>
+              </View>
+              <MessageCircle size={16} color="#7C3AED" strokeWidth={1.8} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Reportar anuncio */}
         {sellerId !== me?.id && (
           <View style={styles.section}>
@@ -634,14 +699,14 @@ export default function ProductDetailScreen() {
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={styles.callBtn}
-          onPress={() => setModal('call')}
+          onPress={() => { registerContactOnce(); setModal('call'); }}
           activeOpacity={0.88}>
           <Phone size={20} color="#ffffff" strokeWidth={2} />
           <Text style={styles.callBtnText}>Llamar</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.whatsappBtn}
-          onPress={() => setModal('whatsapp')}
+          onPress={() => { registerContactOnce(); setModal('whatsapp'); }}
           activeOpacity={0.88}>
           <WhatsAppSvg />
           <Text style={styles.whatsappBtnText}>WhatsApp</Text>
@@ -1025,6 +1090,53 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 15,
       color: colors.onSurface,
       marginTop: 2,
+    },
+    boostedPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      backgroundColor: '#7C3AED' + '14',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 999,
+      marginBottom: 8,
+    },
+    boostedPillText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 11,
+      color: '#7C3AED',
+      letterSpacing: 0.3,
+    },
+    boostCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: '#7C3AED' + '0a',
+      borderRadius: 14,
+      padding: 16,
+      borderWidth: 0.5,
+      borderColor: '#7C3AED' + '22',
+    },
+    boostIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: '#7C3AED' + '18',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    boostTitle: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 14,
+      color: colors.onSurface,
+      marginBottom: 2,
+    },
+    boostDesc: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      lineHeight: 17,
     },
     jobLink: {
       flexDirection: 'row',

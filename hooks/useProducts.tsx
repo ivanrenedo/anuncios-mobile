@@ -1,18 +1,18 @@
-import { useQuery, useLazyQuery, useMutation } from '@apollo/client/react';
-// Apollo 4.x types `data` as `{}` unless a generic is given; these hooks shape
-// the result themselves, so `<any>` keeps the existing loosely-typed style.
+import { useQuery, useMutation } from '@apollo/client/react';
 import {
   GET_PRODUCTS,
   GET_PRODUCT,
   SEARCH_PRODUCTS,
   PRODUCTS_BY_CATEGORY,
   PRODUCTS_BY_SELLER,
+  MY_VIEWS_DAILY,
 } from '@/graphql/queries';
 import {
   CREATE_PRODUCT,
   UPDATE_PRODUCT,
   DELETE_PRODUCT,
   VIEW_PRODUCT,
+  CONTACT_PRODUCT,
 } from '@/graphql/mutations';
 
 // Refetch by operation NAME so every active product list refreshes regardless
@@ -40,24 +40,6 @@ export function useProduct(id: string) {
     fetchPolicy: 'cache-and-network',
   });
   return { product: data?.product ?? null, loading, error, refetch };
-}
-
-export function useSearchProducts() {
-  const [execute, { data, loading, error }] = useLazyQuery<any>(SEARCH_PRODUCTS);
-
-  const search = (input: {
-    query?: string;
-    categoryId?: string;
-    city?: string;
-    condition?: string;
-    priceMin?: number;
-    priceMax?: number;
-    sortBy?: string;
-    take?: number;
-    skip?: number;
-  }) => execute({ variables: { input } });
-
-  return { results: data?.searchProducts ?? [], loading, error, search };
 }
 
 export function useProductsByCategory(categoryId: string, take = 20, skip = 0) {
@@ -106,9 +88,55 @@ export function useDeleteProduct() {
   return { remove, loading, error };
 }
 
+export function useRelatedProducts(title: string, categoryId: string) {
+  const keywords = title
+    .split(/\s+/)
+    .filter((w) => w.length > 2)
+    .slice(0, 3)
+    .join(' ');
+
+  const { data: byCat, loading: l1, refetch: r1 } = useQuery<any>(SEARCH_PRODUCTS, {
+    variables: { input: { categoryId: categoryId || undefined, take: 11 } },
+    skip: !categoryId,
+    fetchPolicy: 'cache-and-network',
+  });
+
+  const { data: byTitle, loading: l2, refetch: r2 } = useQuery<any>(SEARCH_PRODUCTS, {
+    variables: { input: { query: keywords || undefined, take: 11 } },
+    skip: !keywords,
+    fetchPolicy: 'cache-and-network',
+  });
+
+  const merged = [...(byCat?.searchProducts ?? [])];
+  for (const p of byTitle?.searchProducts ?? []) {
+    if (!merged.some((m: any) => m.id === p.id)) merged.push(p);
+  }
+
+  const refetch = async () => { await Promise.all([r1(), r2()]); };
+  return { products: merged, loading: l1 || l2, refetch };
+}
+
 export function useViewProduct() {
   const [mutate] = useMutation(VIEW_PRODUCT);
   const trackView = (id: string, viewerKey?: string) =>
     mutate({ variables: { id, viewerKey } });
   return { trackView };
+}
+
+/** Fire-and-forget contact stat: a buyer tapped WhatsApp/call on a listing. */
+export function useContactProduct() {
+  const [mutate] = useMutation(CONTACT_PRODUCT);
+  const trackContact = (id: string) =>
+    mutate({ variables: { id } }).catch(() => {});
+  return { trackContact };
+}
+
+/** Daily unique views across my listings, for the PREMIUM stats chart. */
+export function useMyViewsDaily(enabled: boolean, days = 7) {
+  const { data, loading } = useQuery<any>(MY_VIEWS_DAILY, {
+    variables: { days },
+    skip: !enabled,
+    fetchPolicy: 'cache-and-network',
+  });
+  return { daily: data?.myViewsDaily ?? [], loading };
 }

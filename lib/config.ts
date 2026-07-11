@@ -7,9 +7,9 @@ import { Platform } from 'react-native';
 const DEV_API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   Platform.select({
-    android: 'http://192.168.0.105:3000',
-    ios: 'http://192.168.0.105:3000',
-    default: 'http://192.168.0.105:3000',
+    android: 'http://192.168.0.101:3000',
+    ios: 'http://192.168.0.101:3000',
+    default: 'http://192.168.0.101:3000',
   });
 
 export const API_URL = DEV_API_URL!;
@@ -20,9 +20,13 @@ export const UPLOAD_URL = `${API_URL}/upload`;
 // from the internet). Falls back to the API_URL for local testing.
 export const SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL ?? API_URL;
 
+// Business WhatsApp number for manual payment flows (plans, boosts).
+// Single source of truth — update here when the number changes.
+export const WHATSAPP_NUMBER = '240222626418';
+
 /** Resolve a possibly-relative image URL coming from the backend. */
-export function resolveImage(url?: string | null): string {
-  if (!url) return '';
+export function resolveImage(url?: string | null): string | undefined {
+  if (!url) return undefined;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   if (url.startsWith('/')) return `${API_URL}${url}`;
   return url;

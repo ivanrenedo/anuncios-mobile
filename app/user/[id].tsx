@@ -37,6 +37,7 @@ import {
   Search,
   ArrowDownUp,
   ChevronDown,
+  Crown,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { GET_USER } from '@/graphql/queries';
@@ -65,19 +66,18 @@ const AVATAR_SIZE = 92;
 const PREVIEW_LIMIT = 6;
 const FOLLOWER_LIMIT = 8;
 
-function timeAgo(dateStr?: string) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `hace ${mins} min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `hace ${days} días`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 4) return `hace ${weeks} semanas`;
-  const months = Math.floor(days / 30);
-  return `hace ${months} meses`;
+function timeAgo(iso?: string) {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'hace un momento';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} d`;
+  const mo = Math.floor(d / 30);
+  return `hace ${mo} meses`;
 }
 
 function StarRating({ rating, size = 12 }: { rating: number; size?: number }) {
@@ -121,11 +121,11 @@ export default function PublicUserProfile() {
   });
   const user = data?.user;
 
-  const { products, refetch: refetchProducts } = useProductsBySeller(userId);
-  const { reviews, refetch: refetchReviews } = useReviewsBySeller(userId);
-  const { average: avgRating, count: ratingCount } = useSellerRating(userId);
-  const { followers, refetch: refetchFollowers } = useFollowers(userId);
-  const { following: followingList, refetch: refetchFollowing } = useFollowing(userId);
+  const { products, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
+  const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
+  const { followers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
+  const { following: followingList, loading: followingLoading, refetch: refetchFollowing } = useFollowing(userId);
   const { count: followersCount } = useFollowersCount(userId);
   const { count: followingCount } = useFollowingCount(userId);
   const { isFollowing } = useIsFollowing(isAuthenticated && !isOwn ? userId : '');
@@ -261,6 +261,7 @@ export default function PublicUserProfile() {
       categoryLabel: p.category?.label,
       operation: p.propertyDetail?.operation,
       offerType: p.serviceDetail?.offerType,
+      isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
       postedAgo: timeAgo(p.createdAt),
     };
   });
@@ -289,6 +290,7 @@ export default function PublicUserProfile() {
     name: f.follower?.name || '',
     avatar: f.follower?.avatarUrl || '',
     verified: f.follower?.verified ?? false,
+    plan: f.follower?.plan || 'FREE',
     location: f.follower?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
@@ -300,6 +302,7 @@ export default function PublicUserProfile() {
     name: f.followed?.name || '',
     avatar: f.followed?.avatarUrl || '',
     verified: f.followed?.verified ?? false,
+    plan: f.followed?.plan || 'FREE',
     location: f.followed?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
@@ -498,6 +501,18 @@ export default function PublicUserProfile() {
                 <Text style={styles.verifiedChipText}>Verificado</Text>
               </View>
             )}
+            {user.plan === 'STAR' && (
+              <View style={styles.planChipStar}>
+                <Star size={11} color="#F5A623" strokeWidth={2} fill="#F5A623" />
+                <Text style={styles.planChipStarText}>Estrella</Text>
+              </View>
+            )}
+            {user.plan === 'PREMIUM' && (
+              <View style={styles.planChipPremium}>
+                <Crown size={11} color="#7C3AED" strokeWidth={2} fill="#7C3AED" />
+                <Text style={styles.planChipPremiumText}>Premium</Text>
+              </View>
+            )}
           </View>
           <View style={styles.locationRow}>
             {user.location ? (
@@ -547,17 +562,20 @@ export default function PublicUserProfile() {
         {/* Stat tabs */}
         <View style={styles.statTabs}>
           {[
-            { value: fmtNumber(products.length), label: 'Anuncios' },
-            { value: avgRating > 0 ? avgRating.toFixed(1) : '—', label: 'Valoración' },
-            { value: fmtNumber(followersCount), label: 'Seguidores' },
-            { value: fmtNumber(followingCount), label: 'Siguiendo' },
-          ].map(({ value, label }, i) => (
+            { value: fmtNumber(products.length), label: 'Anuncios', isLoading: productsLoading },
+            { value: avgRating > 0 ? avgRating.toFixed(1) : '—', label: 'Valoración', isLoading: ratingLoading },
+            { value: fmtNumber(followersCount), label: 'Seguidores', isLoading: followersLoading },
+            { value: fmtNumber(followingCount), label: 'Siguiendo', isLoading: followingLoading },
+          ].map(({ value, label, isLoading }, i) => (
             <TouchableOpacity
               key={label}
               style={[styles.statTab, activeTab === i && styles.statTabActive]}
               onPress={() => setActiveTab(i)}
               activeOpacity={0.7}>
-              <Text style={[styles.statTabValue, activeTab === i && styles.statTabValueActive]}>{value}</Text>
+              {isLoading
+                ? <Spinner color={activeTab === i ? colors.primary : colors.onSurfaceVariant} size={14} />
+                : <Text style={[styles.statTabValue, activeTab === i && styles.statTabValueActive]}>{value}</Text>
+              }
               <Text style={styles.statTabLabel}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -565,7 +583,9 @@ export default function PublicUserProfile() {
 
         {/* Tab content */}
         {activeTab === 0 ? (
-          <View style={styles.grid}>
+          productsLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.grid}>
             {productItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
@@ -599,7 +619,9 @@ export default function PublicUserProfile() {
             )}
           </View>
         ) : activeTab === 1 ? (
-          <View style={styles.reviewsList}>
+          reviewsLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.reviewsList}>
             <View style={styles.ratingHeader}>
               <Text style={styles.ratingValue}>{avgRating > 0 ? avgRating.toFixed(1) : '—'}</Text>
               <View>
@@ -714,7 +736,9 @@ export default function PublicUserProfile() {
             )}
           </View>
         ) : activeTab === 2 ? (
-          <View style={styles.followersList}>
+          followersLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.followersList}>
             <View style={styles.followersHeader}>
               <View style={styles.followersIconWrap}>
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
@@ -756,7 +780,15 @@ export default function PublicUserProfile() {
                           )}
                         </View>
                         <View style={styles.followerInfo}>
-                          <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                          <View style={styles.followerNameRow}>
+                            <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                            {f.plan === 'STAR' && (
+                              <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                            {f.plan === 'PREMIUM' && (
+                              <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                          </View>
                           <View style={styles.followerMetaRow}>
                             <MapPin size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
                             <Text style={styles.followerMeta} numberOfLines={1}>
@@ -782,7 +814,9 @@ export default function PublicUserProfile() {
             )}
           </View>
         ) : (
-          <View style={styles.followersList}>
+          followingLoading ? (
+            <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
+          ) : <View style={styles.followersList}>
             <View style={styles.followersHeader}>
               <View style={styles.followersIconWrap}>
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
@@ -824,7 +858,15 @@ export default function PublicUserProfile() {
                           )}
                         </View>
                         <View style={styles.followerInfo}>
-                          <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                          <View style={styles.followerNameRow}>
+                            <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                            {f.plan === 'STAR' && (
+                              <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                            {f.plan === 'PREMIUM' && (
+                              <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                            )}
+                          </View>
                           <View style={styles.followerMetaRow}>
                             <MapPin size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
                             <Text style={styles.followerMeta} numberOfLines={1}>
@@ -963,7 +1005,15 @@ export default function PublicUserProfile() {
                         )}
                       </View>
                       <View style={styles.followerInfo}>
-                        <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                        <View style={styles.followerNameRow}>
+                          <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                          {f.plan === 'STAR' && (
+                            <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                          {f.plan === 'PREMIUM' && (
+                            <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                        </View>
                         <View style={styles.followerMetaRow}>
                           <MapPin size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
                           <Text style={styles.followerMeta} numberOfLines={1}>{f.location} · {f.since}</Text>
@@ -1045,7 +1095,15 @@ export default function PublicUserProfile() {
                         )}
                       </View>
                       <View style={styles.followerInfo}>
-                        <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                        <View style={styles.followerNameRow}>
+                          <Text style={styles.followerName} numberOfLines={1}>{f.name}</Text>
+                          {f.plan === 'STAR' && (
+                            <View style={styles.planBadgeStar}><Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                          {f.plan === 'PREMIUM' && (
+                            <View style={styles.planBadgePremium}><Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} /></View>
+                          )}
+                        </View>
                         <View style={styles.followerMetaRow}>
                           <MapPin size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
                           <Text style={styles.followerMeta} numberOfLines={1}>{f.location} · {f.since}</Text>
@@ -1278,6 +1336,26 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 999,
     },
     verifiedChipText: { fontFamily: 'Manrope-Bold', fontSize: 10, color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.6 },
+    planChipStar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: '#F5A623' + '20',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    planChipStarText: { fontFamily: 'Manrope-Bold', fontSize: 10, color: '#F5A623', textTransform: 'uppercase', letterSpacing: 0.6 },
+    planChipPremium: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: '#7C3AED' + '20',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    planChipPremiumText: { fontFamily: 'Manrope-Bold', fontSize: 10, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: 0.6 },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
     locationText: { fontFamily: 'Manrope-Regular', fontSize: 13, color: colors.onSurfaceVariant },
     dot: { fontFamily: 'Manrope-Regular', fontSize: 13, color: colors.onSurfaceVariant + '88', marginHorizontal: 2 },
@@ -1308,6 +1386,7 @@ const makeStyles = (colors: ThemeColors) =>
     statTabLabel: { fontFamily: 'Manrope-Regular', fontSize: 10, color: colors.onSurfaceVariant, marginTop: 1 },
     grid: { paddingHorizontal: 16, gap: 12, marginBottom: 24 },
     gridRow: { flexDirection: 'row', gap: 8 },
+    spinnerWrap: { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' },
     emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
     emptyText: { fontFamily: 'Manrope-Regular', fontSize: 15, color: colors.onSurfaceVariant },
     seeAllBottom: {
@@ -1427,6 +1506,9 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
     },
     followerInfo: { flex: 1, gap: 3 },
+    followerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    planBadgeStar: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#F5A623', alignItems: 'center', justifyContent: 'center' },
+    planBadgePremium: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
     followerName: { fontFamily: 'Manrope-SemiBold', fontSize: 14, color: colors.onSurface },
     followerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     followerMeta: { fontFamily: 'Manrope-Regular', fontSize: 11, color: colors.onSurfaceVariant + '99', flexShrink: 1 },

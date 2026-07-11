@@ -64,7 +64,7 @@ export default function CategoryScroll() {
   const { tree: categories, loading } = useCategoryTree();
 
   const search = (term: string) =>
-    router.push({ pathname: '/(tabs)/explore', params: { filterCat: term } });
+    router.push({ pathname: '/explore', params: { filterCat: term } });
 
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);

@@ -56,12 +56,14 @@ function toCardItem(p: any): ProductCardItem {
     sellerId: p.seller?.id,
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
+    sellerPlan: p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
     categoryLabel: p.category?.label,
     operation: p.propertyDetail?.operation ?? p.vehicleDetail?.operation,
     offerType: p.serviceDetail?.offerType,
+    isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     postedAgo: timeAgo(p.createdAt),
   };
 }
@@ -86,7 +88,7 @@ function SectionRenderer({
   const handleSeeAll = () => {
     trackEvent(section.id, 'click');
     router.push({
-      pathname: '/(tabs)/explore',
+      pathname: '/explore',
       params: { sectionId: section.id },
     });
   };
@@ -112,6 +114,20 @@ function SectionRenderer({
           icon={section.icon}
           items={items}
           onSeeAll={section.filter ? handleSeeAll : undefined}
+        />
+      );
+    }
+
+    case 'premium_showcase': {
+      const items = (section.products ?? []).map(toCardItem);
+      if (items.length === 0) return null;
+      return (
+        <ProductRail
+          title={section.title}
+          icon="crown"
+          items={items}
+          autoplay
+          autoplayMs={4000}
         />
       );
     }
@@ -247,7 +263,7 @@ export default function HomeScreen() {
           style={styles.searchBar}
           borderRadius={12}
           rippleColor={colors.primary + '15'}
-          onPress={() => router.push('/(tabs)/explore')}>
+          onPress={() => router.push('/explore')}>
           <Search size={16} color={colors.onSurfaceVariant + '88'} strokeWidth={1.8} />
           <Text style={styles.searchPlaceholder}>¿Qué estás buscando?</Text>
         </RipplePress>
@@ -450,7 +466,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     gap: 10,
     marginHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 20,
     marginTop: 4,
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: 12,
@@ -464,7 +480,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   ctaWrap: {
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   ctaBanner: {
     borderRadius: 16,
@@ -545,8 +561,8 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    marginTop: -4,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 24,
   },
   trustItem: {
     flex: 1,
@@ -582,6 +598,6 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 8,
   },
   scrollContent: {
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
 });

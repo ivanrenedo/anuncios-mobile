@@ -127,7 +127,6 @@ export default function EditProfileScreen() {
       update_(target === 'avatar' ? { avatar_url: url } : { cover_url: url });
       setRemoved((p) => ({ ...p, [target]: false }));
     } catch (err: any) {
-      console.log('[EditProfile] upload error:', err);
       Alert.alert('Error', err?.message || 'No se pudo subir la imagen. Inténtalo de nuevo.');
     } finally {
       setUploading(null);

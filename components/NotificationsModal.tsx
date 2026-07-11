@@ -46,7 +46,8 @@ type NotifType =
   | 'marketing'
   | 'review'
   | 'system'
-  | 'security';
+  | 'security'
+  | 'alert';
 
 interface Notif {
   id: string;
@@ -74,6 +75,7 @@ const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: 
   review:   { icon: Star,         bg: colors.tertiary + '15', color: colors.tertiary },
   system:   { icon: Info,         bg: colors.secondary + '18',color: colors.secondary },
   security: { icon: Flag,         bg: colors.error + '15',    color: colors.error },
+  alert:    { icon: Bell,         bg: colors.primary + '15',  color: colors.primary },
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -158,6 +160,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     switch (notif.type) {
       case 'like':
       case 'price':
+      case 'alert':
         if (notif.relatedProductId) {
           onClose();
           router.push({ pathname: '/product/[id]', params: { id: notif.relatedProductId } });
@@ -191,12 +194,23 @@ export default function NotificationsModal({ visible, onClose }: Props) {
         if (notif.sectionId || notif.filterCat) {
           onClose();
           router.push({
-            pathname: '/(tabs)/explore',
+            pathname: '/explore',
             params: {
               ...(notif.sectionId && { sectionId: notif.sectionId }),
               ...(notif.filterCat && { filterCat: notif.filterCat }),
             },
           });
+        }
+        break;
+      case 'system':
+        // Plan renewal reminders carry filterCat = 'plans' as a route hint;
+        // boost notifications carry the related product.
+        if (notif.filterCat === 'plans') {
+          onClose();
+          router.push('/plans');
+        } else if (notif.relatedProductId) {
+          onClose();
+          router.push({ pathname: '/product/[id]', params: { id: notif.relatedProductId } });
         }
         break;
     }

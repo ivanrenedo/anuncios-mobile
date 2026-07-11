@@ -45,11 +45,19 @@ function RootNavigator() {
           options={{ animation: 'none',  }}
         />
         <Stack.Screen
+          name="explore"
+          options={{ animation: 'none',  }}
+        />
+        <Stack.Screen
           name="user/[id]"
           options={{ animation: 'none' }}
         />
         <Stack.Screen
           name="edit-profile"
+          options={{ animation: 'none' }}
+        />
+        <Stack.Screen
+          name="edit-listing/[id]"
           options={{ animation: 'none' }}
         />
         <Stack.Screen

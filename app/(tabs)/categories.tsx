@@ -67,7 +67,7 @@ export default function CategoriesScreen() {
 
   // Navigate to explore with the selected category/subcategory as filter value
   const goSearch = (term: string) => {
-    router.push({ pathname: '/(tabs)/explore', params: { filterCat: term } });
+    router.push({ pathname: '/explore', params: { filterCat: term } });
   };
 
   const paneTranslate = paneAnim.interpolate({

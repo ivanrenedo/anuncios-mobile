@@ -16,6 +16,13 @@ export interface Profile {
   avatar_url: string;
   cover_url: string;
   verified: boolean;
+  plan: 'FREE' | 'STAR' | 'PREMIUM';
+  /** Plan actually in force (expired paid plans behave as FREE). */
+  effectivePlan: 'FREE' | 'STAR' | 'PREMIUM';
+  plan_expires_at: string | null;
+  /** Server-side limit for the effective plan. Null = unlimited. */
+  maxActiveProducts: number | null;
+  maxImagesPerProduct: number;
   email: string;
   phone: string;
   language: string;
@@ -39,6 +46,11 @@ const DEFAULT_PROFILE: Profile = {
   avatar_url: '',
   cover_url: '',
   verified: false,
+  plan: 'FREE',
+  effectivePlan: 'FREE',
+  plan_expires_at: null,
+  maxActiveProducts: 5,
+  maxImagesPerProduct: 4,
   email: '',
   phone: '',
   language: 'es',
@@ -63,6 +75,11 @@ function apiToProfile(u: any): Profile {
     avatar_url: u.avatarUrl || '',
     cover_url: u.coverUrl || '',
     verified: u.verified ?? false,
+    plan: u.plan || 'FREE',
+    effectivePlan: u.effectivePlan || u.plan || 'FREE',
+    plan_expires_at: u.planExpiresAt ?? null,
+    maxActiveProducts: u.maxActiveProducts === undefined ? 5 : u.maxActiveProducts,
+    maxImagesPerProduct: u.maxImagesPerProduct ?? 4,
     email: u.email || '',
     phone: u.phone || '',
     language: u.language || 'es',
@@ -104,8 +121,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         setProfile(p);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(p));
       }
-    } catch (err) {
-      console.log('[Profile] Refresh error:', err);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -154,8 +170,6 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       }
       return { ok: true };
     } catch (err: any) {
-      console.log('[Profile] Update error:', err);
-      // The backend rejected the change (e.g. duplicate email): surface it.
       if (isGraphQLError(err)) {
         return { ok: false, error: getErrorMessage(err, 'No se pudo guardar el perfil.') };
       }

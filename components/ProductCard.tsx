@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Heart, MapPin, BadgeCheck, Clock } from 'lucide-react-native';
+import { Heart, MapPin, BadgeCheck, Clock, Star, Crown, Zap } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
 import ProductImage from '@/components/ProductImage';
@@ -26,6 +26,8 @@ export interface ProductCardItem {
   location?: string;
   condition?: string;
   verified?: boolean;
+  sellerPlan?: 'FREE' | 'STAR' | 'PREMIUM';
+  isBoosted?: boolean;
   promo?: string;
   promoColor?: string;
   discount?: number;
@@ -83,6 +85,10 @@ export default function ProductCard({
   if (item.offerType) tags.push({ label: item.offerType, bg: '#EEEDFE', color: '#534AB7' });
   if (item.categoryLabel) tags.push({ label: item.categoryLabel, bg: '#E6F1FB', color: '#185FA5' });
   
+  // Option A boost design: badges stack below the "Destacado" pill, so every
+  // top-left overlay shifts one slot down per layer above it.
+  const overlayLayers =
+    (item.isBoosted ? 1 : 0) + (item.promo || hasDiscount ? 1 : 0);
 
   return (
     <TouchableOpacity
@@ -91,17 +97,32 @@ export default function ProductCard({
       onPress={onPress}>
       <View style={styles.imageWrap}>
         <ProductImage uri={item.image} style={styles.image} />
+        {item.isBoosted && (
+          <View style={styles.boostedBadge}>
+            <Zap size={10} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+            <Text style={styles.boostedText}>Destacado</Text>
+          </View>
+        )}
         {!!item.promo && (
-          <View style={[styles.badge, { backgroundColor: item.promoColor }]}>
+          <View style={[styles.badge, { backgroundColor: item.promoColor }, item.isBoosted && { top: 34 }]}>
             <Text style={styles.badgeText}>{item.promo}</Text>
           </View>
         )}
         {!item.promo && hasDiscount && (
-          <View style={styles.discountBadge}>
+          <View style={[styles.discountBadge, item.isBoosted && { top: 34 }]}>
             <Text style={styles.discountBadgeText}>-{item.discount}%</Text>
           </View>
         )}
-        {item.condition && (
+        {tags.length > 0 && (
+          <View style={[styles.tagsOverlay, overlayLayers > 0 && { top: 8 + overlayLayers * 26 }]}>
+            {tags.map((t) => (
+              <View key={t.label} style={[styles.tag, { backgroundColor: t.bg + 'ea' }]}>
+                <Text style={[styles.tagText, { color: t.color }]}>{t.label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {item.condition && !item.isBoosted && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
           </View>
@@ -123,85 +144,88 @@ export default function ProductCard({
           </TouchableOpacity>
         )}
       </View>
-      {tags.length > 0 && (
-        <View style={styles.tagsRow}>
-          {tags.map((t) => (
-            <View key={t.label} style={[styles.tag, { backgroundColor: t.bg }]}>
-              <Text style={[styles.tagText, { color: t.color }]}>{t.label}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-      <Text style={styles.title} numberOfLines={2}>
-        {item.title}
-      </Text>
-      {showPrice && (hasDiscount ? (
-        <View style={styles.priceRow}>
+      <View style={styles.infoZone}>
+        {showPrice && (hasDiscount ? (
+          <View style={styles.priceRow}>
+            <Text
+              style={[styles.price, { color: colors.error }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}>
+              {finalPrice}
+            </Text>
+            <Text style={styles.priceOriginal}>
+              {item.price}
+            </Text>
+          </View>
+        ) : (
           <Text
-            style={[styles.price, { color: colors.error }]}
+            style={[styles.price, accentColor ? { color: accentColor } : null]}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.85}>
-            {finalPrice}
-          </Text>
-          <Text style={styles.priceOriginal} numberOfLines={1}>
             {item.price}
           </Text>
-        </View>
-      ) : (
-        <Text
-          style={[styles.price, accentColor ? { color: accentColor } : null]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}>
-          {item.price}
+        ))}
+        <Text style={styles.title} numberOfLines={2}>
+          {item.title}
         </Text>
-      ))}
-      {(item.location || item.postedAgo) && (
-        <View style={styles.locationRow}>
-          {item.location && (
-            <>
-              <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-              <Text style={styles.location} numberOfLines={1}>
-                {item.location}
-              </Text>
-            </>
-          )}
-          {item.location && item.postedAgo && (
-            <Text style={styles.metaDot}>·</Text>
-          )}
-          {item.postedAgo && (
-            <>
-              <Clock size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-              <Text style={styles.location} numberOfLines={1}>
-                {item.postedAgo}
-              </Text>
-            </>
-          )}
-        </View>
-      )}
-      {item.seller && (
-        <TouchableOpacity
-          style={styles.sellerRow}
-          activeOpacity={0.7}
-          onPress={(e) => {
-            e.stopPropagation();
-            user?.id === item.sellerId ? router.push('/(tabs)/profile')  : router.push(`/user/${item.sellerId}`)  
-          }}>
-          {item.avatar && <Image source={{ uri: item.avatar }} style={styles.avatar} />}
-          <Text style={styles.sellerName} numberOfLines={1}>
-            {item.seller}
-          </Text>
-          {item.verified && (
-            <BadgeCheck
-              size={12}
-              color="#ffffff"
-              style={styles.verified}
-              fill={colors.primary}
-            />
-          )}
-        </TouchableOpacity>
-      )}
+        {(item.location || item.postedAgo) && (
+          <View style={styles.locationRow}>
+            {item.location && (
+              <>
+                <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+                <Text style={styles.location} numberOfLines={1}>
+                  {item.location}
+                </Text>
+              </>
+            )}
+            {item.location && item.postedAgo && (
+              <Text style={styles.metaDot}>·</Text>
+            )}
+            {item.postedAgo && (
+              <>
+                <Clock size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+                <Text style={styles.location} numberOfLines={1}>
+                  {item.postedAgo}
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+        {item.seller && (
+          <TouchableOpacity
+            style={styles.sellerRow}
+            activeOpacity={0.7}
+            onPress={(e) => {
+              e.stopPropagation();
+              user?.id === item.sellerId ? router.push('/(tabs)/profile')  : router.push(`/user/${item.sellerId}`)
+            }}>
+            {item.avatar && <Image source={{ uri: item.avatar }} style={styles.avatar} />}
+            <Text style={styles.sellerName} numberOfLines={1}>
+              {item.seller}
+            </Text>
+            {item.sellerPlan === 'PREMIUM' && (
+              <View style={styles.planBadgePremium}>
+                <Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+              </View>
+            )}
+            {item.sellerPlan === 'STAR' && (
+              <View style={styles.planBadgeStar}>
+                <Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+              </View>
+            )}
+            {item.verified && (
+              <BadgeCheck
+                size={12}
+                color="#ffffff"
+                style={styles.verified}
+                fill={colors.primary}
+              />
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -228,7 +252,7 @@ const makeStyles = (colors: ThemeColors) =>
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: colors.outlineVariant + '4d',
-    marginBottom: 8,
+    marginBottom: 10,
     position: 'relative',
     backgroundColor: colors.surfaceContainerLow,
   },
@@ -262,24 +286,6 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
     letterSpacing: 0.3,
   },
-  soldOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  soldBadge: {
-    backgroundColor: colors.error,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  soldBadgeText: {
-    fontFamily: 'Manrope-Bold',
-    fontSize: 12,
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
   discountBadge: {
     position: 'absolute',
     top: 8,
@@ -296,11 +302,15 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
     letterSpacing: 0.3,
   },
-  tagsRow: {
+  tagsOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
-    marginBottom: 4,
+    maxWidth: '70%',
+    zIndex: 8,
   },
   tag: {
     paddingHorizontal: 7,
@@ -311,6 +321,10 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     fontSize: 10,
   },
+  infoZone: {
+    flexGrow: 1,
+    gap: 4,
+  },
   title: {
     fontFamily: 'Manrope-Regular',
     fontSize: 15,
@@ -320,13 +334,15 @@ const makeStyles = (colors: ThemeColors) =>
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   price: {
-    fontFamily: 'Manrope-SemiBold',
-    fontSize: 15,
+    fontFamily: 'Manrope-Bold',
+    fontSize: 16,
     color: colors.primary,
-    lineHeight: 20,
+    lineHeight: 22
   },
   priceOriginal: {
     fontFamily: 'Manrope-Regular',
@@ -338,7 +354,6 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
   },
   location: {
     fontFamily: 'Manrope-Regular',
@@ -355,9 +370,8 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 12,
-    marginBottom: 12,
-    paddingTop: 8,
+    paddingTop: 6,
+    marginBottom: 6,
     borderTopWidth: 0.5,
     borderTopColor: colors.outlineVariant + '33',
   },
@@ -370,7 +384,7 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     fontSize: 11,
     color: colors.onSurfaceVariant,
-    flex: 1,
+    
   },
   badge: {
     position: "absolute",
@@ -394,5 +408,40 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+  },
+  boostedBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    zIndex: 9,
+  },
+  boostedText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 9,
+    color: '#ffffff',
+    letterSpacing: 0.4,
+  },
+  planBadgeStar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#F5A623',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planBadgePremium: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
