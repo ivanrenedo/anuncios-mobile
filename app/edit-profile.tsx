@@ -23,7 +23,6 @@ import {
   Mail,
   Phone,
   FileText,
-  Image as ImageIcon,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';

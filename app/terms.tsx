@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
+import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
 
 const LAST_UPDATED = '8 de julio de 2026';
 
@@ -61,7 +62,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '11. Contacto',
-    body: 'Para cualquier consulta sobre estos Términos y Condiciones, puedes contactarnos en:\n\n• Email: soporte@marketeg.com\n• WhatsApp: +240 222 000 000',
+    body: `Para cualquier consulta sobre estos Términos y Condiciones, puedes contactarnos en:\n\n• Email: ${EMAIL}\n• Contacto: ${WHATSAPP_NUMBER}`,
   },
 ];
 

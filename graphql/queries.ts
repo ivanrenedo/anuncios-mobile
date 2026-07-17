@@ -59,6 +59,7 @@ export const GET_PRODUCTS = gql`
         avatarUrl
         verified
         plan
+        effectivePlan
         location
       }
       category {
@@ -134,6 +135,7 @@ export const GET_PRODUCT = gql`
         avatarUrl
         verified
         plan
+        effectivePlan
         location
         bio
         phone
@@ -213,6 +215,7 @@ export const SEARCH_PRODUCTS = gql`
         avatarUrl
         verified
         plan
+        effectivePlan
         location
       }
       category {
@@ -263,6 +266,7 @@ export const PRODUCTS_BY_CATEGORY = gql`
         avatarUrl
         verified
         plan
+        effectivePlan
       }
       category {
         id
@@ -397,6 +401,7 @@ export const MY_FAVORITES = gql`
           avatarUrl
           verified
           plan
+          effectivePlan
         }
         category {
           id
@@ -464,6 +469,7 @@ export const GET_FOLLOWERS = gql`
         verified
         location
         plan
+        effectivePlan
       }
     }
   }
@@ -481,6 +487,7 @@ export const GET_FOLLOWING = gql`
         verified
         location
         plan
+        effectivePlan
       }
     }
   }
@@ -562,6 +569,7 @@ export const GET_HOME_SECTIONS = gql`
           avatarUrl
           verified
           plan
+          effectivePlan
         }
         category {
           id
@@ -621,6 +629,7 @@ export const GET_SECTION_PRODUCTS = gql`
         avatarUrl
         verified
         plan
+        effectivePlan
       }
       category {
         id
@@ -662,6 +671,7 @@ export const GET_USER = gql`
       verified
       plan
       planExpiresAt
+      effectivePlan
       language
       showEmail
       showPhone

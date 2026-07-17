@@ -36,74 +36,6 @@ interface Slide {
   linkValue?: string;
 }
 
-const DEFAULT_SLIDES: Slide[] = [
-  {
-    id: '1',
-    badge: 'PROMO',
-    badgeColor: colors.primary,
-    title: 'Ofertas de Verano',
-    subtitle: 'Hasta 40% de descuento en electrónica',
-    buttonLabel: 'Ver ofertas',
-    buttonTextColor: colors.primary,
-    image:
-      'https://images.pexels.com/photos/356056/pexels-photo-356056.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-  {
-    id: '2',
-    badge: 'NUEVO',
-    badgeColor: colors.secondary,
-    title: 'Apple Event 2024',
-    subtitle: 'Reserva ya los nuevos dispositivos',
-    buttonLabel: 'Descubrir',
-    buttonTextColor: colors.secondary,
-    image:
-      'https://images.pexels.com/photos/788946/pexels-photo-788946.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-  {
-    id: '3',
-    badge: 'VEHÍCULOS',
-    badgeColor: colors.tertiary,
-    title: 'Tu próximo coche',
-    subtitle: 'Más de 200 anuncios verificados en Malabo y Bata',
-    buttonLabel: 'Explorar',
-    buttonTextColor: colors.tertiary,
-    image:
-      'https://images.pexels.com/photos/170811/pexels-photo-170811.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-  {
-    id: '4',
-    badge: 'MODA',
-    badgeColor: colors.error,
-    title: 'Tendencias de la semana',
-    subtitle: 'Ropa, zapatillas y accesorios al mejor precio',
-    buttonLabel: 'Ver moda',
-    buttonTextColor: colors.error,
-    image:
-      'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-  {
-    id: '5',
-    badge: 'SERVICIOS',
-    badgeColor: colors.primary,
-    title: 'Profesionales cerca de ti',
-    subtitle: 'Reparación, mudanzas y mucho más, todo verificado',
-    buttonLabel: 'Contratar',
-    buttonTextColor: colors.primary,
-    image:
-      'https://images.pexels.com/photos/3760529/pexels-photo-3760529.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-  {
-    id: '6',
-    badge: 'HOGAR',
-    badgeColor: colors.secondary,
-    title: 'Renueva tu espacio',
-    subtitle: 'Mobiliario y decoración con envío local',
-    buttonLabel: 'Ver hogar',
-    buttonTextColor: colors.secondary,
-    image:
-      'https://images.pexels.com/photos/1080721/pexels-photo-1080721.jpeg?auto=compress&cs=tinysrgb&w=800',
-  },
-];
 
 interface PromoCarouselProps {
   config?: any;
@@ -114,7 +46,7 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
   const router = useRouter();
   const slides: Slide[] = (config?.slides as Slide[] | undefined)?.length
     ? config.slides
-    : DEFAULT_SLIDES;
+    : null;
 
   const handleSlidePress = (slide: Slide) => {
     const value = slide.linkValue?.trim();
@@ -255,7 +187,7 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
                 </View>
                 <Text style={styles.title}>{slide.title}</Text>
                 <Text style={styles.subtitle}>{slide.subtitle}</Text>
-                <TouchableOpacity
+                {slide.buttonLabel.length > 0 &&(<TouchableOpacity
                   style={styles.button}
                   activeOpacity={0.85}
                   onPress={() => handleSlidePress(slide)}>
@@ -263,7 +195,7 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
                     style={[styles.buttonText, { color: slide.buttonTextColor }]}>
                     {slide.buttonLabel}
                   </Text>
-                </TouchableOpacity>
+                </TouchableOpacity>)}
               </Animated.View>
             </Animated.View>
           );

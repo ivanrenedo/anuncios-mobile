@@ -2,7 +2,6 @@ import React, { useRef, useCallback } from 'react';
 import {
   Pressable,
   Animated,
-  View,
   StyleSheet,
   Platform,
   ViewStyle,

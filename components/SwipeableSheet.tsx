@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles, type ThemeColors } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -29,7 +29,6 @@ export default function SwipeableSheet({
   children,
 }: SwipeableSheetProps) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;

@@ -152,7 +152,6 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     setDeletingId(id);
     try { await apiRemove(id); } finally { setDeletingId(null); }
   };
-  const markRead = (id: string) => { apiMarkRead(id); };
 
   const handleNotifPress = (notif: Notif) => {
     if (!notif.read) apiMarkRead(notif.id);

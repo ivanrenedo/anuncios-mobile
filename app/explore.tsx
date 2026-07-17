@@ -77,11 +77,12 @@ function toExploreItem(p: any) {
     description: p.description || '',
     price: fmtPrice(Number(p.price)),
     priceRaw: Number(p.price),
+    condition: p.condition,
     location: p.city || '',
     seller: p.seller?.name || '',
     sellerId: p.seller?.id,
     verified: p.seller?.verified ?? false,
-    sellerPlan: p.seller?.plan,
+    sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan ?? 'FREE',
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     avatar: p.seller?.avatarUrl || '',
     category: p.category?.label || '',
@@ -440,6 +441,10 @@ export default function ExploreScreen() {
     visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.title.localeCompare(b.title));
   else if (sortOrder === 'za')
     visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.title.localeCompare(a.title));
+  else if (sortOrder === 'price_asc')
+    visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.priceRaw - b.priceRaw);
+  else if (sortOrder === 'price_desc')
+    visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.priceRaw - a.priceRaw);
 
   const pairs: any[][] = [];
   for (let i = 0; i < visibleProducts.length; i += 2)

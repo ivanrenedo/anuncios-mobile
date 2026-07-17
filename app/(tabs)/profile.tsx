@@ -58,6 +58,7 @@ import SettingsModal, { Row, Section } from '@/components/SettingsModal';
 import { useProfile, useDeleteAccount } from '@/hooks/useProfile';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductsBySeller, useDeleteProduct, useMyViewsDaily } from '@/hooks/useProducts';
+import { useCategoryTree, useCategoryRootMap, withAlpha } from '@/hooks/useCategories';
 import { useReviewsBySeller, useSellerRating } from '@/hooks/useReviews';
 import { useFollowers, useFollowing, useFollowersCount, useFollowingCount } from '@/hooks/useFollowers';
 import { API_URL } from '@/lib/config';
@@ -131,6 +132,7 @@ export default function ProfileScreen() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productPageSize, setProductPageSize] = useState(10);
+  const [productCategoryId, setProductCategoryId] = useState<string | null>(null);
   const [followerSearch, setFollowerSearch] = useState('');
   const [followerPageSize, setFollowerPageSize] = useState(10);
   const [followerSort, setFollowerSort] = useState<'recent' | 'oldest'>('recent');
@@ -161,7 +163,7 @@ export default function ProfileScreen() {
     share({ type: 'profile', id: userId, name: profile?.name ?? 'este vendedor' });
 
   const { request: verificationRequest, refetch: refetchVerification } = useVerificationRequest();
-  const { requestVerification, loading: requestingVerification } = useRequestVerification();
+  const { requestVerification } = useRequestVerification();
 
   const confirmDelete = (id: string, title: string) => {
     Alert.alert(
@@ -182,13 +184,19 @@ export default function ProfileScreen() {
     );
   };
 
+  const { tree: categoryTree } = useCategoryTree();
+  const categoryRootMap = useCategoryRootMap(categoryTree);
+
   const productItems = myProducts.map((p: any) => {
     const img = p.images?.[0]?.url || '';
+    const catId = p.category?.id as string | undefined;
     return {
       id: p.id,
       title: p.title,
       price: fmtPrice(Number(p.price)),
+      priceRaw: Number(p.price),
       location: p.city || '',
+      condition: p.condition,
       status: p.status || 'active',
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       postedAgo: timeAgo(p.createdAt),
@@ -197,8 +205,21 @@ export default function ProfileScreen() {
       contacts: Number(p.contacts) || 0,
       impressions: Number(p.impressions) || 0,
       isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
+      categoryRootId: catId ? (categoryRootMap.get(catId) ?? catId) : null,
     };
   });
+
+  // Only render chips for roots the seller actually has listings in — avoids
+  // showing empty categories that just add clutter.
+  const availableCategoryRoots = (() => {
+    const usedRoots = new Set<string>();
+    for (const p of productItems) {
+      if (p.categoryRootId) usedRoots.add(p.categoryRootId);
+    }
+    return (categoryTree as any[])
+      .filter((r) => usedRoots.has(r.id))
+      .map((r) => ({ id: r.id, label: r.label as string, color: r.color as string | undefined }));
+  })();
 
   // Effective plan comes from the server and accounts for expiry — an expired
   // STAR/PREMIUM behaves as FREE. Fall back to raw plan for older backends.
@@ -218,11 +239,12 @@ export default function ProfileScreen() {
   const { daily: viewsDaily } = useMyViewsDaily(hasFullStats);
   const maxDaily = Math.max(1, ...viewsDaily.map((d: any) => d.count));
 
-  const filteredProducts = productSearch.trim()
-    ? productItems.filter((p: any) =>
-        p.title.toLowerCase().includes(productSearch.trim().toLowerCase()),
-      )
-    : productItems;
+  const filteredProducts = productItems.filter((p: any) => {
+    if (productCategoryId && p.categoryRootId !== productCategoryId) return false;
+    const q = productSearch.trim().toLowerCase();
+    if (q && !p.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
   const paginatedProducts = filteredProducts.slice(0, productPageSize);
   const hasMoreProducts = filteredProducts.length > productPageSize;
 
@@ -242,7 +264,7 @@ export default function ProfileScreen() {
     name: f.follower?.name || '',
     avatar: f.follower?.avatarUrl || '',
     verified: f.follower?.verified ?? false,
-    plan: f.follower?.plan || 'FREE',
+    plan: f.follower?.effectivePlan ?? f.follower?.plan ?? 'FREE',
     location: f.follower?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
@@ -254,7 +276,7 @@ export default function ProfileScreen() {
     name: f.followed?.name || '',
     avatar: f.followed?.avatarUrl || '',
     verified: f.followed?.verified ?? false,
-    plan: f.followed?.plan || 'FREE',
+    plan: f.followed?.effectivePlan ?? f.followed?.plan ?? 'FREE',
     location: f.followed?.location || '',
     since: f.createdAt ? timeAgo(f.createdAt) : '',
     createdAt: f.createdAt || '',
@@ -483,13 +505,13 @@ export default function ProfileScreen() {
                 <Text style={styles.verifiedChipText}>Verificado</Text>
               </View>
             )}
-            {profile.plan === 'STAR' && (
+            {effectivePlan === 'STAR' && (
               <View style={styles.planChipStar}>
                 <Star size={11} color="#F5A623" strokeWidth={2} fill="#F5A623" />
                 <Text style={styles.planChipStarText}>Estrella</Text>
               </View>
             )}
-            {profile.plan === 'PREMIUM' && (
+            {effectivePlan === 'PREMIUM' && (
               <View style={styles.planChipPremium}>
                 <Crown size={11} color="#7C3AED" strokeWidth={2} fill="#7C3AED" />
                 <Text style={styles.planChipPremiumText}>Premium</Text>
@@ -624,7 +646,7 @@ export default function ProfileScreen() {
                 )}
                 {hasFullStats && topProduct && topProduct.views > 0 && (
                   <View style={styles.statsTopRow}>
-                    <Text style={styles.statsTopText} numberOfLines={1}>
+                    <Text style={styles.statsTopText}>
                       Más visto: <Text style={styles.statsTopName}>{topProduct.title}</Text>
                       {' '}({fmtNumber(topProduct.views)} visitas)
                     </Text>
@@ -920,17 +942,17 @@ export default function ProfileScreen() {
         ) : null}
 
         {/* Plan upgrade banner */}
-        {profile.plan !== 'PREMIUM' && (
+        {effectivePlan !== 'PREMIUM' && (
           <View style={styles.upgradeBanner}>
             <View style={styles.upgradeBannerIcon}>
               <Zap size={22} color="#ffffff" strokeWidth={1.8} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.upgradeBannerTitle}>
-                {profile.plan === 'FREE' ? 'Haz crecer tu negocio' : 'Pasa a Premium'}
+                {effectivePlan === 'FREE' ? 'Haz crecer tu negocio' : 'Pasa a Premium'}
               </Text>
               <Text style={styles.upgradeBannerDesc}>
-                {profile.plan === 'FREE'
+                {effectivePlan === 'FREE'
                   ? 'Más anuncios, insignias y visibilidad desde 3.000 XAF/mes'
                   : 'Anuncios ilimitados, prioridad en portada y estadísticas completas'}
               </Text>
@@ -1011,7 +1033,7 @@ export default function ProfileScreen() {
           <Row
             icon={CreditCard}
             label="Mi plan"
-            value={profile.plan === 'FREE' ? 'Gratis' : profile.plan === 'STAR' ? 'Estrella' : 'Premium'}
+            value={effectivePlan === 'FREE' ? 'Gratis' : effectivePlan === 'STAR' ? 'Estrella' : 'Premium'}
             onPress={() => router.push('/plans')}
             last
           />
@@ -1056,7 +1078,7 @@ export default function ProfileScreen() {
         visible={allProductsOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
+        onRequestClose={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); setProductCategoryId(null); }}>
         <View style={[styles.allProductsModal, { paddingTop: insets.top }]}>
           <View style={styles.allProductsHeader}>
             <Text style={styles.allProductsTitle}>
@@ -1065,7 +1087,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.allProductsClose}
               activeOpacity={0.7}
-              onPress={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
+              onPress={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); setProductCategoryId(null); }}>
               <X size={20} color={colors.onSurface} strokeWidth={1.8} />
             </TouchableOpacity>
           </View>
@@ -1084,14 +1106,77 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
           </View>
+          {availableCategoryRoots.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={styles.categoryChipsRow}>
+              {(() => {
+                const allActive = productCategoryId === null;
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setProductCategoryId(null); setProductPageSize(10); }}
+                    style={[
+                      styles.categoryChip,
+                      allActive && {
+                        borderColor: colors.primary,
+                        backgroundColor: withAlpha(colors.primary, '14'),
+                      },
+                    ]}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.categoryChipText,
+                        allActive && { color: colors.primary, fontFamily: 'Manrope-SemiBold' },
+                      ]}>
+                      Todas
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
+              {availableCategoryRoots.map((cat) => {
+                const active = productCategoryId === cat.id;
+                const accent = cat.color || colors.primary;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    activeOpacity={0.8}
+                    onPress={() => { setProductCategoryId(cat.id); setProductPageSize(10); }}
+                    style={[
+                      styles.categoryChip,
+                      active && {
+                        borderColor: accent,
+                        backgroundColor: withAlpha(accent, '14'),
+                      },
+                    ]}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.categoryChipText,
+                        active && { color: accent, fontFamily: 'Manrope-SemiBold' },
+                      ]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
           <ScrollView
+            style={{ flex: 1 }}
             contentContainerStyle={styles.allProductsGrid}
             showsVerticalScrollIndicator={false}>
             {paginatedProducts.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
                 <Text style={styles.emptyText}>
-                  {productSearch.trim() ? 'Sin resultados' : 'Sin anuncios publicados'}
+                  {productSearch.trim()
+                    ? 'Sin resultados'
+                    : productCategoryId
+                    ? 'Sin anuncios en esta categoría'
+                    : 'Sin anuncios publicados'}
                 </Text>
               </View>
             ) : (
@@ -2010,6 +2095,32 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.onSurface,
     padding: 0,
   },
+  categoryChipsRow: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  categoryChip: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant + '80',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  categoryChipText: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 13,
+    lineHeight: 16,
+    color: colors.onSurfaceVariant,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
   loadMoreBtn: {
     alignItems: 'center',
     paddingVertical: 14,
@@ -2645,6 +2756,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 10,
   },
   statsTopText: {
+    flexWrap: 'wrap',
     fontFamily: 'Manrope-Regular',
     fontSize: 12,
     color: colors.onSurfaceVariant,

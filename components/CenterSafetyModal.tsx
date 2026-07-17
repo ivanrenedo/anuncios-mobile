@@ -8,7 +8,6 @@ import {
   Animated,
   Dimensions,
   PanResponder,
-  Linking,
 } from 'react-native';
 import { ShieldCheck, Phone, AlertTriangle, Flag, Lock } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

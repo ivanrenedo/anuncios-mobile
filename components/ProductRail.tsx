@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -140,7 +140,7 @@ export default function ProductRail({
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   section: {
-    marginBottom: 32,
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',
@@ -181,6 +181,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   scrollContent: {
     paddingHorizontal: 16,
+    marginVertical: 16,
     gap: RAIL_GAP,
   },
 });

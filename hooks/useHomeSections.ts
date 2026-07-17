@@ -20,6 +20,8 @@ export interface HomeSectionProduct {
     avatarUrl?: string;
     verified?: boolean;
     plan?: string;
+    effectivePlan?: string;
+    sellerPlan?: string;
   };
   category?: { id: string; slug: string; label: string; color?: string };
   images?: { id: string; url: string; sortOrder: number }[];

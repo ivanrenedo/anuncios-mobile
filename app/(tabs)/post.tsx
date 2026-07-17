@@ -113,9 +113,15 @@ const CONDITIONS_FULL = [
   'Sin abrir',
   'Nuevo',
   'Como nuevo',
-  'En buen estado',
+  'Buen estado',
   'aceptable',
   'Lo ha dado todo',
+];
+
+const CONDITIONS_VEHICLE = [
+  'Nuevo',
+  'Buen estado',
+  'Para piezas',
 ];
 
 const PROPERTY_CONDITIONS = ['Obra nueva', 'Buen estado', 'A reformar'];
@@ -512,7 +518,6 @@ function KindPicker({
   insets: { top: number; bottom: number };
   onPick: (k: Kind) => void;
 }) {
-  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
     <ScrollView
@@ -803,7 +808,7 @@ function VehiculoForm({ form, setField, showErrors }: FormProps) {
         </Field>
         <Field label="Estado" required error={e && !form.condition} style={{ flex: 1 }}>
           <Select
-            options={CONDITIONS_FULL}
+            options={CONDITIONS_VEHICLE}
             value={form.condition}
             onChange={(v) => setField('condition', v)}
             placeholder="Estado"

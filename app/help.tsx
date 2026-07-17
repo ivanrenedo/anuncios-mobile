@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +21,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
+import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
 
 interface FaqItem {
   q: string;
@@ -157,7 +157,7 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
     items: [
       {
         q: '¿Cómo contacto al equipo de Market EG?',
-        a: 'Puedes escribirnos por email a soporte@marketeg.com o por WhatsApp al +240 222 000 000. Respondemos de lunes a viernes, de 9:00 a 18:00.',
+        a: `Puedes escribirnos por email a ${EMAIL} o por contacto al ${WHATSAPP_NUMBER}. Respondemos de lunes a viernes, de 9:00 a 18:00.`,
       },
       {
         q: '¿Cuánto tardan en responder?',

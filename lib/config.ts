@@ -23,6 +23,7 @@ export const SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL ?? API_URL;
 // Business WhatsApp number for manual payment flows (plans, boosts).
 // Single source of truth — update here when the number changes.
 export const WHATSAPP_NUMBER = '240222626418';
+export const EMAIL = 'digitalcorps365@gmail.com';
 
 /** Resolve a possibly-relative image URL coming from the backend. */
 export function resolveImage(url?: string | null): string | undefined {

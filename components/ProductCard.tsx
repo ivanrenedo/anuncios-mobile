@@ -84,7 +84,7 @@ export default function ProductCard({
   if (item.operation) tags.push({ label: item.operation, bg: '#E1F5EE', color: '#0F6E56' });
   if (item.offerType) tags.push({ label: item.offerType, bg: '#EEEDFE', color: '#534AB7' });
   if (item.categoryLabel) tags.push({ label: item.categoryLabel, bg: '#E6F1FB', color: '#185FA5' });
-  
+ 
   // Option A boost design: badges stack below the "Destacado" pill, so every
   // top-left overlay shifts one slot down per layer above it.
   const overlayLayers =
@@ -92,7 +92,7 @@ export default function ProductCard({
 
   return (
     <TouchableOpacity
-      style={[width ? { width } : styles.flex, style]}
+      style={[width ? { width } : styles.flex, item.isBoosted && styles.isBoosted, style ]}
       activeOpacity={0.92}
       onPress={onPress}>
       <View style={styles.imageWrap}>
@@ -122,7 +122,7 @@ export default function ProductCard({
             ))}
           </View>
         )}
-        {item.condition && !item.isBoosted && (
+        {item.condition && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
           </View>
@@ -210,7 +210,7 @@ export default function ProductCard({
                 <Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
               </View>
             )}
-            {item.sellerPlan === 'STAR' && (
+            {item.sellerPlan === 'STAR' && ( 
               <View style={styles.planBadgeStar}>
                 <Star size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
               </View>
@@ -245,8 +245,10 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   flex: {
     flex: 1,
+    width: '100%'
   },
   imageWrap: {
+    width: '100%',
     aspectRatio: 1,
     borderRadius: 16,
     overflow: 'hidden',
@@ -324,6 +326,8 @@ const makeStyles = (colors: ThemeColors) =>
   infoZone: {
     flexGrow: 1,
     gap: 4,
+    paddingHorizontal: 6,
+    paddingBottom: 2
   },
   title: {
     fontFamily: 'Manrope-Regular',
@@ -354,6 +358,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexWrap: 'wrap'
   },
   location: {
     fontFamily: 'Manrope-Regular',
@@ -444,4 +449,9 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  isBoosted: {
+    boxShadow: '#7C3AED 0px 1px 1px, #7C3AED 0px 0px 1px 1px',
+    borderRadius: 16,
+    position: 'relative',
+  }
 });

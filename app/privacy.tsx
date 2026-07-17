@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
+import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
 
 const LAST_UPDATED = '8 de julio de 2026';
 
@@ -21,7 +22,7 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     title: '1. Responsable del tratamiento',
-    body: 'El responsable del tratamiento de tus datos personales es Market EG, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en soporte@marketeg.com.',
+    body: `El responsable del tratamiento de tus datos personales es Market EG, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en ${EMAIL}`,
   },
   {
     title: '2. Datos que recopilamos',
@@ -45,7 +46,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '7. Tus derechos',
-    body: 'Como usuario, tienes derecho a:\n\n• Acceso: consultar qué datos tenemos sobre ti. Tu perfil y contenido son visibles desde la app.\n• Rectificación: modificar tus datos en cualquier momento desde "Editar perfil".\n• Eliminación: borrar tu cuenta y todos tus datos desde la sección "Cuenta" en tu perfil. La eliminación es permanente e irreversible.\n• Portabilidad: solicitar una copia de tus datos contactando con soporte.\n• Oposición: desactivar las notificaciones desde los ajustes de la app.\n\nPara ejercer cualquiera de estos derechos, contacta con nosotros en soporte@marketeg.com.',
+    body: `Como usuario, tienes derecho a:\n\n• Acceso: consultar qué datos tenemos sobre ti. Tu perfil y contenido son visibles desde la app.\n• Rectificación: modificar tus datos en cualquier momento desde "Editar perfil".\n• Eliminación: borrar tu cuenta y todos tus datos desde la sección "Cuenta" en tu perfil. La eliminación es permanente e irreversible.\n• Portabilidad: solicitar una copia de tus datos contactando con soporte.\n• Oposición: desactivar las notificaciones desde los ajustes de la app.\n\nPara ejercer cualquiera de estos derechos, contacta con nosotros en ${EMAIL}`,
   },
   {
     title: '8. Cookies y tecnologías similares',
@@ -61,7 +62,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '11. Contacto',
-    body: 'Para cualquier consulta sobre esta Política de Privacidad o el tratamiento de tus datos:\n\n• Email: soporte@marketeg.com\n• WhatsApp: +240 222 000 000',
+    body: `Para cualquier consulta sobre esta Política de Privacidad o el tratamiento de tus datos:\n\n• Email: ${EMAIL}\n• Contacto: ${WHATSAPP_NUMBER}`,
   },
 ];
 

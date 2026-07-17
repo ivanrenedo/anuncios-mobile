@@ -56,7 +56,7 @@ function toCardItem(p: any): ProductCardItem {
     sellerId: p.seller?.id,
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
-    sellerPlan: p.seller?.plan,
+    sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -562,7 +562,7 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 8,
     paddingHorizontal: 16,
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 18,
   },
   trustItem: {
     flex: 1,

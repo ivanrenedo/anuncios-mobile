@@ -21,7 +21,6 @@ import {
   Share2,
   Star,
   Crown,
-  Shield,
   MapPin,
   Phone,
   Heart,
@@ -36,10 +35,7 @@ import {
   Gauge,
   Fuel,
   Cog,
-  Car,
-  Wrench,
   ExternalLink,
-  Briefcase,
   Eye,
   Clock,
 } from 'lucide-react-native';
@@ -75,7 +71,7 @@ function toCardItem(p: any): ProductCardItem {
     sellerId: p.seller?.id,
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
-    sellerPlan: p.seller?.plan,
+    sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -133,7 +129,7 @@ export default function ProductDetailScreen() {
   };
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const { isAuthenticated, user: me } = useAuth();
-  const { average: sellerAvg, count: sellerReviewCount, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
+  const { average: sellerAvg, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
   const categoryId = apiProduct?.category?.id || '';
   const productTitle = apiProduct?.title || '';
   const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useRelatedProducts(productTitle, categoryId);
@@ -244,7 +240,7 @@ export default function ProductDetailScreen() {
       avatar: apiProduct.seller?.avatarUrl || undefined,
       rating: sellerAvg,
       verified: apiProduct.seller?.verified ?? false,
-      plan: apiProduct.seller?.plan || 'FREE',
+      plan: apiProduct.seller?.effectivePlan ?? apiProduct.seller?.plan ?? 'FREE',
       phone: apiProduct.seller?.phone || undefined
     },
     location: apiProduct.city || 'Guinea Ecuatorial',

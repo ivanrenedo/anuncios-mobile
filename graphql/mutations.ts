@@ -18,16 +18,6 @@ export const LOGOUT = gql`
   }
 `;
 
-export const REFRESH_TOKEN = gql`
-  mutation RefreshToken($token: String!) {
-    refreshToken(token: $token) {
-      accessToken
-      refreshToken
-      user { id name email avatarUrl }
-    }
-  }
-`;
-
 // ─── Push notifications ──────────────────────────────────────────────────────
 
 export const REGISTER_PUSH_TOKEN = gql`

@@ -5,11 +5,10 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Heart, BarChart2, Plus, Search, Bell, ShieldCheck, LogIn } from 'lucide-react-native';
+import { Heart, BarChart2, LogIn } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
 import ProductCard, { ProductCardSkeleton, fmtPrice } from '@/components/ProductCard';
@@ -46,13 +45,14 @@ export default function SavedScreen() {
       title: p.title,
       price: fmtPrice(Number(p.price)),
       priceRaw: Number(p.price),
+      condition: p.condition,
       category: p.category?.label || '',
       categoryLabel: p.category?.label || '',
       seller: p.seller?.name,
       sellerId: p.seller?.id,
       location: p.city,
       verified: p.seller?.verified,
-      sellerPlan: p.seller?.plan,
+      sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
       avatar: p.seller?.avatarUrl,
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       priceValue: Number(p.price),

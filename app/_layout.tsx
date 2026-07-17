@@ -7,7 +7,6 @@ import {
   SafeAreaProvider,
   initialWindowMetrics,
 } from 'react-native-safe-area-context';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts } from 'expo-font';
 import {
   Manrope_400Regular,
@@ -88,8 +87,6 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  useFrameworkReady();
-
   const [fontsLoaded, fontError] = useFonts({
     'Manrope-Regular': Manrope_400Regular,
     'Manrope-SemiBold': Manrope_600SemiBold,
