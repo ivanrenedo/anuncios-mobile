@@ -7,10 +7,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ShoppingBag, ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import RipplePress from '@/components/RipplePress';
+import BrandLogo from '@/components/BrandLogo';
 import Spinner from '@/components/Spinner';
 
 export default function LoginScreen() {
@@ -45,12 +46,12 @@ export default function LoginScreen() {
 
       <View style={styles.content}>
         <View style={styles.logoWrap}>
-          <View style={styles.logoCircle}>
-            <ShoppingBag size={48} color={colors.primary} strokeWidth={1.3} />
-          </View>
+          <BrandLogo size={92} showWordmark={false} />
         </View>
 
-        <Text style={styles.title}>Bienvenido a Market EG</Text>
+        <Text style={styles.title}>
+          Bienvenido a bomell<Text style={{ color: colors.primary }}>.</Text>
+        </Text>
         <Text style={styles.subtitle}>
           Compra y vende entre particulares en Guinea Ecuatorial de forma segura y sencilla.
         </Text>
@@ -121,16 +122,6 @@ const makeStyles = (colors: ThemeColors) =>
     },
     logoWrap: {
       marginBottom: 28,
-    },
-    logoCircle: {
-      width: 110,
-      height: 110,
-      borderRadius: 55,
-      backgroundColor: colors.primary + '0f',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: colors.primary + '18',
     },
     title: {
       fontFamily: 'Manrope-Bold',

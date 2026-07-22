@@ -18,8 +18,8 @@ export function useShare() {
       } else {
         const url = `${SHARE_URL}/u/${target.id}`;
         await Share.share({
-          title: `${target.name} en Market EG`,
-          message: `Mira el perfil de ${target.name} en Market EG\n${url}`,
+          title: `${target.name} en Bomell`,
+          message: `Mira el perfil de ${target.name} en Bomell\n${url}`,
           url,
         });
       }

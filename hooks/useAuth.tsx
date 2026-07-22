@@ -20,7 +20,7 @@ const discovery = {
  * AuthSession request and the initial hydration. It renders no context.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'marketeg' });
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'bomell' });
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {

@@ -120,7 +120,7 @@ export default function VerifyPhoneScreen() {
           <>
             <Text style={styles.title}>Verifica tu teléfono</Text>
             <Text style={styles.subtitle}>
-              Para usar Market EG necesitas verificar tu número de teléfono.
+              Para usar Bomell necesitas verificar tu número de teléfono.
             </Text>
 
             <View style={styles.phoneRow}>

@@ -22,7 +22,7 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     title: '1. Responsable del tratamiento',
-    body: `El responsable del tratamiento de tus datos personales es Market EG, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en ${EMAIL}`,
+    body: `El responsable del tratamiento de tus datos personales es Bomell, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en ${EMAIL}`,
   },
   {
     title: '2. Datos que recopilamos',
@@ -50,15 +50,15 @@ const SECTIONS: Section[] = [
   },
   {
     title: '8. Cookies y tecnologías similares',
-    body: 'Market EG es una aplicación móvil nativa y no utiliza cookies. Sin embargo, utilizamos almacenamiento local en el dispositivo (AsyncStorage) para:\n\n• Mantener tu sesión iniciada.\n• Guardar tus preferencias (tema, idioma, notificaciones).\n• Almacenar datos de perfil en caché para un acceso más rápido.\n\nEstos datos se almacenan únicamente en tu dispositivo y se eliminan al cerrar sesión o desinstalar la app.',
+    body: 'Bomell es una aplicación móvil nativa y no utiliza cookies. Sin embargo, utilizamos almacenamiento local en el dispositivo (AsyncStorage) para:\n\n• Mantener tu sesión iniciada.\n• Guardar tus preferencias (tema, idioma, notificaciones).\n• Almacenar datos de perfil en caché para un acceso más rápido.\n\nEstos datos se almacenan únicamente en tu dispositivo y se eliminan al cerrar sesión o desinstalar la app.',
   },
   {
     title: '9. Menores de edad',
-    body: 'Market EG no está dirigido a menores de 18 años. No recopilamos intencionadamente datos de menores. Si detectamos que un menor se ha registrado, eliminaremos su cuenta y datos asociados.',
+    body: 'Bomell no está dirigido a menores de 18 años. No recopilamos intencionadamente datos de menores. Si detectamos que un menor se ha registrado, eliminaremos su cuenta y datos asociados.',
   },
   {
     title: '10. Modificaciones',
-    body: 'Podemos actualizar esta Política de Privacidad para reflejar cambios en nuestras prácticas o en la legislación aplicable. Los cambios serán efectivos desde su publicación en la aplicación.\n\nTe notificaremos de cambios significativos a través de la app. El uso continuado de Market EG después de una actualización implica la aceptación de la nueva política.',
+    body: 'Podemos actualizar esta Política de Privacidad para reflejar cambios en nuestras prácticas o en la legislación aplicable. Los cambios serán efectivos desde su publicación en la aplicación.\n\nTe notificaremos de cambios significativos a través de la app. El uso continuado de Bomell después de una actualización implica la aceptación de la nueva política.',
   },
   {
     title: '11. Contacto',

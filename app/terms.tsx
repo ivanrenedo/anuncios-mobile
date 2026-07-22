@@ -22,15 +22,15 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     title: '1. Información general',
-    body: 'Market EG es una plataforma de anuncios clasificados que permite a los usuarios de Guinea Ecuatorial publicar, buscar y contactar sobre productos y servicios. Market EG no es parte en las transacciones entre usuarios y actúa únicamente como intermediario tecnológico.\n\nAl registrarte o usar la aplicación, aceptas estos Términos y Condiciones en su totalidad. Si no estás de acuerdo, no utilices la plataforma.',
+    body: 'Bomell es una plataforma de anuncios clasificados que permite a los usuarios de Guinea Ecuatorial publicar, buscar y contactar sobre productos y servicios. Bomell no es parte en las transacciones entre usuarios y actúa únicamente como intermediario tecnológico.\n\nAl registrarte o usar la aplicación, aceptas estos Términos y Condiciones en su totalidad. Si no estás de acuerdo, no utilices la plataforma.',
   },
   {
     title: '2. Registro y cuenta',
-    body: '• Para usar Market EG necesitas crear una cuenta mediante Google Sign-In.\n• Debes proporcionar información veraz y mantenerla actualizada.\n• Eres responsable de la seguridad de tu cuenta y de toda actividad que se realice desde ella.\n• No está permitido crear múltiples cuentas ni compartir tu acceso con terceros.\n• Debes tener al menos 18 años para registrarte.',
+    body: '• Para usar Bomell necesitas crear una cuenta mediante Google Sign-In.\n• Debes proporcionar información veraz y mantenerla actualizada.\n• Eres responsable de la seguridad de tu cuenta y de toda actividad que se realice desde ella.\n• No está permitido crear múltiples cuentas ni compartir tu acceso con terceros.\n• Debes tener al menos 18 años para registrarte.',
   },
   {
     title: '3. Publicación de anuncios',
-    body: '• Los anuncios deben describir productos o servicios reales y disponibles.\n• Las fotos deben corresponder al producto o servicio ofrecido.\n• Los precios deben expresarse en francos CFA (XFA) y reflejar el valor real del artículo.\n• Está prohibido publicar anuncios de productos ilegales, falsificados, robados, armas, drogas, medicamentos sin receta, animales protegidos o cualquier artículo cuya venta esté prohibida por la legislación de Guinea Ecuatorial.\n• Está prohibido publicar contenido ofensivo, discriminatorio, violento o sexual.\n• Market EG se reserva el derecho de eliminar cualquier anuncio que incumpla estas normas sin previo aviso.',
+    body: '• Los anuncios deben describir productos o servicios reales y disponibles.\n• Las fotos deben corresponder al producto o servicio ofrecido.\n• Los precios deben expresarse en francos CFA (XFA) y reflejar el valor real del artículo.\n• Está prohibido publicar anuncios de productos ilegales, falsificados, robados, armas, drogas, medicamentos sin receta, animales protegidos o cualquier artículo cuya venta esté prohibida por la legislación de Guinea Ecuatorial.\n• Está prohibido publicar contenido ofensivo, discriminatorio, violento o sexual.\n• Bomell se reserva el derecho de eliminar cualquier anuncio que incumpla estas normas sin previo aviso.',
   },
   {
     title: '4. Conducta del usuario',
@@ -38,27 +38,27 @@ const SECTIONS: Section[] = [
   },
   {
     title: '5. Transacciones entre usuarios',
-    body: 'Market EG no participa, media ni garantiza las transacciones entre usuarios. No somos responsables de:\n\n• La calidad, seguridad o legalidad de los productos o servicios publicados.\n• La veracidad de los anuncios o la identidad de los usuarios.\n• La capacidad de los vendedores para vender o de los compradores para pagar.\n• Problemas derivados de envíos, entregas o pagos.\n\nTe recomendamos seguir los consejos de seguridad disponibles en el Centro de ayuda antes de realizar cualquier transacción.',
+    body: 'Bomell no participa, media ni garantiza las transacciones entre usuarios. No somos responsables de:\n\n• La calidad, seguridad o legalidad de los productos o servicios publicados.\n• La veracidad de los anuncios o la identidad de los usuarios.\n• La capacidad de los vendedores para vender o de los compradores para pagar.\n• Problemas derivados de envíos, entregas o pagos.\n\nTe recomendamos seguir los consejos de seguridad disponibles en el Centro de ayuda antes de realizar cualquier transacción.',
   },
   {
     title: '6. Propiedad intelectual',
-    body: 'El contenido que publicas (textos, fotos, descripciones) sigue siendo de tu propiedad. Sin embargo, al publicarlo en Market EG, nos otorgas una licencia no exclusiva, gratuita y mundial para mostrarlo, distribuirlo y promocionarlo dentro de la plataforma.\n\nLa marca Market EG, su logotipo, diseño y código son propiedad de sus creadores y están protegidos. No está permitido copiar, modificar ni distribuir ningún elemento de la aplicación sin autorización.',
+    body: 'El contenido que publicas (textos, fotos, descripciones) sigue siendo de tu propiedad. Sin embargo, al publicarlo en Bomell, nos otorgas una licencia no exclusiva, gratuita y mundial para mostrarlo, distribuirlo y promocionarlo dentro de la plataforma.\n\nLa marca Bomell, su logotipo, diseño y código son propiedad de sus creadores y están protegidos. No está permitido copiar, modificar ni distribuir ningún elemento de la aplicación sin autorización.',
   },
   {
     title: '7. Protección de datos',
-    body: 'Market EG recopila y trata los siguientes datos personales:\n\n• Nombre, email y foto de perfil (proporcionados por Google Sign-In).\n• Teléfono, ubicación y biografía (proporcionados voluntariamente).\n• Anuncios publicados, valoraciones y actividad dentro de la app.\n\nUsamos estos datos para el funcionamiento de la plataforma, la comunicación con los usuarios y la mejora del servicio. No vendemos ni compartimos tus datos con terceros para fines comerciales.\n\nPuedes solicitar la eliminación de tus datos eliminando tu cuenta desde la sección "Cuenta" de tu perfil.',
+    body: 'Bomell recopila y trata los siguientes datos personales:\n\n• Nombre, email y foto de perfil (proporcionados por Google Sign-In).\n• Teléfono, ubicación y biografía (proporcionados voluntariamente).\n• Anuncios publicados, valoraciones y actividad dentro de la app.\n\nUsamos estos datos para el funcionamiento de la plataforma, la comunicación con los usuarios y la mejora del servicio. No vendemos ni compartimos tus datos con terceros para fines comerciales.\n\nPuedes solicitar la eliminación de tus datos eliminando tu cuenta desde la sección "Cuenta" de tu perfil.',
   },
   {
     title: '8. Limitación de responsabilidad',
-    body: 'Market EG se proporciona "tal cual", sin garantías de ningún tipo. No garantizamos:\n\n• La disponibilidad ininterrumpida del servicio.\n• La ausencia de errores o vulnerabilidades.\n• Los resultados obtenidos mediante el uso de la plataforma.\n\nEn ningún caso Market EG será responsable de daños directos, indirectos o consecuentes derivados del uso de la plataforma o de transacciones entre usuarios.',
+    body: 'Bomell se proporciona "tal cual", sin garantías de ningún tipo. No garantizamos:\n\n• La disponibilidad ininterrumpida del servicio.\n• La ausencia de errores o vulnerabilidades.\n• Los resultados obtenidos mediante el uso de la plataforma.\n\nEn ningún caso Bomell será responsable de daños directos, indirectos o consecuentes derivados del uso de la plataforma o de transacciones entre usuarios.',
   },
   {
     title: '9. Suspensión y eliminación de cuentas',
-    body: 'Market EG se reserva el derecho de suspender o eliminar cuentas que:\n\n• Incumplan estos Términos y Condiciones.\n• Publiquen contenido ilegal, fraudulento o dañino.\n• Reciban múltiples reportes de otros usuarios.\n• Realicen un uso abusivo de la plataforma.\n\nLa eliminación de una cuenta conlleva la eliminación de todos los datos asociados: anuncios, valoraciones, seguidores y favoritos.',
+    body: 'Bomell se reserva el derecho de suspender o eliminar cuentas que:\n\n• Incumplan estos Términos y Condiciones.\n• Publiquen contenido ilegal, fraudulento o dañino.\n• Reciban múltiples reportes de otros usuarios.\n• Realicen un uso abusivo de la plataforma.\n\nLa eliminación de una cuenta conlleva la eliminación de todos los datos asociados: anuncios, valoraciones, seguidores y favoritos.',
   },
   {
     title: '10. Modificaciones',
-    body: 'Market EG puede modificar estos Términos y Condiciones en cualquier momento. Los cambios serán efectivos desde su publicación en la aplicación. El uso continuado de la plataforma después de un cambio implica la aceptación de los nuevos términos.\n\nTe notificaremos de cambios importantes a través de la aplicación.',
+    body: 'Bomell puede modificar estos Términos y Condiciones en cualquier momento. Los cambios serán efectivos desde su publicación en la aplicación. El uso continuado de la plataforma después de un cambio implica la aceptación de los nuevos términos.\n\nTe notificaremos de cambios importantes a través de la aplicación.',
   },
   {
     title: '11. Contacto',

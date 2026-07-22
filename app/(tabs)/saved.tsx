@@ -87,7 +87,7 @@ export default function SavedScreen() {
     return (
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: insets.top, height: 44 + insets.top }]}>
-          <Text style={styles.headerTitle}>Favoritos</Text>
+          <Text style={styles.headerTitle}>Favoritos</Text> 
         </View>
         <View style={styles.authGate}>
           <View style={styles.authIconWrap}>
@@ -242,9 +242,9 @@ const makeStyles = (colors: ThemeColors) =>
   },
   headerTitle: {
     fontFamily: 'Manrope-Bold',
-    fontSize: 22,
-    color: colors.primary,
-    letterSpacing: -0.3,
+    fontSize: 24,
+    color: colors.onSurface,
+    letterSpacing: -0.4,
   },
   headerBtn: {
     width: 36,

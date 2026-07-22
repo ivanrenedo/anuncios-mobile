@@ -47,7 +47,7 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
       },
       {
         q: '¿Los pagos se hacen dentro de la app?',
-        a: 'No. Market EG es una plataforma de anuncios. Los pagos se acuerdan directamente entre comprador y vendedor. Te recomendamos usar métodos seguros y, si es posible, realizar el intercambio en persona.',
+        a: 'No. Bomell es una plataforma de anuncios. Los pagos se acuerdan directamente entre comprador y vendedor. Te recomendamos usar métodos seguros y, si es posible, realizar el intercambio en persona.',
       },
       {
         q: '¿Cómo sé si un vendedor es de confianza?',
@@ -74,7 +74,7 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
       },
       {
         q: '¿Publicar anuncios tiene algún coste?',
-        a: 'No. Publicar anuncios en Market EG es completamente gratuito.',
+        a: 'No. Publicar anuncios en Bomell es completamente gratuito.',
       },
     ],
   }),
@@ -127,7 +127,7 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
       },
       {
         q: '¿Hay envíos entre ciudades?',
-        a: 'Market EG no gestiona envíos, pero muchos vendedores envían productos entre Malabo y Bata usando servicios de transporte locales. Consulta directamente con el vendedor las opciones disponibles y los costes.',
+        a: 'Bomell no gestiona envíos, pero muchos vendedores envían productos entre Malabo y Bata usando servicios de transporte locales. Consulta directamente con el vendedor las opciones disponibles y los costes.',
       },
     ],
   }),
@@ -156,7 +156,7 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
     color: c.primary,
     items: [
       {
-        q: '¿Cómo contacto al equipo de Market EG?',
+        q: '¿Cómo contacto al equipo de Bomell?',
         a: `Puedes escribirnos por email a ${EMAIL} o por contacto al ${WHATSAPP_NUMBER}. Respondemos de lunes a viernes, de 9:00 a 18:00.`,
       },
       {

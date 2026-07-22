@@ -22,6 +22,7 @@ import ProductRail from '@/components/ProductRail';
 import ProductGrid from '@/components/ProductGrid';
 import NotificationsModal from '@/components/NotificationsModal';
 import RipplePress from '@/components/RipplePress';
+import BrandLogo from '@/components/BrandLogo';
 import Skeleton from '@/components/Skeleton';
 import { ProductCardSkeleton } from '@/components/ProductCard';
 import { useUnreadCount } from '@/hooks/useNotifications';
@@ -202,7 +203,7 @@ export default function HomeScreen() {
             shadowOpacity: headerShadow,
           },
         ]}>
-        <Text style={styles.headerTitle}>Market EG</Text>
+        <BrandLogo size={28} wordmarkSize={20} />
         <View style={styles.headerActions}>
           {isAuthenticated ? (
             <View style={styles.bellWrap}>

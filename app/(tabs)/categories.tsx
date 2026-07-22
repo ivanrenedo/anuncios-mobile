@@ -88,7 +88,7 @@ export default function CategoriesScreen() {
         activeOpacity={0.8}
         onPress={() => goSearch('')}>
         <Search size={16} color={colors.onSurfaceVariant + '99'} strokeWidth={1.8} />
-        <Text style={styles.searchPlaceholder}>Buscar en Market EG</Text>
+        <Text style={styles.searchPlaceholder}>Buscar en Bomell</Text>
       </TouchableOpacity>
 
       {loading && tree.length === 0 ? (

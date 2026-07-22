@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "bolt-expo-nativewind",
+    "name": "Bomell",
     "slug": "bolt-expo-nativewind",
     "owner": "ivanrenedo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "marketeg",
+    "scheme": "bomell",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -15,8 +15,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#006b5e"
       },
       "edgeToEdgeEnable": "true",
       "package": "com.guslift.com",
@@ -38,14 +38,26 @@
       [
         "expo-notifications",
         {
-          "color": "#1f6feb"
+          "color": "#006b5e"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#006b5e",
+          "dark": {
+            "backgroundColor": "#13c1ac"
+          }
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Market EG accede a tus fotos para añadirlas a tus anuncios.",
-          "cameraPermission": "Market EG usa la cámara para que hagas fotos de tus anuncios."
+          "photosPermission": "Bomell accede a tus fotos para añadirlas a tus anuncios.",
+          "cameraPermission": "Bomell usa la cámara para que hagas fotos de tus anuncios."
         }
       ]
     ],

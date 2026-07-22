@@ -542,7 +542,7 @@ export default function ExploreScreen() {
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder="Buscar en Market EG"
+              placeholder="Buscar en Bomell"
               placeholderTextColor={colors.onSurfaceVariant + '99'}
               returnKeyType="search"
             />

@@ -385,7 +385,7 @@ export default function PostScreen() {
           </View>
           <Text style={styles.authTitle}>Publica tu anuncio</Text>
           <Text style={styles.authDesc}>
-            Inicia sesión para publicar anuncios y empezar a vender en Market EG.
+            Inicia sesión para publicar anuncios y empezar a vender en Bomell.
           </Text>
           <RipplePress
             style={styles.authBtn}
