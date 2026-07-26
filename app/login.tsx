@@ -50,7 +50,7 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.title}>
-          Bienvenido a bomell<Text style={{ color: colors.primary }}>.</Text>
+          Bienvenido a bomelh<Text style={{ color: colors.primary }}>.</Text>
         </Text>
         <Text style={styles.subtitle}>
           Compra y vende entre particulares en Guinea Ecuatorial de forma segura y sencilla.

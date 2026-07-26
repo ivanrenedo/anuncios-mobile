@@ -72,6 +72,8 @@ export const GET_PRODUCTS = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
       attributes {
         id
@@ -81,6 +83,7 @@ export const GET_PRODUCTS = gql`
       marketplaceDetail {
         brand
         model
+        colors
       }
       vehicleDetail {
         id
@@ -91,6 +94,7 @@ export const GET_PRODUCTS = gql`
         kilometrage
         transmission
         engine
+        colors
       }
       propertyDetail {
         id
@@ -152,6 +156,8 @@ export const GET_PRODUCT = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
       attributes {
         id
@@ -161,6 +167,7 @@ export const GET_PRODUCT = gql`
       marketplaceDetail {
         brand
         model
+        colors
       }
       vehicleDetail {
         id
@@ -171,6 +178,7 @@ export const GET_PRODUCT = gql`
         kilometrage
         transmission
         engine
+        colors
       }
       propertyDetail {
         id
@@ -228,6 +236,8 @@ export const SEARCH_PRODUCTS = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
       propertyDetail {
         operation
@@ -241,6 +251,7 @@ export const SEARCH_PRODUCTS = gql`
         model
         engine
         transmission
+        colors
       }
     }
   }
@@ -278,6 +289,8 @@ export const PRODUCTS_BY_CATEGORY = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
     }
   }
@@ -333,6 +346,8 @@ export const PRODUCTS_BY_SELLER = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
       vehicleDetail {
         operation
@@ -413,6 +428,8 @@ export const MY_FAVORITES = gql`
           id
           url
           sortOrder
+        type
+        thumbnailUrl
         }
         vehicleDetail {
           operation
@@ -581,6 +598,8 @@ export const GET_HOME_SECTIONS = gql`
           id
           url
           sortOrder
+        type
+        thumbnailUrl
         }
         vehicleDetail {
           operation
@@ -641,6 +660,8 @@ export const GET_SECTION_PRODUCTS = gql`
         id
         url
         sortOrder
+        type
+        thumbnailUrl
       }
       vehicleDetail {
         operation

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
 import { resolveImage } from '@/lib/config';
+import { useAutoplayScroll } from '@/hooks/useAutoplayScroll';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDE_WIDTH = SCREEN_WIDTH - 32;
@@ -69,38 +70,17 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  const indexRef = useRef(0);
-  const userInteractingRef = useRef(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopAutoPlay = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
-
-  const startAutoPlay = () => {
-    stopAutoPlay();
-    if (slides.length < 2) return;
-    intervalRef.current = setInterval(() => {
-      if (userInteractingRef.current) return;
-      const next = (indexRef.current + 1) % slides.length;
-      scrollRef.current?.scrollTo({ x: next * ITEM_WIDTH, animated: true });
-    }, AUTOPLAY_MS);
-  };
-
-  useEffect(() => {
-    startAutoPlay();
-    return () => stopAutoPlay();
-  }, []);
+  const autoplayHandlers = useAutoplayScroll(scrollRef, {
+    itemCount: slides.length,
+    pitch: ITEM_WIDTH,
+    intervalMs: AUTOPLAY_MS,
+  });
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const i = Math.round(e.nativeEvent.contentOffset.x / ITEM_WIDTH);
-    if (i !== indexRef.current) {
-      indexRef.current = i;
-      setActiveIndex(i);
-    }
+    autoplayHandlers.onMomentumScrollEnd(e);
+    const i = autoplayHandlers.indexRef.current;
+    if (i !== activeIndex) setActiveIndex(i);
   };
 
   return (
@@ -116,15 +96,12 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: false }
         )}
-        onScrollBeginDrag={() => {
-          userInteractingRef.current = true;
-        }}
-        onScrollEndDrag={() => {
-          userInteractingRef.current = false;
-        }}
+        onScrollBeginDrag={autoplayHandlers.onScrollBeginDrag}
+        onScrollEndDrag={autoplayHandlers.onScrollEndDrag}
         onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}>
-        {slides.map((slide, i) => {
+        {(slides.length > 1 ? [...slides, slides[0]] : slides).map((slide, i) => {
+          const isClone = slides.length > 1 && i === slides.length;
           const inputRange = [
             (i - 1) * ITEM_WIDTH,
             i * ITEM_WIDTH,
@@ -157,7 +134,7 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
           });
           return (
             <Animated.View
-              key={slide.id}
+              key={isClone ? `${slide.id}-clone` : slide.id}
               style={[styles.slide, { transform: [{ scale }], opacity }]}>
               <Animated.Image
                 source={{ uri: resolveImage(slide.image) }}

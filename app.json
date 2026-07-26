@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Bomell",
+    "name": "Bomelh",
     "slug": "bolt-expo-nativewind",
     "owner": "ivanrenedo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "bomell",
+    "scheme": "bomelh",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -56,8 +56,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Bomell accede a tus fotos para añadirlas a tus anuncios.",
-          "cameraPermission": "Bomell usa la cámara para que hagas fotos de tus anuncios."
+          "photosPermission": "Bomelh accede a tus fotos para añadirlas a tus anuncios.",
+          "cameraPermission": "Bomelh usa la cámara para que hagas fotos de tus anuncios."
         }
       ]
     ],

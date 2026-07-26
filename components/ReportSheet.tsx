@@ -74,7 +74,7 @@ export default function ReportSheet({
       onClose();
       Alert.alert(
         'Reporte enviado',
-        'Gracias por ayudarnos a mantener Bomell seguro. Nuestro equipo lo revisará.'
+        'Gracias por ayudarnos a mantener Bomelh seguro. Nuestro equipo lo revisará.'
       );
     } catch (e) {
       Alert.alert('Error', getErrorMessage(e, 'No se pudo enviar el reporte.'));

@@ -30,6 +30,7 @@
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-system-ui": "~6.0.7",
+    "expo-video-thumbnails": "~10.0.8",
     "expo-web-browser": "~15.0.7",
     "graphql": "^16.14.2",
     "lucide-react-native": "^0.544.0",

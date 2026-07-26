@@ -99,7 +99,7 @@ const PLANS: PlanDef[] = [
 
 function contactWhatsApp(plan: string) {
   const msg = encodeURIComponent(
-    `Hola, me gustaría contratar el plan ${plan} en Bomell. ¿Cómo puedo activarlo?`,
+    `Hola, me gustaría contratar el plan ${plan} en Bomelh. ¿Cómo puedo activarlo?`,
   );
   const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
   Linking.openURL(url).catch(() =>
@@ -304,7 +304,7 @@ export default function PlansScreen() {
           activeOpacity={0.8}
           onPress={() => {
             const msg = encodeURIComponent(
-              'Hola, quiero destacar un anuncio en Bomell durante 7 días (1.000 XAF). ¿Cómo procedo?',
+              'Hola, quiero destacar un anuncio en Bomelh durante 7 días (1.000 XAF). ¿Cómo procedo?',
             );
             Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`).catch(() =>
               Alert.alert('Error', 'No se pudo abrir WhatsApp.'),

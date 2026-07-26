@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { ChevronRight, Clock, Crown, Flame, Heart, Star, Tag, TrendingUp } from 
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductCard, { ProductCardItem, ProductCardSkeleton } from '@/components/ProductCard';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
+import { useAutoplayScroll } from '@/hooks/useAutoplayScroll';
 
 const RAIL_GAP = 12;
 
@@ -68,20 +69,18 @@ export default function ProductRail({
   const iconColor = getIconColor(icon);
 
   const scrollRef = useRef<ScrollView>(null);
-  const indexRef = useRef(0);
-  const userInteractingRef = useRef(false);
   const pitch = cardWidth + RAIL_GAP;
 
-  useEffect(() => {
-    if (!autoplay || items.length < 2) return;
-    indexRef.current = 0;
-    const id = setInterval(() => {
-      if (userInteractingRef.current) return;
-      indexRef.current = (indexRef.current + 1) % items.length;
-      scrollRef.current?.scrollTo({ x: indexRef.current * pitch, animated: true });
-    }, autoplayMs);
-    return () => clearInterval(id);
-  }, [autoplay, autoplayMs, items.length, pitch]);
+  const autoplayHandlers = useAutoplayScroll(scrollRef, {
+    itemCount: items.length,
+    pitch,
+    enabled: !!autoplay,
+    intervalMs: autoplayMs,
+    // Cards are much narrower than the viewport, so the clone position
+    // `itemCount * pitch` would exceed the scrollable range and the wrap
+    // would never trigger. Sweep back to 0 instead.
+    loopMode: 'sweep',
+  });
 
   return (
     <View style={styles.section}>
@@ -110,12 +109,11 @@ export default function ProductRail({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        onScrollBeginDrag={() => {
-          userInteractingRef.current = true;
-        }}
-        onScrollEndDrag={() => {
-          userInteractingRef.current = false;
-        }}>
+        onScrollBeginDrag={autoplayHandlers.onScrollBeginDrag}
+        onScrollEndDrag={autoplayHandlers.onScrollEndDrag}
+        onMomentumScrollEnd={autoplayHandlers.onMomentumScrollEnd}
+        onContentSizeChange={autoplayHandlers.onContentSizeChange}
+        onLayout={autoplayHandlers.onLayout}>
         {loading && items.length === 0
           ? [0, 1, 2, 3].map((i) => (
               <ProductCardSkeleton key={i} width={cardWidth} />

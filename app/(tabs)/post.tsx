@@ -36,6 +36,7 @@ import {
   Eye,
   ImageIcon,
   LogIn,
+  Play,
 } from 'lucide-react-native';
 import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
@@ -45,9 +46,14 @@ import { useProfile } from '@/hooks/useProfile';
 import { useCreateProduct, useUpdateProduct, useProduct, useProductsBySeller } from '@/hooks/useProducts';
 import { useCategoryTree } from '@/hooks/useCategories';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { uploadImages } from '@/lib/upload';
+import {
+  uploadMedia,
+  generateVideoThumbnail,
+  type MediaAsset,
+} from '@/lib/upload';
 import { resolveImage } from '@/lib/config';
 import Spinner from '@/components/Spinner';
+import ColorPicker from '@/components/ColorPicker';
 import { fmtPrice as fmtPriceCompact } from '@/components/ProductCard';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -142,7 +148,7 @@ function getMissingFields(kind: Kind, form: FormState): string[] {
     if (val === undefined || val === null || val === '') missing.push(label);
   };
 
-  if (!form.photos || form.photos.length === 0) missing.push('Fotos');
+  if (!form.media || form.media.length === 0) missing.push('Fotos');
   check(form.categoryId, 'Categoría');
   check(form.title, 'Título');
   check(form.description, 'Descripción');
@@ -179,8 +185,24 @@ function kindFromProduct(product: any): Kind {
 }
 
 function prefillForm(product: any): FormState {
+  const media: MediaAsset[] =
+    product.images
+      ?.slice()
+      .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+      .map((i: any): MediaAsset | null => {
+        const uri = resolveImage(i.url);
+        if (!uri) return null;
+        return {
+          uri,
+          type: i.type === 'video' ? 'video' : 'image',
+          thumbnailUri: i.thumbnailUrl
+            ? resolveImage(i.thumbnailUrl) ?? undefined
+            : undefined,
+        };
+      })
+      .filter(Boolean) ?? [];
   return {
-    photos: product.images?.sort((a: any, b: any) => a.sortOrder - b.sortOrder).map((i: any) => resolveImage(i.url)).filter(Boolean) as string[] ?? [],
+    media,
     categoryId: product.category?.id,
     categoryLabel: product.category?.label,
     title: product.title ?? '',
@@ -191,6 +213,7 @@ function prefillForm(product: any): FormState {
     city: product.city ?? '',
     brand: product.marketplaceDetail?.brand ?? product.vehicleDetail?.brand ?? '',
     model: product.marketplaceDetail?.model ?? product.vehicleDetail?.model ?? '',
+    colors: (product.marketplaceDetail?.colors ?? product.vehicleDetail?.colors ?? []) as string[],
     operation: product.vehicleDetail?.operation ?? product.propertyDetail?.operation ?? '',
     year: product.vehicleDetail?.year ? String(product.vehicleDetail.year) : '',
     kilometrage: product.vehicleDetail?.kilometrage ? String(product.vehicleDetail.kilometrage) : '',
@@ -229,9 +252,13 @@ export default function PostScreen() {
   const publishing = isEdit ? updating : creating;
   const submittingRef = useRef(false);
   const [kind, setKind] = useState<Kind | null>(null);
-  const [form, setForm] = useState<FormState>({ photos: [] });
+  const [form, setForm] = useState<FormState>({ media: [] });
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  // null = not uploading; 0-100 = uploading with that percent. Displayed on
+  // the publish button in the preview modal so users know something's happening
+  // during video uploads (they can take several seconds on mobile connections).
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const editPrefilled = useRef(false);
 
   const setField = (k: string, v: any) =>
@@ -259,7 +286,7 @@ export default function PostScreen() {
         }
         if (kind) {
           setKind(null);
-          setForm({ photos: [] });
+          setForm({ media: [] });
           return true;
         }
         return false;
@@ -270,7 +297,7 @@ export default function PostScreen() {
 
   const reset = () => {
     setKind(null);
-    setForm({ photos: [] });
+    setForm({ media: [] });
     setPreviewOpen(false);
     setShowErrors(false);
     editPrefilled.current = false;
@@ -312,13 +339,13 @@ export default function PostScreen() {
 
     submittingRef.current = true;
     try {
-      let imageUrls: string[] = [];
-      if (form.photos && form.photos.length > 0) {
-        const toUpload = form.photos.filter((p: string) => !/^https?:\/\//.test(p));
-        const existing = form.photos.filter((p: string) => /^https?:\/\//.test(p));
-        const uploaded = toUpload.length > 0 ? await uploadImages(toUpload) : [];
-        imageUrls = [...existing, ...uploaded];
-      }
+      const assets: MediaAsset[] = form.media ?? [];
+      setUploadPct(assets.length > 0 ? 0 : null);
+      const uploaded =
+        assets.length > 0
+          ? await uploadMedia(assets, { onProgress: setUploadPct })
+          : [];
+      setUploadPct(null);
 
       const input: any = {
         title: form.title || 'Sin título',
@@ -327,13 +354,20 @@ export default function PostScreen() {
         description: form.description,
         condition: form.condition,
         city: form.city,
-        imageUrls,
+        mediaItems: uploaded,
       };
 
       if (form.categoryId) input.categoryId = form.categoryId;
 
-      if (kind === 'MarketPlace' && (form.brand || form.model)) {
-        input.marketplaceDetail = { brand: form.brand || undefined, model: form.model || undefined };
+      const colorsArr: string[] | undefined =
+        Array.isArray(form.colors) && form.colors.length > 0 ? form.colors : undefined;
+
+      if (kind === 'MarketPlace' && (form.brand || form.model || colorsArr)) {
+        input.marketplaceDetail = {
+          brand: form.brand || undefined,
+          model: form.model || undefined,
+          colors: colorsArr,
+        };
       } else if (kind === 'vehiculos') {
         input.vehicleDetail = {
           operation: form.operation || undefined,
@@ -343,6 +377,7 @@ export default function PostScreen() {
           kilometrage: form.kilometrage ? parseInt(form.kilometrage) : undefined,
           transmission: form.transmission || undefined,
           engine: form.engine || undefined,
+          colors: colorsArr,
         };
       } else if (kind === 'inmobiliaria') {
         input.propertyDetail = {
@@ -372,6 +407,7 @@ export default function PostScreen() {
       }
     } catch (err) {
       submittingRef.current = false;
+      setUploadPct(null);
       Alert.alert('Error', getErrorMessage(err, isEdit ? 'No se pudo actualizar el anuncio.' : 'No se pudo publicar el anuncio.'));
     }
   };
@@ -385,7 +421,7 @@ export default function PostScreen() {
           </View>
           <Text style={styles.authTitle}>Publica tu anuncio</Text>
           <Text style={styles.authDesc}>
-            Inicia sesión para publicar anuncios y empezar a vender en Bomell.
+            Inicia sesión para publicar anuncios y empezar a vender en Bomelh.
           </Text>
           <RipplePress
             style={styles.authBtn}
@@ -442,8 +478,8 @@ export default function PostScreen() {
         extraScrollHeight={Platform.OS === 'ios' ? 40 : 80}
         enableOnAndroid>
         <PhotoPicker
-          photos={form.photos ?? []}
-          setPhotos={(p) => setField('photos', p)}
+          media={form.media ?? []}
+          setMedia={(p) => setField('media', p)}
           showErrors={showErrors}
           maxPhotos={profile?.maxImagesPerProduct ?? MAX_PHOTOS}
         />
@@ -501,6 +537,7 @@ export default function PostScreen() {
         onClose={() => setPreviewOpen(false)}
         onPublish={onPublish}
         loading={publishing}
+        uploadPct={uploadPct}
         isEdit={isEdit}
       />
     </View>
@@ -745,6 +782,13 @@ function ProductoForm({ form, setField, showErrors }: FormProps) {
         />
       </Field>
 
+      <Field label="Colores">
+        <ColorField
+          value={form.colors}
+          onChange={(v) => setField('colors', v)}
+        />
+      </Field>
+
       <RowFields>
         <Field label="Precio (XAF)" style={{ flex: 1 }}>
           <Input
@@ -874,6 +918,13 @@ function VehiculoForm({ form, setField, showErrors }: FormProps) {
         />
         </Field>
       </RowFields>
+
+      <Field label="Colores">
+        <ColorField
+          value={form.colors}
+          onChange={(v) => setField('colors', v)}
+        />
+      </Field>
 
       <RowFields>
         <Field label="Precio (XAF)" style={{ flex: 1 }}>
@@ -1122,14 +1173,21 @@ function EmpleoForm({ form, setField, showErrors }: FormProps) {
 // Preview modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getPreviewFields(
-  kind: Kind,
-  form: FormState
-): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = [];
+type PreviewField = { label: string; value: string; swatches?: string[] };
+
+function getPreviewFields(kind: Kind, form: FormState): PreviewField[] {
+  const out: PreviewField[] = [];
   const add = (label: string, raw: unknown) => {
     if (raw === undefined || raw === null || raw === '') return;
     out.push({ label, value: String(raw) });
+  };
+  const addColors = (raw: unknown) => {
+    if (!Array.isArray(raw) || raw.length === 0) return;
+    out.push({
+      label: raw.length === 1 ? 'Color' : 'Colores',
+      value: raw.join(', '),
+      swatches: raw as string[],
+    });
   };
   const fmtPrice = (v: unknown) =>
     v ? fmtPriceCompact(Number(v)) : undefined;
@@ -1142,6 +1200,7 @@ function getPreviewFields(
       add('Marca', form.brand);
       add('Modelo', form.model);
       add('Estado', form.condition);
+      addColors(form.colors);
       add('Precio', fmtPrice(form.price));
       add('Descuento', form.discount ? `${form.discount}%` : undefined);
       add('Ubicación (Ciudad)', form.city);
@@ -1156,6 +1215,7 @@ function getPreviewFields(
       add('Cambio', form.transmission);
       add('Motor', form.engine);
       add('Estado', form.condition);
+      addColors(form.colors);
       add('Título', form.title);
       add('Precio', fmtPrice(form.price));
       add('Descuento', form.discount ? `${form.discount}%` : undefined);
@@ -1201,6 +1261,7 @@ function PreviewModal({
   onClose,
   onPublish,
   loading,
+  uploadPct,
   isEdit,
 }: {
   visible: boolean;
@@ -1209,6 +1270,7 @@ function PreviewModal({
   onClose: () => void;
   onPublish: () => void;
   loading?: boolean;
+  uploadPct?: number | null;
   isEdit?: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -1238,7 +1300,7 @@ function PreviewModal({
     }).start(() => onClose());
   };
 
-  const photos: string[] = form.photos ?? [];
+  const media: MediaAsset[] = form.media ?? [];
   const fields = getPreviewFields(kind, form);
   const meta = KIND_META[kind];
   const KindIcon = meta.Icon;
@@ -1276,10 +1338,10 @@ function PreviewModal({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
           {/* Photo carousel */}
-          {photos.length > 0 ? (
+          {media.length > 0 ? (
             <View>
               <FlatList
-                data={photos}
+                data={media}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -1290,17 +1352,29 @@ function PreviewModal({
                   setActivePhoto(idx);
                 }}
                 keyExtractor={(_, i) => String(i)}
-                renderItem={({ item }) => (
-                  <Image
-                    source={{ uri: item }}
-                    style={styles.pvPhoto}
-                    resizeMode="cover"
-                  />
-                )}
+                renderItem={({ item }) => {
+                  const previewUri = item.type === 'video'
+                    ? item.thumbnailUri ?? item.uri
+                    : item.uri;
+                  return (
+                    <View>
+                      <Image
+                        source={{ uri: previewUri }}
+                        style={styles.pvPhoto}
+                        resizeMode="cover"
+                      />
+                      {item.type === 'video' && (
+                        <View style={styles.pvPlayOverlay} pointerEvents="none">
+                          <Play size={40} color="#ffffff" strokeWidth={2.4} fill="#ffffff" />
+                        </View>
+                      )}
+                    </View>
+                  );
+                }}
               />
-              {photos.length > 1 && (
+              {media.length > 1 && (
                 <View style={styles.pvDots}>
-                  {photos.map((_, i) => (
+                  {media.map((_, i) => (
                     <View
                       key={i}
                       style={[
@@ -1394,9 +1468,20 @@ function PreviewModal({
                     i === shortFields.length - 1 && { borderBottomWidth: 0 },
                   ]}>
                   <Text style={styles.pvFieldLabel}>{f.label}</Text>
-                  <Text style={styles.pvFieldValue} numberOfLines={2}>
-                    {f.value}
-                  </Text>
+                  {f.swatches ? (
+                    <View style={styles.pvColorValue}>
+                      {f.swatches.map((c, si) => (
+                        <View
+                          key={`${c}-${si}`}
+                          style={[styles.colorSwatchSm, { backgroundColor: c }]}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.pvFieldValue} numberOfLines={2}>
+                      {f.value}
+                    </Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -1409,19 +1494,31 @@ function PreviewModal({
             styles.pvFooter,
             { paddingBottom: Math.max(insets.bottom, 12) },
           ]}>
+          {(() => {
+            // The button is busy from the moment the upload starts until the
+            // mutation resolves. `loading` alone doesn't cover the upload
+            // phase (create/update hasn't been called yet), so combine both.
+            const busy = loading || uploadPct != null;
+            return (
           <RipplePress
-            style={[styles.publishBtn, loading && { opacity: 0.5 }]}
+            style={[styles.publishBtn, busy && { opacity: 0.5 }]}
             borderRadius={14}
             rippleColor="rgba(255,255,255,0.25)"
             onPress={() => {
-              if (!loading) onPublish();
+              if (!busy) onPublish();
             }}>
-            {loading ? (
+            {uploadPct != null ? (
+              <Text style={styles.publishBtnText}>
+                Subiendo… {uploadPct}%
+              </Text>
+            ) : loading ? (
               <Spinner color="#ffffff" />
             ) : (
               <Text style={styles.publishBtnText}>{isEdit ? 'Guardar cambios' : 'Publicar anuncio'}</Text>
             )}
           </RipplePress>
+            );
+          })()}
         </View>
       </Animated.View>
     </Modal>
@@ -1586,6 +1683,92 @@ function Select({
   );
 }
 
+const MAX_COLORS = 6;
+
+function ColorField({
+  value,
+  onChange,
+  max = MAX_COLORS,
+}: {
+  value?: string[];
+  onChange: (v: string[]) => void;
+  max?: number;
+}) {
+  const { colors: themeColors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<string>('#FF3B30');
+
+  const list = value ?? [];
+  const canAdd = list.length < max;
+
+  const openPicker = () => {
+    setCurrent('#FF3B30');
+    setOpen(true);
+  };
+
+  const addCurrent = () => {
+    const hex = (current || '').toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(hex)) {
+      setOpen(false);
+      return;
+    }
+    if (list.map((c) => c.toUpperCase()).includes(hex) || list.length >= max) {
+      setOpen(false);
+      return;
+    }
+    onChange([...list, hex]);
+    setOpen(false);
+  };
+
+  const removeAt = (i: number) => onChange(list.filter((_, idx) => idx !== i));
+
+  return (
+    <>
+      <View style={styles.colorList}>
+        {list.map((c, i) => (
+          <View key={`${c}-${i}`} style={styles.colorChip}>
+            <View style={[styles.colorSwatchSm, { backgroundColor: c }]} />
+            <Text style={styles.colorChipText}>{c.toUpperCase()}</Text>
+            <TouchableOpacity
+              style={styles.colorChipX}
+              onPress={() => removeAt(i)}
+              activeOpacity={0.85}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <X size={12} color="#ffffff" strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
+        ))}
+        {canAdd && (
+          <TouchableOpacity
+            style={styles.colorAdd}
+            activeOpacity={0.85}
+            onPress={openPicker}>
+            <Plus size={16} color={themeColors.primary} strokeWidth={2} />
+            <Text style={styles.colorAddText}>
+              {list.length === 0 ? 'Añadir color' : 'Otro'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      {list.length >= max && (
+        <Text style={styles.colorMaxHint}>Máximo {max} colores</Text>
+      )}
+
+      <SwipeableSheet visible={open} onClose={() => setOpen(false)} title="Añadir color">
+        <ColorPicker value={current} onChange={setCurrent} />
+        <RipplePress
+          style={styles.colorConfirmBtn}
+          borderRadius={12}
+          rippleColor="rgba(255,255,255,0.25)"
+          onPress={addCurrent}>
+          <Text style={styles.colorConfirmBtnText}>Añadir a la lista</Text>
+        </RipplePress>
+      </SwipeableSheet>
+    </>
+  );
+}
+
 function Stepper({
   value,
   onChange,
@@ -1621,13 +1804,13 @@ function RowFields({ children }: { children: React.ReactNode }) {
 }
 
 function PhotoPicker({
-  photos,
-  setPhotos,
+  media,
+  setMedia,
   showErrors,
   maxPhotos = MAX_PHOTOS,
 }: {
-  photos: string[];
-  setPhotos: (p: string[]) => void;
+  media: MediaAsset[];
+  setMedia: (p: MediaAsset[]) => void;
   showErrors?: boolean;
   maxPhotos?: number;
 }) {
@@ -1635,38 +1818,60 @@ function PhotoPicker({
   const styles = useThemedStyles(makeStyles);
 
   const addAssets = async (assets: ImagePickerAsset[]) => {
-    const room = maxPhotos - photos.length;
-    const accepted: string[] = [];
+    const room = maxPhotos - media.length;
+    const accepted: MediaAsset[] = [];
     let tooBig = false;
     for (const a of assets.slice(0, room)) {
-      if (a.fileSize != null && a.fileSize > MAX_PHOTO_MB * 1024 * 1024) {
+      // Videos get a higher ceiling since they naturally weigh more than an
+      // image; anything over 50 MB is rejected so the presigned PUT stays
+      // within reasonable time on a mobile connection.
+      const isVideo = a.type === 'video';
+      const maxBytes = (isVideo ? 50 : MAX_PHOTO_MB) * 1024 * 1024;
+      if (a.fileSize != null && a.fileSize > maxBytes) {
         tooBig = true;
         continue;
       }
-      accepted.push(a.uri);
+      let thumbnailUri: string | undefined;
+      if (isVideo) {
+        thumbnailUri = await generateVideoThumbnail(a.uri);
+      }
+      accepted.push({
+        uri: a.uri,
+        type: isVideo ? 'video' : 'image',
+        thumbnailUri,
+      });
     }
-    if (accepted.length) setPhotos([...photos, ...accepted]);
+    if (accepted.length) setMedia([...media, ...accepted]);
     if (tooBig) {
-      Alert.alert('Foto demasiado grande', `Cada foto debe pesar menos de ${MAX_PHOTO_MB} MB.`);
+      Alert.alert(
+        'Archivo demasiado grande',
+        `Las fotos no pueden pesar más de ${MAX_PHOTO_MB} MB y los vídeos no más de 50 MB.`,
+      );
     } else if (assets.length > room) {
-      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${maxPhotos} fotos por anuncio.`);
+      Alert.alert(
+        'Límite alcanzado',
+        `Puedes subir un máximo de ${maxPhotos} archivos por anuncio.`,
+      );
     }
   };
 
   const pickFromLibrary = async () => {
     if (!ImagePicker) {
-      Alert.alert('Función no disponible', 'Actualiza la app para añadir fotos.');
+      Alert.alert('Función no disponible', 'Actualiza la app para añadir archivos.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permiso necesario', 'Concede acceso a tus fotos para añadir imágenes.');
+      Alert.alert('Permiso necesario', 'Concede acceso a tus fotos para añadir archivos.');
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
+      // Videos temporarily disabled — only images for now. The rest of the
+      // media pipeline (upload, DB, gallery) still supports videos, so
+      // re-enabling later is a one-line change here.
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: maxPhotos - photos.length,
+      selectionLimit: maxPhotos - media.length,
       quality: 0.7,
     });
     if (!res.canceled) await addAssets(res.assets);
@@ -1687,11 +1892,11 @@ function PhotoPicker({
   };
 
   const addPhoto = () => {
-    if (photos.length >= maxPhotos) {
-      Alert.alert('Límite de fotos', `Puedes subir un máximo de ${maxPhotos} fotos por anuncio.`);
+    if (media.length >= maxPhotos) {
+      Alert.alert('Límite alcanzado', `Puedes subir un máximo de ${maxPhotos} archivos por anuncio.`);
       return;
     }
-    Alert.alert('Añadir foto', undefined, [
+    Alert.alert('Añadir', undefined, [
       { text: 'Hacer una foto', onPress: takePhoto },
       { text: 'Elegir de la galería', onPress: pickFromLibrary },
       { text: 'Cancelar', style: 'cancel' },
@@ -1699,7 +1904,7 @@ function PhotoPicker({
   };
 
   const removePhoto = (i: number) =>
-    setPhotos(photos.filter((_, idx) => idx !== i));
+    setMedia(media.filter((_, idx) => idx !== i));
 
   return (
     <View style={{ marginBottom: 22 }}>
@@ -1707,34 +1912,47 @@ function PhotoPicker({
         <Text style={styles.fieldLabel}>
           Fotos<Text style={{ color: colors.error }}> *</Text>
         </Text>
-        <Text style={[styles.photoCount, showErrors && photos.length === 0 && { color: colors.error }]}>
-          {photos.length}/{maxPhotos}
+        <Text style={[styles.photoCount, showErrors && media.length === 0 && { color: colors.error }]}>
+          {media.length}/{maxPhotos}
         </Text>
       </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 10, paddingVertical: 2 }}>
-        {photos.map((uri, i) => (
-          <View key={`${uri}-${i}`} style={styles.photoThumb}>
-            <Image source={{ uri }} style={styles.photoImage} />
-            {i === 0 && (
-              <View style={styles.coverBadge}>
-                <Text style={styles.coverBadgeText}>Portada</Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.photoRemove}
-              onPress={() => removePhoto(i)}
-              activeOpacity={0.85}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-              <X size={14} color="#ffffff" strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-        ))}
-        {photos.length < maxPhotos && (
+        {media.map((asset, i) => {
+          // Videos show their generated thumbnail when available so the tile
+          // isn't a blank grey square. Falls back to the video URI which some
+          // platforms can render as a first-frame preview via <Image>.
+          const previewUri = asset.type === 'video'
+            ? asset.thumbnailUri ?? asset.uri
+            : asset.uri;
+          return (
+            <View key={`${asset.uri}-${i}`} style={styles.photoThumb}>
+              <Image source={{ uri: previewUri }} style={styles.photoImage} />
+              {asset.type === 'video' && (
+                <View style={styles.videoPlayOverlay} pointerEvents="none">
+                  <Play size={22} color="#ffffff" strokeWidth={2.4} fill="#ffffff" />
+                </View>
+              )}
+              {i === 0 && (
+                <View style={styles.coverBadge}>
+                  <Text style={styles.coverBadgeText}>Portada</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.photoRemove}
+                onPress={() => removePhoto(i)}
+                activeOpacity={0.85}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <X size={14} color="#ffffff" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+        {media.length < maxPhotos && (
           <TouchableOpacity
-            style={[styles.photoAdd, showErrors && photos.length === 0 && { borderColor: colors.error }]}
+            style={[styles.photoAdd, showErrors && media.length === 0 && { borderColor: colors.error }]}
             activeOpacity={0.85}
             onPress={addPhoto}>
             <Camera size={22} color={colors.primary} strokeWidth={1.5} />
@@ -1921,6 +2139,87 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 14,
     color: colors.error,
   },
+  // Color swatch (used inside ColorField button)
+  colorSwatchSm: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.15)',
+  },
+  colorList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  colorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 4,
+    paddingRight: 26,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceContainerLow,
+    borderWidth: 0.5,
+    borderColor: colors.outlineVariant + '4d',
+    position: 'relative' as const,
+  },
+  colorChipText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: colors.onSurface,
+    letterSpacing: 0.5,
+  },
+  colorChipX: {
+    position: 'absolute' as const,
+    right: 4,
+    top: 4,
+    bottom: 4,
+    width: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.2,
+    borderStyle: 'dashed',
+    borderColor: colors.primary + '66',
+    backgroundColor: colors.primary + '0d',
+  },
+  colorAddText: {
+    fontFamily: 'Manrope-SemiBold',
+    fontSize: 12,
+    color: colors.primary,
+  },
+  colorMaxHint: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 11,
+    color: colors.onSurfaceVariant + '99',
+    marginTop: 6,
+  },
+  colorConfirmBtn: {
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  colorConfirmBtnText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 15,
+    color: '#ffffff',
+    letterSpacing: 0.2,
+  },
   // Stepper
   stepper: {
     flexDirection: 'row',
@@ -1998,6 +2297,26 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  pvPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   photoAdd: {
     width: 96,
@@ -2179,6 +2498,13 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.onSurface,
     flex: 1,
     textAlign: 'right' as const,
+  },
+  pvColorValue: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    gap: 8,
+    flex: 1,
   },
   pvDescCard: {
     marginHorizontal: 16,

@@ -246,7 +246,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
                 last
               />
             </Section>
-            <Text style={styles.version}>Bomell · v1.0.0</Text>
+            <Text style={styles.version}>Bomelh · v1.0.0</Text>
           </ScrollView>
         )}
       </Animated.View>

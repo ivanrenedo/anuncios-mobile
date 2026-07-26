@@ -389,7 +389,7 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     fontSize: 11,
     color: colors.onSurfaceVariant,
-    
+    width: 90
   },
   badge: {
     position: "absolute",

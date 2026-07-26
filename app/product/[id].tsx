@@ -110,6 +110,24 @@ function timeAgo(iso?: string): string {
   return `hace ${y} año${y > 1 ? 's' : ''}`;
 }
 
+function ColorsCell({ colors, styles }: { colors: string[]; styles: any }) {
+  return (
+    <View style={styles.colorsCell}>
+      <Text style={styles.specCellLabel}>
+        {colors.length === 1 ? 'Color' : 'Colores'}
+      </Text>
+      <View style={styles.colorsRow}>
+        {colors.map((c, i) => (
+          <View
+            key={`${c}-${i}`}
+            style={[styles.colorSwatchLg, { backgroundColor: c }]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function ProductDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -214,11 +232,23 @@ export default function ProductDetailScreen() {
   const sellerId = apiProduct.seller?.id;
   const liked = isFavorite(id || '');
 
-  const images: string[] = apiProduct.images?.length
-    ? apiProduct.images.map((img: any) =>
-        img.url.startsWith('/') ? `${API_URL}${img.url}` : img.url,
-      )
+  const abs = (u?: string | null) =>
+    !u ? u : u.startsWith('/') ? `${API_URL}${u}` : u;
+  const media: {
+    uri: string;
+    type: 'image' | 'video';
+    videoUri?: string;
+  }[] = apiProduct.images?.length
+    ? apiProduct.images.map((img: any) => {
+        const isVideo = img.type === 'video';
+        const primary = abs(img.url) || '';
+        const thumb = abs(img.thumbnailUrl) || undefined;
+        return isVideo
+          ? { uri: thumb ?? primary, type: 'video' as const, videoUri: primary }
+          : { uri: primary, type: 'image' as const };
+      })
     : [];
+  const images = media.map((m) => m.uri);
 
   const priceNum = Number(apiProduct.price);
   const discountPct = apiProduct.discount ?? 0;
@@ -298,13 +328,30 @@ export default function ProductDetailScreen() {
             onScroll={onScroll}
             scrollEventThrottle={16}
             style={styles.galleryScroll}>
-            {product.images.length > 0 ? (
-              product.images.map((uri: string, i: number) => (
+            {media.length > 0 ? (
+              media.map((m, i) => (
                 <TouchableOpacity
                   key={i}
                   activeOpacity={0.9}
-                  onPress={() => { setActiveImage(i); setGalleryOpen(true); }}>
-                  <Image source={{ uri }} style={styles.galleryImage} />
+                  onPress={() => {
+                    if (m.type === 'video' && m.videoUri) {
+                      // No inline player yet — hand off to the system video app
+                      // so users can at least watch it. Follow-up: inline
+                      // <Video> with expo-av / expo-video.
+                      Linking.openURL(m.videoUri).catch(() => {});
+                    } else {
+                      setActiveImage(i);
+                      setGalleryOpen(true);
+                    }
+                  }}>
+                  <Image source={{ uri: m.uri }} style={styles.galleryImage} />
+                  {m.type === 'video' && (
+                    <View style={styles.videoPlayOverlay} pointerEvents="none">
+                      <View style={styles.videoPlayCircle}>
+                        <Text style={styles.videoPlayIcon}>▶</Text>
+                      </View>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))
             ) : (
@@ -326,9 +373,9 @@ export default function ProductDetailScreen() {
           </TouchableOpacity>
 
           {/* Dots */}
-          {product.images.length > 1 && (
+          {media.length > 1 && (
             <View style={styles.dots}>
-              {product.images.map((_: string, i: number) => (
+              {media.map((_, i) => (
                 <View
                   key={i}
                   style={[
@@ -485,7 +532,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* ── Marketplace detail ── */}
-        {mkt && (mkt.brand || mkt.model) && (
+        {mkt && (mkt.brand || mkt.model || (mkt.colors && mkt.colors.length > 0)) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Detalles del producto</Text>
             <View style={styles.specGrid}>
@@ -502,6 +549,9 @@ export default function ProductDetailScreen() {
                 </View>
               ) : null}
             </View>
+            {mkt.colors && mkt.colors.length > 0 && (
+              <ColorsCell colors={mkt.colors} styles={styles} />
+            )}
           </View>
         )}
 
@@ -562,6 +612,9 @@ export default function ProductDetailScreen() {
                   </View>
                 ) : null}
               </View>
+            )}
+            {veh.colors && veh.colors.length > 0 && (
+              <ColorsCell colors={veh.colors} styles={styles} />
             )}
           </View>
         )}
@@ -726,7 +779,9 @@ export default function ProductDetailScreen() {
       />
 
       <ImageViewing
-        images={product.images.map((uri: string) => ({ uri }))}
+        images={media
+          .filter((m) => m.type === 'image')
+          .map((m) => ({ uri: m.uri }))}
         imageIndex={activeImage}
         visible={galleryOpen}
         onRequestClose={() => setGalleryOpen(false)}
@@ -821,6 +876,29 @@ const makeStyles = (colors: ThemeColors) =>
     galleryImage: {
       width: SCREEN_WIDTH,
       aspectRatio: 1,
+    },
+    videoPlayOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.15)',
+    },
+    videoPlayCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    videoPlayIcon: {
+      color: '#ffffff',
+      fontSize: 30,
+      marginLeft: 4,
     },
     likeBtn: {
       position: 'absolute',
@@ -1057,6 +1135,25 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 14,
       color: colors.onSurface,
       marginTop: 2,
+    },
+    colorsCell: {
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 10,
+    },
+    colorsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+    },
+    colorSwatchLg: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 0.5,
+      borderColor: 'rgba(0,0,0,0.15)',
     },
     addressRow: {
       flexDirection: 'row',

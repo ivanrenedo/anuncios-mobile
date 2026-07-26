@@ -1064,7 +1064,7 @@ export default function ProfileScreen() {
           />
         </Section>
 
-        <Text style={styles.version}>Bomell · v1.0.0</Text>
+        <Text style={styles.version}>Bomelh · v1.0.0</Text>
       </Animated.ScrollView>
 
       <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />

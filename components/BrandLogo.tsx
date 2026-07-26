@@ -39,7 +39,7 @@ export default function BrandLogo({
           ]}
           allowFontScaling={false}
         >
-          bomell<Text style={{ color: primary }}>.</Text>
+          bomelh<Text style={{ color: primary }}>.</Text>
         </Text>
       )}
     </View>
