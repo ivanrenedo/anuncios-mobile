@@ -23,7 +23,7 @@ const AUTH_STORAGE_KEY = 'market_eg_auth_v1';
 const REFRESH_TOKEN_KEY = 'market_eg_refresh_token';
 
 export const GOOGLE_WEB_CLIENT_ID =
-  '97086228598-fqa8ukvkbijsronqag78mga4g1us41d3.apps.googleusercontent.com';
+  '296495104091-f6cnko1bhds9ga46e2r3dt13pc9gt6of.apps.googleusercontent.com';
 
 /** Reject if a promise (e.g. an unreachable backend call) doesn't settle in time. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {

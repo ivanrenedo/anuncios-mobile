@@ -128,7 +128,7 @@ const CIRCLE_SIZE = 48;
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     section: {
-      marginBottom: 12,
+      marginBottom: 16,
     },
     container: {
       paddingHorizontal: 16,

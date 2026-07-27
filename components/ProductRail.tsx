@@ -144,7 +144,6 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
     paddingHorizontal: 16,
   },
   contentTitle: {

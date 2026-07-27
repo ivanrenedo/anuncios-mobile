@@ -87,11 +87,12 @@ export function usePushNotifications() {
     let cancelled = false;
     if (isAuthenticated) {
       getExpoPushToken().then((token) => {
+        console.log('[push] expo token =', token);
         if (cancelled || !token) return;
         tokenRef.current = token;
-        registerToken({ variables: { token, platform: Platform.OS } }).catch(
-          () => {},
-        );
+        registerToken({ variables: { token, platform: Platform.OS } })
+          .then((res) => console.log('[push] registerPushToken ok', res.data))
+          .catch((err) => console.log('[push] registerPushToken err', err?.message));
       });
     } else if (tokenRef.current) {
       const token = tokenRef.current;

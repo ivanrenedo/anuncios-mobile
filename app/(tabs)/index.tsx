@@ -562,7 +562,6 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    marginTop: 8,
     marginBottom: 18,
   },
   trustItem: {
