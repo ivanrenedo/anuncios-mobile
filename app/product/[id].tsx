@@ -110,6 +110,10 @@ function timeAgo(iso?: string): string {
   return `hace ${y} año${y > 1 ? 's' : ''}`;
 }
 
+export function fmtNumber(n: number) {
+  return `${Math.round(n).toLocaleString('es')} XAF`;
+}
+
 function ColorsCell({ colors, styles }: { colors: string[]; styles: any }) {
   return (
     <View style={styles.colorsCell}>
@@ -258,9 +262,9 @@ export default function ProductDetailScreen() {
     title: apiProduct.title,
     subtitle: apiProduct.category?.label || '',
     price: hasDiscount
-      ? fmtPrice(Math.round(priceNum * (1 - discountPct / 100)))
-      : fmtPrice(priceNum),
-    originalPrice: hasDiscount ? fmtPrice(priceNum) : undefined,
+      ? Math.round(priceNum * (1 - discountPct / 100))
+      : priceNum,
+    originalPrice: hasDiscount ? fmtNumber(priceNum) : undefined,
     discount: hasDiscount ? `-${discountPct}%` : undefined,
     condition: apiProduct.condition || '',
     description: apiProduct.description || 'Sin descripción.',
@@ -295,7 +299,7 @@ export default function ProductDetailScreen() {
 
   const { share } = useShare();
   const onShare = () =>
-    share({ type: 'product', id: product.id, title: product.title, price: product.price });
+    share({ type: 'product', id: product.id, title: product.title, price: fmtNumber(product.price) });
 
   return (
     <View style={styles.root}>
@@ -423,7 +427,7 @@ export default function ProductDetailScreen() {
           
           {priceNum > 0 && (
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{product.price}</Text>
+            <Text style={styles.price}>{fmtNumber(product.price)}</Text>
             {product.originalPrice && (
               <Text style={styles.priceOriginal}>{product.originalPrice}</Text>
             )}
@@ -683,7 +687,7 @@ export default function ProductDetailScreen() {
               activeOpacity={0.8}
               onPress={() => {
                 const msg = encodeURIComponent(
-                  `Hola, quiero destacar mi anuncio "${product.title}" (${SHARE_URL}/p/${product.id} durante 7 días.`,
+                  `Hola, quiero destacar mi anuncio "${product.title}" (${SHARE_URL}/product/${product.id}) durante 7 días.`,
                 );
                 Linking.openURL(`https://wa.me/${contactNumber}?text=${msg}`).catch(() =>
                   Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
@@ -768,7 +772,7 @@ export default function ProductDetailScreen() {
         onClose={() => setModal(null)}
         phoneNumber={product.seller.phone}
         whatsappNumber={product.seller.phone?.replace(/[^0-9]/g, '')}
-        whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/p/${product.id}`}
+        whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/product/${product.id}`}
       />
 
       <ReportSheet

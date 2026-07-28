@@ -18,7 +18,7 @@ export const UPLOAD_URL = `${API_URL}/upload`;
 
 // Public-facing URL for share links (OG previews require a URL reachable
 // from the internet). Falls back to the API_URL for local testing.
-export const SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL ?? API_URL;
+export const SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL;
 
 // Business WhatsApp number for manual payment flows (plans, boosts).
 // Single source of truth — update here when the number changes.
