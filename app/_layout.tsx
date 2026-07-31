@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,7 +15,8 @@ import {
 } from '@expo-google-fonts/manrope';
 import * as SplashScreen from 'expo-splash-screen';
 import { ApolloProvider } from '@apollo/client/react';
-import { apolloClient } from '@/lib/apollo';
+import { apolloClient, hydrateApolloCache } from '@/lib/apollo';
+import { SEARCH_PRODUCTS } from '@/graphql/queries';
 import { ProfileProvider } from '@/hooks/useProfile';
 import { AuthProvider } from '@/hooks/useAuth';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
@@ -45,19 +46,23 @@ function RootNavigator() {
         />
         <Stack.Screen
           name="explore"
-          options={{ animation: 'none',  }}
+          options={{
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+          }}
         />
         <Stack.Screen
           name="user/[id]"
-          options={{ animation: 'none' }}
+          options={{ animation: 'none', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="edit-profile"
-          options={{ animation: 'none' }}
+          options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="edit-listing/[id]"
-          options={{ animation: 'none' }}
+          options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="verify-phone"
@@ -65,19 +70,19 @@ function RootNavigator() {
         />
         <Stack.Screen
           name="login"
-          options={{ animation: 'none' }}
+          options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="help"
-          options={{ animation: 'none' }}
+         options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="terms"
-          options={{ animation: 'none' }}
+         options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen
           name="privacy"
-          options={{ animation: 'none' }}
+         options={{ animation: 'slide_from_right', gestureEnabled: true,fullScreenGestureEnabled: true, }}
         />
         <Stack.Screen name="+not-found" />
       </Stack>
@@ -93,13 +98,36 @@ export default function RootLayout() {
     'Manrope-Bold': Manrope_700Bold,
   });
 
+  // Restore persisted Apollo cache before mounting the app so previously
+  // visited screens paint from cache on cold start. Non-blocking on failure
+  // — we still boot rather than trap the user on the splash.
+  const [cacheReady, setCacheReady] = useState(false);
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    hydrateApolloCache().finally(() => {
+      setCacheReady(true);
+      // Warm the Explore default query in the background. The first navigation
+      // to Explore currently waits on this network round-trip before showing
+      // real content; prefetching once cache is restored lets it paint from
+      // cache instantly. Fire-and-forget — failures don't block boot.
+      apolloClient
+        .query({
+          query: SEARCH_PRODUCTS,
+          variables: {
+            input: { sortBy: 'recent', take: 8, skip: 0 },
+          },
+          fetchPolicy: 'network-only',
+        })
+        .catch(() => {});
+    });
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && cacheReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, cacheReady]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !cacheReady) {
     return null;
   }
 

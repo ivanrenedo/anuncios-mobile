@@ -24,7 +24,7 @@ import {
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
 import RipplePress from '@/components/RipplePress';
-import { WHATSAPP_NUMBER } from '@/lib/config';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 
 interface PlanDef {
   key: 'FREE' | 'STAR' | 'PREMIUM';
@@ -97,22 +97,22 @@ const PLANS: PlanDef[] = [
   },
 ];
 
-function contactWhatsApp(plan: string) {
-  const msg = encodeURIComponent(
-    `Hola, me gustaría contratar el plan ${plan} en Bomelh. ¿Cómo puedo activarlo?`,
-  );
-  const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`;
-  Linking.openURL(url).catch(() =>
-    Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
-  );
-}
-
 export default function PlansScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { profile } = useProfile();
+  const { phone: whatsappNumber } = useBusinessContact();
+
+  const contactWhatsApp = (plan: string) => {
+    const msg = encodeURIComponent(
+      `Hola, me gustaría contratar el plan ${plan} en Bomelh. ¿Cómo puedo activarlo?`,
+    );
+    Linking.openURL(`https://wa.me/${whatsappNumber}?text=${msg}`).catch(() =>
+      Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
+    );
+  };
   const currentPlan = profile?.plan ?? 'FREE';
   const effectivePlan = profile?.effectivePlan ?? currentPlan;
   const expiresAt = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
@@ -306,7 +306,7 @@ export default function PlansScreen() {
             const msg = encodeURIComponent(
               'Hola, quiero destacar un anuncio en Bomelh durante 7 días (1.000 XAF). ¿Cómo procedo?',
             );
-            Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`).catch(() =>
+            Linking.openURL(`https://wa.me/${whatsappNumber}?text=${msg}`).catch(() =>
               Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
             );
           }}>

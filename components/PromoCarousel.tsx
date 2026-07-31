@@ -43,11 +43,9 @@ interface PromoCarouselProps {
   onSlidePress?: () => void;
 }
 
-export default function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
+function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
   const router = useRouter();
-  const slides: Slide[] = (config?.slides as Slide[] | undefined)?.length
-    ? config.slides
-    : null;
+  const slides: Slide[] = (config?.slides as Slide[] | undefined) ?? [];
 
   const handleSlidePress = (slide: Slide) => {
     const value = slide.linkValue?.trim();
@@ -82,6 +80,10 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
     const i = autoplayHandlers.indexRef.current;
     if (i !== activeIndex) setActiveIndex(i);
   };
+
+  // Nothing to show yet — either config hasn't arrived (cold cache) or the
+  // home-sections config for this slot has an empty slides array.
+  if (slides.length === 0) return null;
 
   return (
     <View style={styles.container}>
@@ -213,6 +215,8 @@ export default function PromoCarousel({ config, onSlidePress }: PromoCarouselPro
     </View>
   );
 }
+
+export default React.memo(PromoCarousel);
 
 const styles = StyleSheet.create({
   container: {

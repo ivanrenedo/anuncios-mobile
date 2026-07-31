@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Switch,
   BackHandler,
   Alert,
+  InteractionManager,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -54,6 +55,17 @@ import { GET_FILTERABLE_SECTIONS, GET_SECTION_PRODUCTS, SEARCH_PRODUCTS } from '
 import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+/** Returns `value` delayed by `delay` ms, resetting the timer on every change.
+ *  Used to coalesce keystrokes into a single network query. */
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
 
 function timeAgo(iso?: string): string {
   if (!iso) return '';
@@ -170,9 +182,40 @@ export default function ExploreScreen() {
     sectionId?: string;
   }>();
   const PAGE_SIZE = 8;
+
+  // Three-stage mount so the user sees progressive content instead of a
+  // frozen screen or a spinner-only shell:
+  //   Stage 0 (immediate)          : header (back + search + filter) so the
+  //                                  user can go back or start typing right
+  //                                  away.
+  //   Stage 1 (next animation frame): category pills + saved searches — cheap
+  //                                  to render, high visual value.
+  //   Stage 2 (after interactions) : product grid, related suggestions,
+  //                                  results header, load-more — the heavy
+  //                                  part, deferred so it doesn't block the
+  //                                  stack slide-in animation.
+  // Hooks below still fire on the first mount, so Apollo queries kick off
+  // during stage 0 and data is usually ready by the time stage 2 renders.
+  const [pillsReady, setPillsReady] = useState(false);
+  const [contentReady, setContentReady] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setPillsReady(true));
+    const task = InteractionManager.runAfterInteractions(() =>
+      setContentReady(true),
+    );
+    return () => {
+      cancelAnimationFrame(raf);
+      task.cancel();
+    };
+  }, []);
+
   const [hasMore, setHasMore] = useState(true);
   const { tree } = useCategoryTree();
-  const categoryNames = ['Todos', ...tree.map((t: any) => t.label)];
+  const categoryNames = useMemo(
+    () => ['Todos', ...tree.map((t: any) => t.label)],
+    [tree],
+  );
+  
   const [query, setQuery] = useState('');
   const [related, setRelated] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState('Todos');
@@ -184,9 +227,13 @@ export default function ExploreScreen() {
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
-  const { data: sectionsData, refetch: refetchSections } = useQuery(GET_FILTERABLE_SECTIONS, { fetchPolicy: 'cache-and-network' });
-  const filterableSections: { id: string; title: string; icon?: string; filter: any }[] =
-    (sectionsData as any)?.filterableSections ?? [];
+  const { data: sectionsData, refetch: refetchSections } = useQuery(GET_FILTERABLE_SECTIONS, {
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+  });
+  const filterableSections = useMemo<
+    { id: string; title: string; icon?: string; filter: any }[]
+  >(() => (sectionsData as any)?.filterableSections ?? [], [sectionsData]);
 
   const { data: sectionProductsData, loading: sectionProductsLoading } = useQuery(
     GET_SECTION_PRODUCTS,
@@ -194,11 +241,16 @@ export default function ExploreScreen() {
       variables: { sectionId: activeSectionId!, take: 50 },
       skip: !activeSectionId,
       fetchPolicy: 'cache-and-network',
+      nextFetchPolicy: 'cache-first',
     },
   );
-  const sectionProducts = activeSectionId
-    ? ((sectionProductsData as any)?.sectionProducts ?? []).map(toExploreItem)
-    : null;
+  const sectionProducts = useMemo(
+    () =>
+      activeSectionId
+        ? ((sectionProductsData as any)?.sectionProducts ?? []).map(toExploreItem)
+        : null,
+    [activeSectionId, sectionProductsData],
+  );
   type SortOrder = 'price_asc' | 'price_desc' | 'az' | 'za' | null;
   const SORT_LABELS: Record<Exclude<SortOrder, null>, string> = {
     price_asc: 'Menor precio',
@@ -210,6 +262,8 @@ export default function ExploreScreen() {
   const [sortPickerOpen, setSortPickerOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sectionPickerOpen, setSectionPickerOpen] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [categoryPickerRoot, setCategoryPickerRoot] = useState<any>(null);
   const [cityFilter, setCityFilter] = useState('');
   // Filter drawer state
   const [priceMin, setPriceMin] = useState('');
@@ -229,30 +283,65 @@ export default function ExploreScreen() {
   const [filterOfferType, setFilterOfferType] = useState<string | null>(null);
 
   // Resolve category → categoryId for the server query
-  const activeCategoryId = activeCategory !== 'Todos'
-    ? (
-        tree.find((t: any) => t.label === activeCategory)?.id ??
-        tree.flatMap((t: any) => t.children ?? []).find((c: any) => c.label === activeCategory)?.id ??
-        undefined
-      )
-    : undefined;
+  const activeCategoryId = useMemo(
+    () =>
+      activeCategory !== 'Todos'
+        ? (tree.find((t: any) => t.label === activeCategory)?.id ??
+          tree
+            .flatMap((t: any) => t.children ?? [])
+            .find((c: any) => c.label === activeCategory)?.id ??
+          undefined)
+        : undefined,
+    [activeCategory, tree],
+  );
 
-  // Build server search input from filter state
-  const searchInput = {
-    query: query.trim() || undefined,
-    categoryId: activeCategoryId,
-    city: cityFilter.trim() || undefined,
-    condition: activeConditions.length === 1 ? activeConditions[0] : undefined,
-    priceMin: priceMin ? parseInt(priceMin, 10) : undefined,
-    priceMax: priceMax ? parseInt(priceMax, 10) : undefined,
-    sortBy: sortOrder === 'price_asc' || sortOrder === 'price_desc' ? sortOrder : 'recent',
-    take: PAGE_SIZE,
-    skip: 0,
-  };
+  // Debounce text inputs that hit the server so a burst of keystrokes
+  // collapses into a single network request. The TextInputs stay bound to
+  // the raw `query` / `cityFilter` / `priceMin` / `priceMax` state so typing
+  // feels instant; only the query variables lag.
+  const debouncedQuery = useDebouncedValue(query, 500);
+  const debouncedCity = useDebouncedValue(cityFilter, 500);
+  const debouncedPriceMin = useDebouncedValue(priceMin, 500);
+  const debouncedPriceMax = useDebouncedValue(priceMax, 500);
+
+  // Build server search input from filter state. Memoized so Apollo doesn't
+  // see a new `variables` object on every render — and so unrelated state
+  // updates (opening a sheet, typing in an unrelated field) don't force a
+  // re-fetch or a variables deep-equality check.
+  const searchInput = useMemo(
+    () => ({
+      query: debouncedQuery.trim() || undefined,
+      categoryId: activeCategoryId,
+      city: debouncedCity.trim() || undefined,
+      condition: activeConditions.length === 1 ? activeConditions[0] : undefined,
+      priceMin: debouncedPriceMin ? parseInt(debouncedPriceMin, 10) : undefined,
+      priceMax: debouncedPriceMax ? parseInt(debouncedPriceMax, 10) : undefined,
+      sortBy:
+        sortOrder === 'price_asc' || sortOrder === 'price_desc' ? sortOrder : 'recent',
+      take: PAGE_SIZE,
+      skip: 0,
+    }),
+    [
+      debouncedQuery,
+      activeCategoryId,
+      debouncedCity,
+      activeConditions,
+      debouncedPriceMin,
+      debouncedPriceMax,
+      sortOrder,
+    ],
+  );
 
   const { data: searchData, loading: productsLoading, refetch: refetchProducts } = useQuery<any>(
     SEARCH_PRODUCTS,
-    { variables: { input: searchInput }, fetchPolicy: 'cache-and-network', notifyOnNetworkStatusChange: true },
+    {
+      variables: { input: searchInput },
+      // `cache-and-network` paints from cache instantly; `nextFetchPolicy`
+      // makes subsequent focuses / re-renders read from cache too, so
+      // navigating back to Explore doesn't wait on the network.
+      fetchPolicy: 'cache-and-network',
+      nextFetchPolicy: 'cache-first',
+    },
   );
 
   // ── Saved searches (alerts) ────────────────────────────────────────────────
@@ -307,7 +396,10 @@ export default function ExploreScreen() {
   });
 
   // First page derived synchronously — no useEffect delay
-  const firstPage = (searchData?.searchProducts ?? []).map(toExploreItem);
+  const firstPage = useMemo(
+    () => (searchData?.searchProducts ?? []).map(toExploreItem),
+    [searchData],
+  );
 
   // Extra pages loaded via "Cargar más"
   const [extraPages, setExtraPages] = useState<any[]>([]);
@@ -319,7 +411,10 @@ export default function ExploreScreen() {
     setLoadingMore(false);
   }, [searchData]);
 
-  const searchResults = [...firstPage, ...extraPages];
+  const searchResults = useMemo(
+    () => [...firstPage, ...extraPages],
+    [firstPage, extraPages],
+  );
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -421,34 +516,52 @@ export default function ExploreScreen() {
   const applySuggestion = (term: string) => setQuery(term);
 
   // Server handles: query, categoryId, city, condition, price, sortBy.
-  // Post-filters for what the backend doesn't support yet:
-  let visibleProducts = sectionProducts ? sectionProducts : searchResults;
+  // Post-filters for what the backend doesn't support yet. Memoized so the
+  // filter/sort chain doesn't re-run on unrelated state changes.
+  const visibleProducts = useMemo(() => {
+    let list = sectionProducts ? sectionProducts : searchResults;
 
-  if (sellerType === 'profesionales')
-    visibleProducts = visibleProducts.filter((p: any) => p.verified);
-  else if (sellerType === 'particulares')
-    visibleProducts = visibleProducts.filter((p: any) => !p.verified);
-  if (withPriceOnly)
-    visibleProducts = visibleProducts.filter((p: any) => p.priceNum > 0);
-  if (activeConditions.length > 1)
-    visibleProducts = visibleProducts.filter((p: any) =>
-      activeConditions.includes(p.condition ?? ''));
-  if (brandModelQuery.trim())
-    visibleProducts = visibleProducts.filter((p: any) =>
-      p.title.toLowerCase().includes(brandModelQuery.trim().toLowerCase()));
+    if (sellerType === 'profesionales')
+      list = list.filter((p: any) => p.verified);
+    else if (sellerType === 'particulares')
+      list = list.filter((p: any) => !p.verified);
+    if (withPriceOnly)
+      list = list.filter((p: any) => p.priceNum > 0);
+    if (activeConditions.length > 1)
+      list = list.filter((p: any) =>
+        activeConditions.includes(p.condition ?? ''),
+      );
+    if (brandModelQuery.trim())
+      list = list.filter((p: any) =>
+        p.title.toLowerCase().includes(brandModelQuery.trim().toLowerCase()),
+      );
 
-  if (sortOrder === 'az')
-    visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.title.localeCompare(b.title));
-  else if (sortOrder === 'za')
-    visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.title.localeCompare(a.title));
-  else if (sortOrder === 'price_asc')
-    visibleProducts = [...visibleProducts].sort((a: any, b: any) => a.priceRaw - b.priceRaw);
-  else if (sortOrder === 'price_desc')
-    visibleProducts = [...visibleProducts].sort((a: any, b: any) => b.priceRaw - a.priceRaw);
+    if (sortOrder === 'az')
+      list = [...list].sort((a: any, b: any) => a.title.localeCompare(b.title));
+    else if (sortOrder === 'za')
+      list = [...list].sort((a: any, b: any) => b.title.localeCompare(a.title));
+    else if (sortOrder === 'price_asc')
+      list = [...list].sort((a: any, b: any) => a.priceRaw - b.priceRaw);
+    else if (sortOrder === 'price_desc')
+      list = [...list].sort((a: any, b: any) => b.priceRaw - a.priceRaw);
 
-  const pairs: any[][] = [];
-  for (let i = 0; i < visibleProducts.length; i += 2)
-    pairs.push(visibleProducts.slice(i, i + 2));
+    return list;
+  }, [
+    sectionProducts,
+    searchResults,
+    sellerType,
+    withPriceOnly,
+    activeConditions,
+    brandModelQuery,
+    sortOrder,
+  ]);
+
+  const pairs = useMemo(() => {
+    const out: any[][] = [];
+    for (let i = 0; i < visibleProducts.length; i += 2)
+      out.push(visibleProducts.slice(i, i + 2));
+    return out;
+  }, [visibleProducts]);
 
   const catFilter = CATEGORY_FILTERS[activeCategory.toLowerCase()] ?? CATEGORY_FILTERS.todos;
   const CatIcon = catFilter.icon;
@@ -615,7 +728,8 @@ export default function ExploreScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: 100 + insets.top, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {/* Category pills */}
+        {/* Category pills — stage 1 */}
+        {pillsReady && (
         <View style={styles.section}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
             {categoryNames.map((cat) => (
@@ -632,9 +746,10 @@ export default function ExploreScreen() {
             ))}
           </ScrollView>
         </View>
+        )}
 
-        {/* Saved searches / alerts */}
-        {isAuthenticated && (hasSearchCriteria || savedSearches.length > 0) && (
+        {/* Saved searches / alerts — stage 1 */}
+        {pillsReady && isAuthenticated && (hasSearchCriteria || savedSearches.length > 0) && (
           <View style={[styles.section, { paddingTop: 0, paddingBottom: 0 }]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -671,6 +786,13 @@ export default function ExploreScreen() {
           </View>
         )}
 
+        {/* Stage 2 — related + results header + product grid + load more.
+            These are the heavy pieces (many ProductCards, sort/filter memo
+            chains). Deferring until interactions settle lets the stack
+            slide-in animation finish before React starts building this
+            subtree, so the transition feels instant. */}
+        {contentReady && (
+        <>
         {/* Related suggestions (coming from a subcategory) */}
         {related.length > 0 && (
           <View style={[styles.section, { paddingBottom: 0 }]}>
@@ -702,8 +824,8 @@ export default function ExploreScreen() {
         {!productsLoading && visibleProducts.length > 0 && (
           <View style={styles.resultsHeader}>
             <Text style={styles.resultsCount}>
-              {query.trim()
-                ? `${visibleProducts.length} resultados para "${query.trim()}"`
+              {debouncedQuery.trim()
+                ? `${visibleProducts.length} resultados para "${debouncedQuery.trim()}"`
                 : `${visibleProducts.length} resultados`}
             </Text>
           </View>
@@ -752,7 +874,7 @@ export default function ExploreScreen() {
             <View style={styles.emptyIcon}>
               <Search size={32} color={colors.primary + '88'} strokeWidth={1.5} />
             </View>
-            <Text style={styles.emptyTitle}>Sin resultados para "{query.trim()}"</Text>
+            <Text style={styles.emptyTitle}>Sin resultados para "{debouncedQuery.trim()}"</Text>
             <Text style={styles.emptyDesc}>
               {related.length > 0
                 ? 'Prueba una de las búsquedas relacionadas de arriba.'
@@ -779,6 +901,8 @@ export default function ExploreScreen() {
               )}
             </RipplePress>
           </View>
+        )}
+        </>
         )}
       </ScrollView>
 
@@ -841,12 +965,7 @@ export default function ExploreScreen() {
                   style={styles.fdSelector}
                   borderRadius={14}
                   rippleColor={colors.primary + '10'}
-                  onPress={() => {
-                    closeFilter();
-                    setTimeout(() => {
-                      router.push('/(tabs)/categories');
-                    }, 280);
-                  }}>
+                  onPress={() => setCategoryPickerOpen(true)}>
                   <View style={[styles.fdSelectorIcon, { backgroundColor: colors.primary + '15' }]}>
                     <CatIcon size={20} color={colors.primary} strokeWidth={1.8} />
                   </View>
@@ -1239,7 +1358,11 @@ export default function ExploreScreen() {
         </>
       )}
 
-      {/* Section/sort picker sheet */}
+      {/* Section/sort picker sheet — mounted lazily to keep Explore's initial
+          render cheap. RN `Modal` allocates a native window even when hidden,
+          so keeping three of them in the tree at all times adds a real
+          per-mount cost. */}
+      {sectionPickerOpen && (
       <SwipeableSheet
         visible={sectionPickerOpen}
         onClose={() => setSectionPickerOpen(false)}
@@ -1272,8 +1395,10 @@ export default function ExploreScreen() {
           )}
         </ScrollView>
       </SwipeableSheet>
+      )}
 
-      {/* Sort picker sheet */}
+      {/* Sort picker sheet — lazy-mounted (see note above). */}
+      {sortPickerOpen && (
       <SwipeableSheet
         visible={sortPickerOpen}
         onClose={() => setSortPickerOpen(false)}
@@ -1293,6 +1418,122 @@ export default function ExploreScreen() {
           ))}
         </ScrollView>
       </SwipeableSheet>
+      )}
+
+      {/* Category picker sheet — drill-down like the post-creation flow.
+          Replaces the old navigation to the categories tab, which broke the
+          back stack (back went to Home instead of here) and forced a full
+          Home reload. Lazy-mounted like the other sheets. */}
+      {categoryPickerOpen && (
+      <SwipeableSheet
+        visible={categoryPickerOpen}
+        onClose={() => {
+          setCategoryPickerOpen(false);
+          setCategoryPickerRoot(null);
+        }}
+        title={categoryPickerRoot ? categoryPickerRoot.label : 'Categoría'}>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+          {!categoryPickerRoot ? (
+            <>
+              <TouchableOpacity
+                style={styles.fdSheetOption}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setActiveCategory('Todos');
+                  setBrand(null);
+                  setActiveConditions([]);
+                  setCategoryPickerOpen(false);
+                  setCategoryPickerRoot(null);
+                }}>
+                <Text style={[styles.fdSheetOptionText, activeCategory === 'Todos' && styles.fdSheetOptionActive]}>
+                  Todos
+                </Text>
+                {activeCategory === 'Todos' && <Check size={18} color={colors.primary} strokeWidth={2.2} />}
+              </TouchableOpacity>
+              {tree.map((r: any) => {
+                const active = activeCategory === r.label;
+                const hasChildren = (r.children ?? []).length > 0;
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={styles.fdSheetOption}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (hasChildren) {
+                        setCategoryPickerRoot(r);
+                      } else {
+                        setActiveCategory(r.label);
+                        setBrand(null);
+                        setActiveConditions([]);
+                        setCategoryPickerOpen(false);
+                        setCategoryPickerRoot(null);
+                      }
+                    }}>
+                    <Text style={[styles.fdSheetOptionText, active && styles.fdSheetOptionActive]}>
+                      {r.label}
+                    </Text>
+                    {hasChildren ? (
+                      <ChevronRight size={18} color={colors.onSurfaceVariant} strokeWidth={1.8} />
+                    ) : active ? (
+                      <Check size={18} color={colors.primary} strokeWidth={2.2} />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.fdSheetOption}
+                activeOpacity={0.7}
+                onPress={() => setCategoryPickerRoot(null)}>
+                <Text style={[styles.fdSheetOptionText, { color: colors.primary }]}>
+                  ‹ Volver
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.fdSheetOption}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setActiveCategory(categoryPickerRoot.label);
+                  setBrand(null);
+                  setActiveConditions([]);
+                  setCategoryPickerOpen(false);
+                  setCategoryPickerRoot(null);
+                }}>
+                <Text style={[styles.fdSheetOptionText, activeCategory === categoryPickerRoot.label && styles.fdSheetOptionActive]}>
+                  Toda la categoría «{categoryPickerRoot.label}»
+                </Text>
+                {activeCategory === categoryPickerRoot.label && (
+                  <Check size={18} color={colors.primary} strokeWidth={2.2} />
+                )}
+              </TouchableOpacity>
+              {(categoryPickerRoot.children ?? []).map((c: any) => {
+                const active = activeCategory === c.label;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={styles.fdSheetOption}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setActiveCategory(c.label);
+                      setBrand(null);
+                      setActiveConditions([]);
+                      setCategoryPickerOpen(false);
+                      setCategoryPickerRoot(null);
+                    }}>
+                    <Text style={[styles.fdSheetOptionText, active && styles.fdSheetOptionActive]}>
+                      {c.label}
+                    </Text>
+                    {active && <Check size={18} color={colors.primary} strokeWidth={2.2} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+        </ScrollView>
+      </SwipeableSheet>
+      )}
     </View>
   );
 }

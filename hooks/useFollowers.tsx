@@ -12,7 +12,6 @@ export function useFollowers(userId: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWERS, {
     variables: { userId },
     skip: !userId,
-    fetchPolicy: 'cache-and-network',
   });
   return { followers: data?.followers ?? [], loading, error, refetch };
 }
@@ -21,7 +20,6 @@ export function useFollowing(userId: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_FOLLOWING, {
     variables: { userId },
     skip: !userId,
-    fetchPolicy: 'cache-and-network',
   });
   return { following: data?.following ?? [], loading, error, refetch };
 }
@@ -30,7 +28,6 @@ export function useIsFollowing(userId: string) {
   const { data, loading } = useQuery<any>(IS_FOLLOWING, {
     variables: { userId },
     skip: !userId,
-    fetchPolicy: 'cache-and-network',
   });
   return { isFollowing: data?.isFollowing ?? false, loading };
 }
@@ -39,7 +36,6 @@ export function useFollowersCount(userId: string) {
   const { data, loading } = useQuery<any>(FOLLOWERS_COUNT, {
     variables: { userId },
     skip: !userId,
-    fetchPolicy: 'cache-and-network',
   });
   return { count: data?.followersCount ?? 0, loading };
 }
@@ -48,7 +44,6 @@ export function useFollowingCount(userId: string) {
   const { data, loading } = useQuery<any>(FOLLOWING_COUNT, {
     variables: { userId },
     skip: !userId,
-    fetchPolicy: 'cache-and-network',
   });
   return { count: data?.followingCount ?? 0, loading };
 }

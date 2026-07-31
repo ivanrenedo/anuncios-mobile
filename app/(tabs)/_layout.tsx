@@ -20,6 +20,10 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.secondary,
         tabBarInactiveTintColor: colors.onSurfaceVariant + '99',
         tabBarLabelStyle: styles.tabLabel,
+        // Only mount a tab the first time the user opens it. Cuts cold-start
+        // work: without this, `post.tsx` (2.6k lines) and `profile.tsx`
+        // (2.8k lines) mount on app launch even if the user never visits them.
+        lazy: true,
       }}>
       <Tabs.Screen
         name="index"

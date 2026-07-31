@@ -17,12 +17,16 @@ import {
 
 // Refetch by operation NAME so every active product list refreshes regardless
 // of its variables (take/skip, sellerId, categoryId…). This is what makes a new
-// or edited product show up instantly without remounting the screen.
+// or edited product show up instantly without remounting the screen. Includes
+// the Home ('HomeSections'/'SectionProducts') so a freshly-posted ad appears in
+// the feed without pull-to-refresh.
 const PRODUCT_LISTS = [
   'Products',
   'ProductsBySeller',
   'ProductsByCategory',
   'SearchProducts',
+  'HomeSections',
+  'SectionProducts',
 ];
 
 export function useProducts(take = 20, skip = 0) {
@@ -37,7 +41,6 @@ export function useProduct(id: string) {
   const { data, loading, error, refetch } = useQuery<any>(GET_PRODUCT, {
     variables: { id },
     skip: !id,
-    fetchPolicy: 'cache-and-network',
   });
   return { product: data?.product ?? null, loading, error, refetch };
 }

@@ -60,7 +60,7 @@ import RipplePress from '@/components/RipplePress';
 import Skeleton from '@/components/Skeleton';
 import ReportSheet from '@/components/ReportSheet';
 import { useShare } from '@/hooks/useShare';
-import { API_URL } from '@/lib/config';
+import { API_URL, resolveImage } from '@/lib/config';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -298,7 +298,7 @@ export default function PublicUserProfile() {
     id: r.id,
     authorId: r.author?.id || '',
     author: r.author?.name || '',
-    avatar: r.author?.avatarUrl || '',
+    avatar: resolveImage(r.author?.avatarUrl) || '',
     rating: r.rating,
     text: r.text || '',
     date: r.createdAt ? timeAgo(r.createdAt) : '',
@@ -310,7 +310,7 @@ export default function PublicUserProfile() {
     id: f.id,
     userId: f.follower?.id || '',
     name: f.follower?.name || '',
-    avatar: f.follower?.avatarUrl || '',
+    avatar: resolveImage(f.follower?.avatarUrl) || '',
     verified: f.follower?.verified ?? false,
     plan: f.follower?.effectivePlan ?? f.follower?.plan ?? 'FREE',
     location: f.follower?.location || '',
@@ -322,7 +322,7 @@ export default function PublicUserProfile() {
     id: f.id,
     userId: f.followed?.id || '',
     name: f.followed?.name || '',
-    avatar: f.followed?.avatarUrl || '',
+    avatar: resolveImage(f.followed?.avatarUrl) || '',
     verified: f.followed?.verified ?? false,
     plan: f.followed?.effectivePlan ?? f.followed?.plan ?? 'FREE',
     location: f.followed?.location || '',
@@ -440,7 +440,7 @@ export default function PublicUserProfile() {
         <View style={styles.coverWrap}>
           {user.coverUrl ? (
             <Animated.Image
-              source={{ uri: user.coverUrl }}
+              source={{ uri: resolveImage(user.coverUrl) }}
               style={[styles.cover, { transform: [{ translateY: coverParallax }, { scale: coverScale }] }]}
             />
           ) : (
@@ -465,7 +465,7 @@ export default function PublicUserProfile() {
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
             {user.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+              <Image source={{ uri: resolveImage(user.avatarUrl) }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback]}>
                 <Text style={styles.avatarInitial}>{user.name?.charAt(0) ?? '?'}</Text>
@@ -916,7 +916,10 @@ export default function PublicUserProfile() {
         )}
       </KeyboardAwareScrollView>
 
-      {/* All products modal */}
+      {/* Gate the heavy modal subtrees so filter chips + lists only mount
+          while the modal is open; native <Modal> keeps rendering its children
+          even at visible=false. */}
+      {allProductsOpen && (
       <Modal
         visible={allProductsOpen}
         animationType="slide"
@@ -1022,8 +1025,10 @@ export default function PublicUserProfile() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All followers modal */}
+      {allFollowersOpen && (
       <Modal
         visible={allFollowersOpen}
         animationType="slide"
@@ -1112,8 +1117,10 @@ export default function PublicUserProfile() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All following modal */}
+      {allFollowingOpen && (
       <Modal
         visible={allFollowingOpen}
         animationType="slide"
@@ -1202,8 +1209,10 @@ export default function PublicUserProfile() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All reviews modal */}
+      {allReviewsOpen && (
       <Modal
         visible={allReviewsOpen}
         animationType="slide"
@@ -1292,8 +1301,11 @@ export default function PublicUserProfile() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
-      <ReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} type="user" targetId={userId} />
+      {reportOpen && (
+        <ReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} type="user" targetId={userId} />
+      )}
     </View>
   );
 }

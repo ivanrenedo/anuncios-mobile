@@ -16,7 +16,7 @@ export function withAlpha(hex: string | null | undefined, alphaHex: string): str
 
 /** Top-level categories with their nested children (the menu tree). */
 export function useCategoryTree() {
-  const { data, loading, error, refetch } = useQuery<any>(CATEGORY_TREE, { fetchPolicy: 'cache-and-network' });
+  const { data, loading, error, refetch } = useQuery<any>(CATEGORY_TREE);
   return { tree: data?.categoryTree ?? [], loading, error, refetch };
 }
 

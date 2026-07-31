@@ -21,7 +21,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 
 interface FaqItem {
   q: string;
@@ -35,7 +35,7 @@ interface FaqSection {
   items: FaqItem[];
 }
 
-const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
+const FAQ_DATA: ((c: ThemeColors, email: string, whatsapp: string) => FaqSection)[] = [
   (c) => ({
     title: 'Comprar',
     icon: ShoppingBag,
@@ -150,14 +150,14 @@ const FAQ_DATA: ((c: ThemeColors) => FaqSection)[] = [
       },
     ],
   }),
-  (c) => ({
+  (c, email, whatsapp) => ({
     title: 'Contacto',
     icon: MessageCircle,
     color: c.primary,
     items: [
       {
         q: '¿Cómo contacto al equipo de Bomelh?',
-        a: `Puedes escribirnos por email a ${EMAIL} o por contacto al ${WHATSAPP_NUMBER}. Respondemos de lunes a viernes, de 9:00 a 18:00.`,
+        a: `Puedes escribirnos por email a ${email} o por contacto al ${whatsapp}. Respondemos de lunes a viernes, de 9:00 a 18:00.`,
       },
       {
         q: '¿Cuánto tardan en responder?',
@@ -173,8 +173,9 @@ export default function HelpScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { email, phone } = useBusinessContact();
 
-  const sections = FAQ_DATA.map((fn) => fn(colors));
+  const sections = FAQ_DATA.map((fn) => fn(colors, email, phone));
 
   const toggle = (key: string) =>
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));

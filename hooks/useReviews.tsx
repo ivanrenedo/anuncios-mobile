@@ -6,7 +6,6 @@ export function useReviewsBySeller(sellerId: string) {
   const { data, loading, error, refetch } = useQuery<any>(REVIEWS_BY_SELLER, {
     variables: { sellerId },
     skip: !sellerId,
-    fetchPolicy: 'cache-and-network',
   });
   return { reviews: data?.reviewsBySeller ?? [], loading, error, refetch };
 }
@@ -15,7 +14,6 @@ export function useSellerRating(sellerId: string) {
   const { data, loading, refetch } = useQuery<any>(SELLER_RATING, {
     variables: { sellerId },
     skip: !sellerId,
-    fetchPolicy: 'cache-and-network',
   });
   return {
     average: data?.sellerRating?.average ?? 0,

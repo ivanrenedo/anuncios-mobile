@@ -4,9 +4,11 @@ import { onError } from '@apollo/client/link/error';
 import { setContext } from '@apollo/client/link/context';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistCache, AsyncStorageWrapper, CachePersistor } from 'apollo3-cache-persist';
 import { GRAPHQL_URL } from './config';
 
 const TOKEN_KEY = 'market_eg_token';
+const APOLLO_CACHE_KEY = 'apollo-cache-persist';
 
 export async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem(TOKEN_KEY);
@@ -20,6 +22,15 @@ export async function removeToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
+// Plain HttpLink — Apollo Server v5 (@apollo/server ^5) that the backend runs
+// rejects batched POST arrays unless `allowBatchedHttpRequests: true` is set
+// on the driver config. Until the backend is deployed with that flag, keep
+// one request per query. To switch back to batching:
+//   1. In backend/src/app.module.ts inside GraphQLModule.forRootAsync
+//      useFactory return object, add: allowBatchedHttpRequests: true
+//   2. Deploy the backend.
+//   3. Swap this createHttpLink for BatchHttpLink from
+//      '@apollo/client/link/batch-http' (batchMax:10, batchInterval:20).
 const httpLink = createHttpLink({ uri: GRAPHQL_URL });
 
 const authLink = setContext(async (_, { headers }) => {
@@ -69,48 +80,85 @@ const errorLink = onError(({ error }) => {
   }
 });
 
-export const apolloClient = new ApolloClient({
-  link: errorLink.concat(authLink.concat(httpLink)),
-  cache: new InMemoryCache({
-    typePolicies: {
-      Query: {
-        fields: {
-          products: { merge: false },
-          productsByCategory: { merge: false },
-          productsBySeller: { merge: false },
-          searchProducts: { merge: false },
-          sectionProducts: { merge: false },
-          homeSections: { merge: false },
-          myFavorites: { merge: false },
-          notifications: { merge: false },
-          reviewsBySeller: { merge: false },
-          followers: { merge: false },
-          following: { merge: false },
-          mySavedSearches: { merge: false },
-          myViewsDaily: { merge: false },
-        },
-      },
-      ProductModel: {
-        fields: {
-          images: { merge: false },
-          vehicleDetail: { merge: false },
-          propertyDetail: { merge: false },
-          serviceDetail: { merge: false },
-          jobDetail: { merge: false },
-        },
+const cache = new InMemoryCache({
+  typePolicies: {
+    Query: {
+      fields: {
+        products: { merge: false },
+        productsByCategory: { merge: false },
+        productsBySeller: { merge: false },
+        searchProducts: { merge: false },
+        sectionProducts: { merge: false },
+        homeSections: { merge: false },
+        myFavorites: { merge: false },
+        notifications: { merge: false },
+        reviewsBySeller: { merge: false },
+        followers: { merge: false },
+        following: { merge: false },
+        mySavedSearches: { merge: false },
+        myViewsDaily: { merge: false },
       },
     },
-  }),
-  defaultOptions: {
-    // errorPolicy 'all': a failed watched query (e.g. an in-flight request
-    // resolving with UNAUTHENTICATED right after logout) surfaces through the
-    // hook's `error` field instead of throwing an uncaught CombinedGraphQLErrors,
-    // and Apollo skips the cache write for error results (no "missing field"
-    // warnings from writing null data). Direct client.query()/mutate() calls
-    // keep the default 'none' policy so existing try/catch flows still work.
-    // The `as any` cast avoids Apollo 4's DeclareDefaultOptions TS ceremony,
-    // whose module augmentation conflicts with our untyped useQuery<any> calls.
-    watchQuery: { fetchPolicy: 'cache-and-network', errorPolicy: 'all' as any },
-    query: { fetchPolicy: 'network-only' },
+    ProductModel: {
+      fields: {
+        images: { merge: false },
+        vehicleDetail: { merge: false },
+        propertyDetail: { merge: false },
+        serviceDetail: { merge: false },
+        jobDetail: { merge: false },
+      },
+    },
   },
 });
+
+export const apolloClient = new ApolloClient({
+  link: errorLink.concat(authLink.concat(httpLink)),
+  cache,
+  defaultOptions: {
+    // `cache-first` is the fast default: hooks read from the persisted cache
+    // instantly. Screens whose data must always be fresh (notifications, home
+    // feed, product lists) opt into `cache-and-network` explicitly in their hook.
+    // errorPolicy 'all': in-flight queries that resolve with UNAUTHENTICATED
+    // right after logout surface via the hook's `error` field instead of
+    // throwing, and Apollo skips writing null data into the cache.
+    watchQuery: { fetchPolicy: 'cache-first', errorPolicy: 'all' as any },
+    query: { fetchPolicy: 'cache-first' },
+  },
+});
+
+/**
+ * Restore the Apollo cache from AsyncStorage before rendering the app so
+ * screens that were previously visited paint instantly on cold start.
+ * Idempotent — subsequent calls return the same promise.
+ */
+let hydrationPromise: Promise<void> | null = null;
+let cachePersistor: CachePersistor<any> | null = null;
+
+export function hydrateApolloCache(): Promise<void> {
+  if (!hydrationPromise) {
+    cachePersistor = new CachePersistor({
+      cache,
+      storage: new AsyncStorageWrapper(AsyncStorage),
+      key: APOLLO_CACHE_KEY,
+      maxSize: 5 * 1024 * 1024,
+      debug: false,
+    });
+    hydrationPromise = cachePersistor.restore();
+  }
+  return hydrationPromise;
+}
+
+/**
+ * Wipe both the in-memory Apollo cache and the persisted copy in AsyncStorage.
+ * Call on logout — otherwise the next cold start rehydrates the previous
+ * user's data and the app renders it before the fresh session lands.
+ */
+export async function purgeApolloCache(): Promise<void> {
+  try {
+    if (cachePersistor) await cachePersistor.purge();
+  } catch {
+    // Fallback: nuke the key directly so we never leave stale data behind.
+    await AsyncStorage.removeItem(APOLLO_CACHE_KEY).catch(() => {});
+  }
+  await apolloClient.clearStore().catch(() => {});
+}

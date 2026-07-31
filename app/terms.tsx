@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 
 const LAST_UPDATED = '8 de julio de 2026';
 
@@ -19,7 +19,7 @@ interface Section {
   body: string;
 }
 
-const SECTIONS: Section[] = [
+const buildSections = (email: string, whatsapp: string): Section[] => [
   {
     title: '1. Información general',
     body: 'Bomelh es una plataforma de anuncios clasificados que permite a los usuarios de Guinea Ecuatorial publicar, buscar y contactar sobre productos y servicios. Bomelh no es parte en las transacciones entre usuarios y actúa únicamente como intermediario tecnológico.\n\nAl registrarte o usar la aplicación, aceptas estos Términos y Condiciones en su totalidad. Si no estás de acuerdo, no utilices la plataforma.',
@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '11. Contacto',
-    body: `Para cualquier consulta sobre estos Términos y Condiciones, puedes contactarnos en:\n\n• Email: ${EMAIL}\n• Contacto: ${WHATSAPP_NUMBER}`,
+    body: `Para cualquier consulta sobre estos Términos y Condiciones, puedes contactarnos en:\n\n• Email: ${email}\n• Contacto: ${whatsapp}`,
   },
 ];
 
@@ -71,6 +71,8 @@ export default function TermsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { email, phone } = useBusinessContact();
+  const sections = useMemo(() => buildSections(email, phone), [email, phone]);
 
   return (
     <View style={styles.root}>
@@ -98,7 +100,7 @@ export default function TermsScreen() {
         }}>
         <Text style={styles.updated}>Última actualización: {LAST_UPDATED}</Text>
 
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Text style={styles.sectionBody}>{section.body}</Text>

@@ -14,6 +14,7 @@ import {
   getToken,
   onAccountSuspended,
   resetSuspendedAlert,
+  purgeApolloCache,
 } from '@/lib/apollo';
 import { GOOGLE_LOGIN, LOGOUT } from '@/graphql/mutations';
 import { ME } from '@/graphql/queries';
@@ -23,7 +24,7 @@ const AUTH_STORAGE_KEY = 'market_eg_auth_v1';
 const REFRESH_TOKEN_KEY = 'market_eg_refresh_token';
 
 export const GOOGLE_WEB_CLIENT_ID =
-  '296495104091-f6cnko1bhds9ga46e2r3dt13pc9gt6of.apps.googleusercontent.com';
+  '962502086719-5fvrdle768s2s9h3ivflrg6qqj3880ob.apps.googleusercontent.com';
 
 /** Reject if a promise (e.g. an unreachable backend call) doesn't settle in time. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -93,8 +94,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           // Validate the token *before* trusting the cached session. Otherwise a
           // stale/invalid token (e.g. after a DB reset) leaves the app in a
           // half-authenticated state that fires guarded queries → Unauthorized.
+          // MUST be network-only — with the Apollo default now cache-first plus
+          // persisted cache, this would otherwise return stale ME data without
+          // touching the backend and never notice an expired/revoked token.
           const { data }: any = await apolloClient.query({
             query: ME,
+            fetchPolicy: 'network-only',
           });
 
           if (data?.me?.permission === 'DENIED') {
@@ -127,7 +132,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
     } catch (error) {
-      console.log({ error });
       /* ignore */
     } finally {
       set({ loading: false });
@@ -159,6 +163,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         );
         return null;
       }
+      // Nuke any cache from a previous session (persisted or not) so cached
+      // queries don't leak that user's data into this one.
+      await purgeApolloCache().catch(() => {});
       await setToken(accessToken);
       await AsyncStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
       const authUser: AuthUser = {
@@ -249,7 +256,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
     await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
     await removeToken();
-    await apolloClient.clearStore();
+    // Wipe both InMemoryCache AND the persisted copy — otherwise on the next
+    // cold start `hydrateApolloCache` restores the previous user's data.
+    await purgeApolloCache();
   },
 }));
 

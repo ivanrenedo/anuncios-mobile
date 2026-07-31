@@ -61,7 +61,7 @@ import { useProductsBySeller, useDeleteProduct, useMyViewsDaily } from '@/hooks/
 import { useCategoryTree, useCategoryRootMap, withAlpha } from '@/hooks/useCategories';
 import { useReviewsBySeller, useSellerRating } from '@/hooks/useReviews';
 import { useFollowers, useFollowing, useFollowersCount, useFollowingCount } from '@/hooks/useFollowers';
-import { API_URL } from '@/lib/config';
+import { API_URL, resolveImage } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
@@ -251,7 +251,7 @@ export default function ProfileScreen() {
   const reviewItems = myReviews.map((r: any) => ({
     id: r.id,
     author: r.author?.name || '',
-    avatar: r.author?.avatarUrl || '',
+    avatar: resolveImage(r.author?.avatarUrl) || '',
     rating: r.rating,
     text: r.text || '',
     date: r.createdAt ? timeAgo(r.createdAt) : '',
@@ -262,7 +262,7 @@ export default function ProfileScreen() {
     id: f.id,
     userId: f.follower?.id || '',
     name: f.follower?.name || '',
-    avatar: f.follower?.avatarUrl || '',
+    avatar: resolveImage(f.follower?.avatarUrl) || '',
     verified: f.follower?.verified ?? false,
     plan: f.follower?.effectivePlan ?? f.follower?.plan ?? 'FREE',
     location: f.follower?.location || '',
@@ -274,7 +274,7 @@ export default function ProfileScreen() {
     id: f.id,
     userId: f.followed?.id || '',
     name: f.followed?.name || '',
-    avatar: f.followed?.avatarUrl || '',
+    avatar: resolveImage(f.followed?.avatarUrl) || '',
     verified: f.followed?.verified ?? false,
     plan: f.followed?.effectivePlan ?? f.followed?.plan ?? 'FREE',
     location: f.followed?.location || '',
@@ -429,7 +429,7 @@ export default function ProfileScreen() {
         <View style={styles.coverWrap}>
           {profile.cover_url ? (
             <Animated.Image
-              source={{ uri: profile.cover_url }}
+              source={{ uri: resolveImage(profile.cover_url) }}
               style={[
                 styles.cover,
                 { transform: [{ translateY: coverParallax }, { scale: coverScale }] },
@@ -463,7 +463,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
             {profile.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+              <Image source={{ uri: resolveImage(profile.avatar_url) }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }]}>
                 <User size={32} color={colors.onSurfaceVariant} strokeWidth={1.5} />
@@ -1067,13 +1067,21 @@ export default function ProfileScreen() {
         <Text style={styles.version}>Bomelh · v1.0.0</Text>
       </Animated.ScrollView>
 
-      <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <CenterSafetyModal
-        visible={centerSafetyOpen}
-        onClose={() => setcenterSafetyOpen(false)}
-      />
+      {/* Gate modal subtrees so the heavy contents (ScrollView + filter chips
+          + lists) only mount while the modal is open. Native <Modal> keeps
+          rendering its children even when visible=false. */}
+      {settingsOpen && (
+        <SettingsModal visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      )}
+      {centerSafetyOpen && (
+        <CenterSafetyModal
+          visible={centerSafetyOpen}
+          onClose={() => setcenterSafetyOpen(false)}
+        />
+      )}
 
       {/* All products modal */}
+      {allProductsOpen && (
       <Modal
         visible={allProductsOpen}
         animationType="slide"
@@ -1243,8 +1251,10 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All followers modal */}
+      {allFollowersOpen && (
       <Modal
         visible={allFollowersOpen}
         animationType="slide"
@@ -1368,8 +1378,10 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All following modal */}
+      {allFollowingOpen && (
       <Modal
         visible={allFollowingOpen}
         animationType="slide"
@@ -1493,8 +1505,10 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* All reviews modal */}
+      {allReviewsOpen && (
       <Modal
         visible={allReviewsOpen}
         animationType="slide"
@@ -1611,8 +1625,10 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
       </Modal>
+      )}
 
       {/* Confirmation modal */}
+      {confirmAction !== null && (
       <Modal
         transparent
         visible={confirmAction !== null}
@@ -1688,6 +1704,7 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      )}
     </View>
   );
 }

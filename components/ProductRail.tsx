@@ -50,7 +50,7 @@ function getIconColor(name?: string | null) {
   return ICON_COLOR[name ?? ''] ?? '#534AB7';
 }
 
-export default function ProductRail({
+function ProductRail({
   title,
   icon,
   items,
@@ -134,6 +134,8 @@ export default function ProductRail({
     </View>
   );
 }
+
+export default React.memo(ProductRail);
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({

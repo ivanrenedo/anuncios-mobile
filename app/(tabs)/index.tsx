@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 import { Bell, Search, LogIn, Megaphone, Shield, Users, Clock, X, Plus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductsBySeller } from '@/hooks/useProducts';
@@ -69,7 +69,7 @@ function toCardItem(p: any): ProductCardItem {
   };
 }
 
-function SectionRenderer({
+const SectionRenderer = React.memo(function SectionRenderer({
   section,
   trackEvent,
 }: {
@@ -86,28 +86,36 @@ function SectionRenderer({
     }
   }, [section.id, trackEvent]);
 
-  const handleSeeAll = () => {
+  // Stable callbacks so memoized children (PromoCarousel/ProductRail/ProductGrid)
+  // can skip re-renders when nothing about their inputs changed.
+  const handleSeeAll = useCallback(() => {
     trackEvent(section.id, 'click');
     router.push({
       pathname: '/explore',
       params: { sectionId: section.id },
     });
-  };
+  }, [router, section.id, trackEvent]);
+
+  const handleSlidePress = useCallback(() => {
+    trackEvent(section.id, 'click');
+  }, [section.id, trackEvent]);
+
+  // Recompute only when the underlying products change reference.
+  const items = useMemo(
+    () => (section.products ?? []).map(toCardItem),
+    [section.products],
+  );
 
   switch (section.type) {
     case 'banner':
       return (
-        <PromoCarousel
-          config={section.config}
-          onSlidePress={() => trackEvent(section.id, 'click')}
-        />
+        <PromoCarousel config={section.config} onSlidePress={handleSlidePress} />
       );
 
     case 'categories':
       return <CategoryScroll />;
 
     case 'product_grid': {
-      const items = (section.products ?? []).map(toCardItem);
       if (items.length === 0) return null;
       return (
         <ProductGrid
@@ -120,7 +128,6 @@ function SectionRenderer({
     }
 
     case 'premium_showcase': {
-      const items = (section.products ?? []).map(toCardItem);
       if (items.length === 0) return null;
       return (
         <ProductRail
@@ -135,7 +142,6 @@ function SectionRenderer({
 
     case 'recent_views':
     case 'product_rail': {
-      const items = (section.products ?? []).map(toCardItem);
       if (items.length === 0) return null;
       return (
         <ProductRail
@@ -152,7 +158,7 @@ function SectionRenderer({
     default:
       return null;
   }
-}
+});
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -169,12 +175,6 @@ export default function HomeScreen() {
   const [ctaDismissed, setCtaDismissed] = useState(false);
   const showCta = !ctaDismissed && myProducts.length === 0;
   const { sections, loading, refetch, trackEvent } = useHomeSections();
-
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch]),
-  );
 
   const headerShadow = scrollY.interpolate({
     inputRange: [0, 20],

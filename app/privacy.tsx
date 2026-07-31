@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import { EMAIL, WHATSAPP_NUMBER } from '@/lib/config';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 
 const LAST_UPDATED = '8 de julio de 2026';
 
@@ -19,10 +19,10 @@ interface Section {
   body: string;
 }
 
-const SECTIONS: Section[] = [
+const buildSections = (email: string, whatsapp: string): Section[] => [
   {
     title: '1. Responsable del tratamiento',
-    body: `El responsable del tratamiento de tus datos personales es Bomelh, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en ${EMAIL}`,
+    body: `El responsable del tratamiento de tus datos personales es Bomelh, plataforma de anuncios clasificados con actividad en Guinea Ecuatorial.\n\nPara cualquier consulta relacionada con tus datos, puedes contactarnos en ${email}`,
   },
   {
     title: '2. Datos que recopilamos',
@@ -46,7 +46,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '7. Tus derechos',
-    body: `Como usuario, tienes derecho a:\n\n• Acceso: consultar qué datos tenemos sobre ti. Tu perfil y contenido son visibles desde la app.\n• Rectificación: modificar tus datos en cualquier momento desde "Editar perfil".\n• Eliminación: borrar tu cuenta y todos tus datos desde la sección "Cuenta" en tu perfil. La eliminación es permanente e irreversible.\n• Portabilidad: solicitar una copia de tus datos contactando con soporte.\n• Oposición: desactivar las notificaciones desde los ajustes de la app.\n\nPara ejercer cualquiera de estos derechos, contacta con nosotros en ${EMAIL}`,
+    body: `Como usuario, tienes derecho a:\n\n• Acceso: consultar qué datos tenemos sobre ti. Tu perfil y contenido son visibles desde la app.\n• Rectificación: modificar tus datos en cualquier momento desde "Editar perfil".\n• Eliminación: borrar tu cuenta y todos tus datos desde la sección "Cuenta" en tu perfil. La eliminación es permanente e irreversible.\n• Portabilidad: solicitar una copia de tus datos contactando con soporte.\n• Oposición: desactivar las notificaciones desde los ajustes de la app.\n\nPara ejercer cualquiera de estos derechos, contacta con nosotros en ${email}`,
   },
   {
     title: '8. Cookies y tecnologías similares',
@@ -62,7 +62,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: '11. Contacto',
-    body: `Para cualquier consulta sobre esta Política de Privacidad o el tratamiento de tus datos:\n\n• Email: ${EMAIL}\n• Contacto: ${WHATSAPP_NUMBER}`,
+    body: `Para cualquier consulta sobre esta Política de Privacidad o el tratamiento de tus datos:\n\n• Email: ${email}\n• Contacto: ${whatsapp}`,
   },
 ];
 
@@ -71,6 +71,8 @@ export default function PrivacyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { email, phone } = useBusinessContact();
+  const sections = useMemo(() => buildSections(email, phone), [email, phone]);
 
   return (
     <View style={styles.root}>
@@ -98,7 +100,7 @@ export default function PrivacyScreen() {
         }}>
         <Text style={styles.updated}>Última actualización: {LAST_UPDATED}</Text>
 
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Text style={styles.sectionBody}>{section.body}</Text>

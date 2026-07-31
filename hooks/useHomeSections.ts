@@ -50,10 +50,16 @@ export function useHomeSections() {
     });
   }, []);
 
-  const { data, loading, refetch } = useQuery(GET_HOME_SECTIONS, {
+  const { data, previousData, loading, refetch } = useQuery(GET_HOME_SECTIONS, {
     variables: { viewerKey },
     skip: viewerKey === null,
-    fetchPolicy: 'network-only',
+    // `cache-and-network` so returning to Home paints instantly from cache
+    // and refreshes in the background. `network-only` was making every focus
+    // wait on the network before anything showed, so navigating back to Home
+    // felt like a 10s freeze.
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: false,
   });
 
   const [trackMutation] = useMutation(TRACK_HOME_SECTION_EVENT);
@@ -68,11 +74,12 @@ export function useHomeSections() {
     [trackMutation],
   );
 
-  const sections: HomeSection[] = (data as any)?.homeSections ?? [];
+  const sections: HomeSection[] =
+    (data as any)?.homeSections ?? (previousData as any)?.homeSections ?? [];
 
   return {
     sections,
-    loading: viewerKey === null || loading,
+    loading: viewerKey === null || (loading && sections.length === 0),
     refetch,
     trackEvent,
   };

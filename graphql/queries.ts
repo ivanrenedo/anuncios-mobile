@@ -701,6 +701,15 @@ export const GET_USER = gql`
   }
 `;
 
+export const BUSINESS_CONTACT = gql`
+  query BusinessContact {
+    businessContact {
+      phone
+      email
+    }
+  }
+`;
+
 // ─── Verifications ───────────────────────────────────────────────────────────
 
 export const MY_VERIFICATION_REQUEST = gql`

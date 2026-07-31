@@ -49,7 +49,8 @@ import { useProduct, useViewProduct, useContactProduct, useRelatedProducts } fro
 import { useSellerRating } from '@/hooks/useReviews';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
 import { useAuth } from '@/hooks/useAuth';
-import { API_URL, SHARE_URL, WHATSAPP_NUMBER } from '@/lib/config';
+import { API_URL, SHARE_URL, resolveImage } from '@/lib/config';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 import { useShare } from '@/hooks/useShare';
 import Skeleton from '@/components/Skeleton';
 import { fmtPrice, type ProductCardItem } from '@/components/ProductCard';
@@ -69,7 +70,7 @@ function toCardItem(p: any): ProductCardItem {
     location: p.city,
     seller: p.seller?.name,
     sellerId: p.seller?.id,
-    avatar: p.seller?.avatarUrl,
+    avatar: resolveImage(p.seller?.avatarUrl),
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
@@ -174,7 +175,7 @@ export default function ProductDetailScreen() {
   const [descExpanded, setDescExpanded] = useState(false);
   const [descNeedsToggle, setDescNeedsToggle] = useState<boolean | null>(null);
 
-  const contactNumber = WHATSAPP_NUMBER;
+  const { phone: contactNumber } = useBusinessContact();
 
   // Track view once per listing — the ref guard survives re-mounts and any
   // double-invoked effect, and the backend also dedups per visitor (6h window).

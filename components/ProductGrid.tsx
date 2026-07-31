@@ -85,7 +85,7 @@ interface Props {
   onSeeAll?: () => void;
 }
 
-export default function ProductGrid({
+function ProductGrid({
   title,
   icon,
   items: externalItems,
@@ -213,6 +213,8 @@ export default function ProductGrid({
     </View>
   );
 }
+
+export default React.memo(ProductGrid);
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({

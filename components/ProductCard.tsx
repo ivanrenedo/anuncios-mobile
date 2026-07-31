@@ -59,7 +59,7 @@ export function fmtPrice(n: number) {
   return `${fmtNumber(n)} XFA`;
 }
 
-export default function ProductCard({
+function ProductCardImpl({
   item,
   liked = false,
   onLike,
@@ -67,7 +67,7 @@ export default function ProductCard({
   width,
   accentColor,
   style,
-}: Props) { 
+}: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
@@ -229,6 +229,48 @@ export default function ProductCard({
     </TouchableOpacity>
   );
 }
+
+/**
+ * Memoized so re-renders of the parent list (favorite toggle, scroll, etc.)
+ * skip cards whose props didn't change. `item` is a fresh object per parent
+ * render, so we do a shallow compare of the fields the card actually reads.
+ *
+ * `onLike` and `onPress` are intentionally NOT compared: every caller passes
+ * a fresh inline arrow (`() => toggleFavorite(item.id)`, `() => router.push(...)`),
+ * so referential comparison would always miss and defeat the memo. Their
+ * behavior is a pure function of `item.id`, so skipping when the item is
+ * unchanged is safe in this codebase.
+ */
+const ProductCard = React.memo(ProductCardImpl, (prev, next) => {
+  if (prev.liked !== next.liked) return false;
+  if (prev.width !== next.width) return false;
+  if (prev.accentColor !== next.accentColor) return false;
+  const a = prev.item;
+  const b = next.item;
+  return (
+    a.id === b.id &&
+    a.title === b.title &&
+    a.price === b.price &&
+    a.image === b.image &&
+    a.avatar === b.avatar &&
+    a.seller === b.seller &&
+    a.sellerId === b.sellerId &&
+    a.location === b.location &&
+    a.condition === b.condition &&
+    a.verified === b.verified &&
+    a.sellerPlan === b.sellerPlan &&
+    a.isBoosted === b.isBoosted &&
+    a.promo === b.promo &&
+    a.discount === b.discount &&
+    a.priceRaw === b.priceRaw &&
+    a.categoryLabel === b.categoryLabel &&
+    a.operation === b.operation &&
+    a.offerType === b.offerType &&
+    a.postedAgo === b.postedAgo
+  );
+});
+
+export default ProductCard;
 
 /** Loading placeholder matching ProductCard's shape (image + 2 text lines). */
 export function ProductCardSkeleton({ width }: { width?: number }) {
