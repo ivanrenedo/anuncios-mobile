@@ -60,6 +60,12 @@
       "@react-native-google-signin/google-signin",
       "./plugins/withJdk17",
       [
+        "./plugins/withAndroidAbiFilters",
+        {
+          "abis": ["arm64-v8a", "armeabi-v7a"]
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/splash-icon.png",
