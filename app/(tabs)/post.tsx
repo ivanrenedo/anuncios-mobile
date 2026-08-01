@@ -51,6 +51,7 @@ import {
   generateVideoThumbnail,
   type MediaAsset,
 } from '@/lib/upload';
+import { optimizeImage } from '@/lib/imageOptimizer';
 import { resolveImage } from '@/lib/config';
 import Spinner from '@/components/Spinner';
 import ColorPicker from '@/components/ColorPicker';
@@ -58,7 +59,11 @@ import { fmtPrice as fmtPriceCompact } from '@/components/ProductCard';
 import { getErrorMessage } from '@/lib/errors';
 
 const MAX_PHOTOS = 4;
-const MAX_PHOTO_MB = 2;
+// Videos still get a real cap — we don't transcode them client-side, so a
+// huge original would kill the upload on a mobile connection. Photos no
+// longer have a client-side size cap: `optimizeImage` downscales anything
+// large to ~300-500 KB before it ever reaches the size check.
+const MAX_VIDEO_MB = 50;
 
 // expo-image-picker is a native module (requireNativeModule at import). Load it
 // defensively so an outdated binary (built before it was added) degrades
@@ -1820,32 +1825,35 @@ function PhotoPicker({
   const addAssets = async (assets: ImagePickerAsset[]) => {
     const room = maxPhotos - media.length;
     const accepted: MediaAsset[] = [];
-    let tooBig = false;
+    let videoTooBig = false;
     for (const a of assets.slice(0, room)) {
-      // Videos get a higher ceiling since they naturally weigh more than an
-      // image; anything over 50 MB is rejected so the presigned PUT stays
-      // within reasonable time on a mobile connection.
       const isVideo = a.type === 'video';
-      const maxBytes = (isVideo ? 50 : MAX_PHOTO_MB) * 1024 * 1024;
-      if (a.fileSize != null && a.fileSize > maxBytes) {
-        tooBig = true;
-        continue;
-      }
-      let thumbnailUri: string | undefined;
       if (isVideo) {
-        thumbnailUri = await generateVideoThumbnail(a.uri);
+        // Videos aren't transcoded client-side; anything huge would take
+        // forever to PUT over a mobile connection, so we still cap them.
+        const maxBytes = MAX_VIDEO_MB * 1024 * 1024;
+        if (a.fileSize != null && a.fileSize > maxBytes) {
+          videoTooBig = true;
+          continue;
+        }
+        const thumbnailUri = await generateVideoThumbnail(a.uri);
+        accepted.push({ uri: a.uri, type: 'video', thumbnailUri });
+      } else {
+        // Downscale + recompress *before* uploading — user never sees a size
+        // rejection. A 12 MP HEIC comes out as a ~400 KB JPEG that looks
+        // identical on any phone screen.
+        const optimizedUri = await optimizeImage(a.uri, {
+          sourceWidth: a.width,
+          sourceHeight: a.height,
+        });
+        accepted.push({ uri: optimizedUri, type: 'image' });
       }
-      accepted.push({
-        uri: a.uri,
-        type: isVideo ? 'video' : 'image',
-        thumbnailUri,
-      });
     }
     if (accepted.length) setMedia([...media, ...accepted]);
-    if (tooBig) {
+    if (videoTooBig) {
       Alert.alert(
-        'Archivo demasiado grande',
-        `Las fotos no pueden pesar más de ${MAX_PHOTO_MB} MB y los vídeos no más de 50 MB.`,
+        'Vídeo demasiado grande',
+        `Los vídeos no pueden pesar más de ${MAX_VIDEO_MB} MB.`,
       );
     } else if (assets.length > room) {
       Alert.alert(

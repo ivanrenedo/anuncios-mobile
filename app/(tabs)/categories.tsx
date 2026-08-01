@@ -17,6 +17,7 @@ import { Search, LayoutGrid } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useCategoryTree } from '@/hooks/useCategories';
 import { useProducts } from '@/hooks/useProducts';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -33,9 +34,13 @@ export default function CategoriesScreen() {
   const styles = useThemedStyles(makeStyles);
   const paneAnim = useRef(new Animated.Value(1)).current;
   const rightScrollRef = useRef<ScrollView>(null);
-  const { tree, loading } = useCategoryTree();
-  const { products } = useProducts(100);
+  const { tree, loading, refetch: refetchTree } = useCategoryTree();
+  const { products, refetch: refetchProducts } = useProducts(100);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
+
+  // Categorías creadas desde el panel admin, o productos nuevos que aportan
+  // thumbnails a categorías vacías, aparecen al volver a esta pantalla.
+  useRefetchOnFocus([refetchTree, refetchProducts]);
 
   // Representative thumbnail per leaf category id (first product image found).
   const imageByCategory = useMemo(() => {

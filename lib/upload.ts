@@ -197,8 +197,10 @@ export async function uploadMedia(
   return results;
 }
 
-// ─── Legacy proxy-based helpers (still used elsewhere; kept for now) ───────
-
+// Single-image proxy upload — still used by the profile avatar picker in
+// app/edit-profile.tsx. The presigned-URL flow above (uploadWithPresigned)
+// is preferred for listings; this shorter proxy path stays for the avatar
+// case where we upload one file and expect a URL back.
 export async function uploadImage(uri: string): Promise<string> {
   const token = await getToken();
   const name = uri.split('/').pop() || 'photo.jpg';
@@ -219,25 +221,4 @@ export async function uploadImage(uri: string): Promise<string> {
 
   const data = JSON.parse(text);
   return resolveImage(data.url) ?? data.url;
-}
-
-export async function uploadImages(uris: string[]): Promise<string[]> {
-  const token = await getToken();
-  const form = new FormData();
-
-  uris.forEach((uri) => {
-    const name = uri.split('/').pop() || 'photo.jpg';
-    const match = /\.(\w+)$/.exec(name);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-    form.append('files', { uri, name, type } as any);
-  });
-
-  const res = await fetch(`${UPLOAD_URL}/images`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  });
-
-  const data = await res.json();
-  return (data.urls as string[]).map((u) => resolveImage(u) ?? u);
 }

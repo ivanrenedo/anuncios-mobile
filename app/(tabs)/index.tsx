@@ -26,6 +26,7 @@ import BrandLogo from '@/components/BrandLogo';
 import Skeleton from '@/components/Skeleton';
 import { ProductCardSkeleton } from '@/components/ProductCard';
 import { useUnreadCount } from '@/hooks/useNotifications';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
 import { ProductCardItem, fmtPrice } from '@/components/ProductCard';
 
@@ -175,6 +176,11 @@ export default function HomeScreen() {
   const [ctaDismissed, setCtaDismissed] = useState(false);
   const showCta = !ctaDismissed && myProducts.length === 0;
   const { sections, loading, refetch, trackEvent } = useHomeSections();
+
+  // Refresh feed + badge every time Home regains focus (returning from post,
+  // from a product, from a background). Other users' new listings and freshly
+  // arrived notifications become visible without a pull-to-refresh.
+  useRefetchOnFocus([refetch, refetchUnread]); 
 
   const headerShadow = scrollY.interpolate({
     inputRange: [0, 20],

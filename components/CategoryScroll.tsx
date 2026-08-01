@@ -24,10 +24,12 @@ import {
   Refrigerator,
   Laptop,
   Smartphone,
+  Watch,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
 import { useCategoryTree } from '@/hooks/useCategories';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   baby: Baby,
@@ -43,6 +45,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   laptop: Laptop,
   smartphone: Smartphone,
   shirt: Shirt,
+  watch: Watch
 };
 
 const DEFAULT_COLOR = '#006b5e';
@@ -56,10 +59,14 @@ function hexToRgba(hex: string, alpha: number): string {
 
 export default function CategoryScroll() {
   const router = useRouter();
-  const { tree: categories, loading } = useCategoryTree();
+  const { tree: categories, loading, refetch: refetchTree } = useCategoryTree();
+
+    // Categorías creadas desde el panel admin, o productos nuevos que aportan
+    // thumbnails a categorías vacías, aparecen al volver a esta pantalla.
+    useRefetchOnFocus([refetchTree]);
 
   const search = (term: string) =>
-    router.push({ pathname: '/explore', params: { filterCat: term } });
+  router.push({ pathname: '/explore', params: { filterCat: term } });
 
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);

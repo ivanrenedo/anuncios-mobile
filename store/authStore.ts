@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Platform, Alert, AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -36,12 +36,10 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-if (Platform.OS !== 'web') {
-  GoogleSignin.configure({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    scopes: ['profile', 'email'],
-  });
-}
+GoogleSignin.configure({
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+  scopes: ['profile', 'email'],
+});
 
 export interface AuthUser {
   id: string;
@@ -64,12 +62,8 @@ interface AuthState {
   user: AuthUser | null;
   loading: boolean;
   isAuthenticated: boolean;
-  /** Web-only: set by AuthProvider once the AuthSession request is ready. */
-  _webPrompt: (() => Promise<void>) | null;
-  setWebPrompt: (fn: (() => Promise<void>) | null) => void;
   hydrate: () => Promise<void>;
   loginWithBackend: (googleUser: GoogleUser) => Promise<AuthUser | null>;
-  completeWebLogin: (googleAccessToken: string) => Promise<void>;
   signInWithGoogleNative: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -79,9 +73,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
   isAuthenticated: false,
-  _webPrompt: null,
-
-  setWebPrompt: (fn) => set({ _webPrompt: fn }),
 
   hydrate: async () => {
     try {
@@ -194,21 +185,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  completeWebLogin: async (googleAccessToken) => {
-    try {
-      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${googleAccessToken}` },
-      });
-      const info = await res.json();
-      await get().loginWithBackend({
-        id: info.sub,
-        email: info.email,
-        name: info.name,
-        avatar: info.picture,
-      });
-    } catch {}
-  },
-
   signInWithGoogleNative: async () => {
     try {
       await GoogleSignin.hasPlayServices({
@@ -235,22 +211,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signInWithGoogle: async () => {
-    if (Platform.OS === 'web') {
-      const prompt = get()._webPrompt;
-      if (prompt) await prompt();
-      return;
-    }
     await get().signInWithGoogleNative();
   },
 
   signOut: async () => {
     await apolloClient.mutate({ mutation: LOGOUT }).catch(() => {});
-    if (Platform.OS !== 'web') {
-      try {
-        await GoogleSignin.signOut();
-      } catch {
-        /* ignore */
-      }
+    try {
+      await GoogleSignin.signOut();
+    } catch {
+      /* ignore */
     }
     set({ user: null, isAuthenticated: false });
     await AsyncStorage.removeItem(AUTH_STORAGE_KEY);

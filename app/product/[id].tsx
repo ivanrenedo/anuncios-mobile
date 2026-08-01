@@ -48,6 +48,7 @@ import { ArrowUpCircle, MessageCircle, Zap } from 'lucide-react-native';
 import { useProduct, useViewProduct, useContactProduct, useRelatedProducts } from '@/hooks/useProducts';
 import { useSellerRating } from '@/hooks/useReviews';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { useAuth } from '@/hooks/useAuth';
 import { API_URL, SHARE_URL, resolveImage } from '@/lib/config';
 import { useBusinessContact } from '@/hooks/useBusinessContact';
@@ -156,6 +157,11 @@ export default function ProductDetailScreen() {
   const categoryId = apiProduct?.category?.id || '';
   const productTitle = apiProduct?.title || '';
   const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useRelatedProducts(productTitle, categoryId);
+
+  // Precio, disponibilidad, favoritos y rating del vendedor pueden cambiar
+  // desde otras sesiones — recarga al volver a la ficha.
+  useRefetchOnFocus([refetchProduct, refetchRating, refetchRelated]);
+
   const relatedItems = relatedRaw
     .filter((p: any) => p.id !== id)
     .slice(0, 10)

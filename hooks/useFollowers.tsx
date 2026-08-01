@@ -25,27 +25,27 @@ export function useFollowing(userId: string) {
 }
 
 export function useIsFollowing(userId: string) {
-  const { data, loading } = useQuery<any>(IS_FOLLOWING, {
+  const { data, loading, refetch } = useQuery<any>(IS_FOLLOWING, {
     variables: { userId },
     skip: !userId,
   });
-  return { isFollowing: data?.isFollowing ?? false, loading };
+  return { isFollowing: data?.isFollowing ?? false, loading, refetch };
 }
 
 export function useFollowersCount(userId: string) {
-  const { data, loading } = useQuery<any>(FOLLOWERS_COUNT, {
+  const { data, loading, refetch } = useQuery<any>(FOLLOWERS_COUNT, {
     variables: { userId },
     skip: !userId,
   });
-  return { count: data?.followersCount ?? 0, loading };
+  return { count: data?.followersCount ?? 0, loading, refetch };
 }
 
 export function useFollowingCount(userId: string) {
-  const { data, loading } = useQuery<any>(FOLLOWING_COUNT, {
+  const { data, loading, refetch } = useQuery<any>(FOLLOWING_COUNT, {
     variables: { userId },
     skip: !userId,
   });
-  return { count: data?.followingCount ?? 0, loading };
+  return { count: data?.followingCount ?? 0, loading, refetch };
 }
 
 const FOLLOW_QUERIES = [

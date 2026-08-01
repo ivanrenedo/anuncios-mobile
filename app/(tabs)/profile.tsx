@@ -13,6 +13,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -64,7 +65,9 @@ import { useFollowers, useFollowing, useFollowersCount, useFollowingCount } from
 import { API_URL, resolveImage } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
+import ImageViewing from 'react-native-image-viewing';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -117,11 +120,12 @@ export default function ProfileScreen() {
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers: myFollowers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
   const { following: myFollowing, loading: followingLoading, refetch: refetchFollowing } = useFollowing(userId);
-  const { count: followersCountNum } = useFollowersCount(userId);
-  const { count: followingCountNum } = useFollowingCount(userId);
+  const { count: followersCountNum, refetch: refetchFollowersCount } = useFollowersCount(userId);
+  const { count: followingCountNum, refetch: refetchFollowingCount } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'logout' | 'delete' | null>(null);
   const [allProductsOpen, setAllProductsOpen] = useState(false);
@@ -156,7 +160,11 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  
+  // Estado social del perfil visitado (seguidores, follow-back, reviews nuevas,
+    // productos publicados/borrados) puede haber cambiado desde otra sesión.
+    useRefetchOnFocus([
+     refresh, refetchProducts, refetchReviews, refetchFollowers, refetchFollowing,
+    ]);
 
   const { share } = useShare();
   const onShareProfile = () =>
@@ -427,23 +435,33 @@ export default function ProfileScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Cover */}
         <View style={styles.coverWrap}>
-          {profile.cover_url ? (
-            <Animated.Image
-              source={{ uri: resolveImage(profile.cover_url) }}
-              style={[
-                styles.cover,
-                { transform: [{ translateY: coverParallax }, { scale: coverScale }] },
-              ]}
-            />
-          ) : (
-            <Animated.View
-              style={[
-                styles.cover,
-                { backgroundColor: colors.surfaceContainerHigh, transform: [{ translateY: coverParallax }, { scale: coverScale }] },
-              ]}
-            />
-          )}
+          <TouchableOpacity
+            activeOpacity={0.95}
+            style={styles.cover}
+            disabled={!profile.cover_url}
+            onPress={() => {
+              const uri = resolveImage(profile.cover_url);
+              if (uri) setViewerUri(uri);
+            }}>
+            {profile.cover_url ? (
+              <Animated.Image
+                source={{ uri: resolveImage(profile.cover_url) }}
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  { transform: [{ translateY: coverParallax }, { scale: coverScale }] },
+                ]}
+              />
+            ) : (
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  { backgroundColor: colors.surfaceContainerHigh, transform: [{ translateY: coverParallax }, { scale: coverScale }] },
+                ]}
+              />
+            )}
+          </TouchableOpacity>
           <LinearGradient
+            pointerEvents="none"
             colors={['transparent', 'rgba(0,0,0,0.35)', colors.surface]}
             locations={[0, 0.55, 1]}
             style={StyleSheet.absoluteFillObject}
@@ -462,13 +480,21 @@ export default function ProfileScreen() {
         {/* Avatar bubble + edit button */}
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
-            {profile.avatar_url ? (
-              <Image source={{ uri: resolveImage(profile.avatar_url) }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }]}>
-                <User size={32} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-              </View>
-            )}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={!profile.avatar_url}
+              onPress={() => {
+                const uri = resolveImage(profile.avatar_url);
+                if (uri) setViewerUri(uri);
+              }}>
+              {profile.avatar_url ? (
+                <Image source={{ uri: resolveImage(profile.avatar_url) }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.surfaceContainerHigh, alignItems: 'center', justifyContent: 'center' }]}>
+                  <User size={32} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                </View>
+              )}
+            </TouchableOpacity>
             {profile.verified && (
               <View style={styles.verifiedBadge}>
                 <BadgeCheck size={16} color="#ffffff" fill={colors.primary} />
@@ -545,16 +571,34 @@ export default function ProfileScreen() {
           {(profile.show_email || profile.show_phone) && (
             <View style={styles.contactRow}>
               {profile.show_email && profile.email ? (
-                <View style={styles.contactItem}>
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  activeOpacity={0.6}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Escribir a ${profile.email}`}
+                  onPress={() =>
+                    Linking.openURL(`mailto:${profile.email}`).catch(() =>
+                      Alert.alert('No se pudo abrir', 'No hay app de correo configurada en el dispositivo.'),
+                    )
+                  }>
                   <Mail size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                  <Text style={styles.contactText}>{profile.email}</Text>
-                </View>
+                  <Text style={[styles.contactText, styles.contactTextLink]}>{profile.email}</Text>
+                </TouchableOpacity>
               ) : null}
               {profile.show_phone && profile.phone ? (
-                <View style={styles.contactItem}>
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  activeOpacity={0.6}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Llamar a ${profile.phone}`}
+                  onPress={() =>
+                    Linking.openURL(`tel:${String(profile.phone).replace(/\s+/g, '')}`).catch(() =>
+                      Alert.alert('No se pudo abrir', 'Este dispositivo no puede realizar llamadas.'),
+                    )
+                  }>
                   <Phone size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                  <Text style={styles.contactText}>{profile.phone}</Text>
-                </View>
+                  <Text style={[styles.contactText, styles.contactTextLink]}>{profile.phone}</Text>
+                </TouchableOpacity>
               ) : null}
             </View>
           )}
@@ -1079,6 +1123,24 @@ export default function ProfileScreen() {
           onClose={() => setcenterSafetyOpen(false)}
         />
       )}
+
+      <ImageViewing
+        images={viewerUri ? [{ uri: viewerUri }] : []}
+        imageIndex={0}
+        visible={!!viewerUri}
+        onRequestClose={() => setViewerUri(null)}
+        HeaderComponent={() => (
+          <View style={{ paddingTop: insets.top + 8, paddingRight: 16, alignItems: 'flex-end' }}>
+            <TouchableOpacity
+              onPress={() => setViewerUri(null)}
+              activeOpacity={0.8}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} color="#ffffff" strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        )}
+      />
+
 
       {/* All products modal */}
       {allProductsOpen && (
@@ -1939,6 +2001,10 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Regular',
     fontSize: 13,
     color: colors.onSurfaceVariant,
+  },
+  contactTextLink: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
   badgesRow: {
     paddingHorizontal: 16,

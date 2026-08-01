@@ -11,6 +11,7 @@ import {
   Animated,
   Modal,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -60,7 +61,9 @@ import RipplePress from '@/components/RipplePress';
 import Skeleton from '@/components/Skeleton';
 import ReportSheet from '@/components/ReportSheet';
 import { useShare } from '@/hooks/useShare';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL, resolveImage } from '@/lib/config';
+import ImageViewing from 'react-native-image-viewing';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -127,9 +130,24 @@ export default function PublicUserProfile() {
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
   const { following: followingList, loading: followingLoading, refetch: refetchFollowing } = useFollowing(userId);
-  const { count: followersCount } = useFollowersCount(userId);
-  const { count: followingCount } = useFollowingCount(userId);
-  const { isFollowing } = useIsFollowing(isAuthenticated && !isOwn ? userId : '');
+  const { count: followersCount, refetch: refetchFollowersCount } = useFollowersCount(userId);
+  const { count: followingCount, refetch: refetchFollowingCount } = useFollowingCount(userId);
+  const { isFollowing, refetch: refetchIsFollowing } = useIsFollowing(isAuthenticated && !isOwn ? userId : '');
+  const { refetch: refetchRating } = useSellerRating(userId);
+
+  // Estado social del perfil visitado (seguidores, follow-back, reviews nuevas,
+  // productos publicados/borrados) puede haber cambiado desde otra sesión.
+  useRefetchOnFocus([
+    refetchUser,
+    refetchProducts,
+    refetchReviews,
+    refetchFollowers,
+    refetchFollowing,
+    refetchFollowersCount,
+    refetchFollowingCount,
+    refetchIsFollowing,
+    refetchRating,
+  ]);
   const { follow, unfollow } = useFollowToggle();
 
   const { create: createReview, loading: submittingReview } = useCreateReview();
@@ -145,6 +163,7 @@ export default function PublicUserProfile() {
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [bioLines, setBioLines] = useState<number | null>(null);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const [allProductsOpen, setAllProductsOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
@@ -438,17 +457,27 @@ export default function PublicUserProfile() {
         onScroll={(e: any) => scrollY.setValue(e.nativeEvent.contentOffset.y)}>
         {/* Cover */}
         <View style={styles.coverWrap}>
-          {user.coverUrl ? (
-            <Animated.Image
-              source={{ uri: resolveImage(user.coverUrl) }}
-              style={[styles.cover, { transform: [{ translateY: coverParallax }, { scale: coverScale }] }]}
-            />
-          ) : (
-            <Animated.View
-              style={[styles.cover, { backgroundColor: colors.surfaceContainerHigh, transform: [{ translateY: coverParallax }, { scale: coverScale }] }]}
-            />
-          )}
+          <TouchableOpacity
+            activeOpacity={0.95}
+            style={styles.cover}
+            disabled={!user.coverUrl}
+            onPress={() => {
+              const uri = resolveImage(user.coverUrl);
+              if (uri) setViewerUri(uri);
+            }}>
+            {user.coverUrl ? (
+              <Animated.Image
+                source={{ uri: resolveImage(user.coverUrl) }}
+                style={[StyleSheet.absoluteFillObject, { transform: [{ translateY: coverParallax }, { scale: coverScale }] }]}
+              />
+            ) : (
+              <Animated.View
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.surfaceContainerHigh, transform: [{ translateY: coverParallax }, { scale: coverScale }] }]}
+              />
+            )}
+          </TouchableOpacity>
           <LinearGradient
+            pointerEvents="none"
             colors={['transparent', 'rgba(0,0,0,0.35)', colors.surface]}
             locations={[0, 0.55, 1]}
             style={StyleSheet.absoluteFillObject}
@@ -464,13 +493,21 @@ export default function PublicUserProfile() {
         {/* Avatar + actions */}
         <View style={styles.avatarRow}>
           <View style={styles.avatarWrap}>
-            {user.avatarUrl ? (
-              <Image source={{ uri: resolveImage(user.avatarUrl) }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial}>{user.name?.charAt(0) ?? '?'}</Text>
-              </View>
-            )}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={!user.avatarUrl}
+              onPress={() => {
+                const uri = resolveImage(user.avatarUrl);
+                if (uri) setViewerUri(uri);
+              }}>
+              {user.avatarUrl ? (
+                <Image source={{ uri: resolveImage(user.avatarUrl) }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarInitial}>{user.name?.charAt(0) ?? '?'}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             {user.verified && (
               <View style={styles.verifiedBadge}>
                 <BadgeCheck size={16} color="#ffffff" fill={colors.primary} />
@@ -566,16 +603,34 @@ export default function PublicUserProfile() {
           {(user.showEmail || user.showPhone) && (
             <View style={styles.contactRow}>
               {user.showEmail && user.email ? (
-                <View style={styles.contactItem}>
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  activeOpacity={0.6}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Escribir a ${user.email}`}
+                  onPress={() =>
+                    Linking.openURL(`mailto:${user.email}`).catch(() =>
+                      Alert.alert('No se pudo abrir', 'No hay app de correo configurada en el dispositivo.'),
+                    )
+                  }>
                   <Mail size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                  <Text style={styles.contactText}>{user.email}</Text>
-                </View>
+                  <Text style={[styles.contactText, styles.contactTextLink]}>{user.email}</Text>
+                </TouchableOpacity>
               ) : null}
               {user.showPhone && user.phone ? (
-                <View style={styles.contactItem}>
+                <TouchableOpacity
+                  style={styles.contactItem}
+                  activeOpacity={0.6}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Llamar a ${user.phone}`}
+                  onPress={() =>
+                    Linking.openURL(`tel:${String(user.phone).replace(/\s+/g, '')}`).catch(() =>
+                      Alert.alert('No se pudo abrir', 'Este dispositivo no puede realizar llamadas.'),
+                    )
+                  }>
                   <PhoneIcon size={13} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                  <Text style={styles.contactText}>{user.phone}</Text>
-                </View>
+                  <Text style={[styles.contactText, styles.contactTextLink]}>{user.phone}</Text>
+                </TouchableOpacity>
               ) : null}
             </View>
           )}
@@ -1306,6 +1361,23 @@ export default function PublicUserProfile() {
       {reportOpen && (
         <ReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} type="user" targetId={userId} />
       )}
+
+      <ImageViewing
+        images={viewerUri ? [{ uri: viewerUri }] : []}
+        imageIndex={0}
+        visible={!!viewerUri}
+        onRequestClose={() => setViewerUri(null)}
+        HeaderComponent={() => (
+          <View style={{ paddingTop: insets.top + 8, paddingRight: 16, alignItems: 'flex-end' }}>
+            <TouchableOpacity
+              onPress={() => setViewerUri(null)}
+              activeOpacity={0.8}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} color="#ffffff" strokeWidth={2.2} />
+            </TouchableOpacity>
+          </View>
+        )}
+      />
     </View>
   );
 }
@@ -1456,6 +1528,7 @@ const makeStyles = (colors: ThemeColors) =>
     contactRow: { gap: 6, marginTop: 10 },
     contactItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     contactText: { fontFamily: 'Manrope-Regular', fontSize: 13, color: colors.onSurfaceVariant },
+    contactTextLink: { color: colors.primary, textDecorationLine: 'underline' },
     statTabs: {
       flexDirection: 'row',
       marginHorizontal: 16,

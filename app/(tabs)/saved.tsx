@@ -15,6 +15,7 @@ import ProductCard, { ProductCardSkeleton, fmtPrice } from '@/components/Product
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useFavorites, useFavoriteToggle } from '@/hooks/useFavorites';
+import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
 
 export default function SavedScreen() {
@@ -26,6 +27,10 @@ export default function SavedScreen() {
   const { favorites, loading: favsLoading, refetch } = useFavorites();
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Precio o disponibilidad de un producto guardado puede haber cambiado
+  // desde otro dispositivo — refrescar al volver.
+  useRefetchOnFocus(refetch);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [safetyOpen, setSafetyOpen] = useState(false);
 

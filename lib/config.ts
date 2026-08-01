@@ -7,10 +7,15 @@ import { Platform } from 'react-native';
 const DEV_API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   Platform.select({
+    android: 'https://api.bomelh.com',
+    ios: 'https://api.bomelh.com',
+    default: 'https://api.bomelh.com',
+  });
+/* Platform.select({
     android: 'http://192.168.0.101:3000',
     ios: 'http://192.168.0.101:3000',
     default: 'http://192.168.0.101:3000',
-  });
+  }); */
 
 export const API_URL = DEV_API_URL!;
 export const GRAPHQL_URL = `${API_URL}/graphql`;

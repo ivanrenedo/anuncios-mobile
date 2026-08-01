@@ -27,6 +27,7 @@ import {
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
 import { uploadImage } from '@/lib/upload';
+import { optimizeImage } from '@/lib/imageOptimizer';
 import Skeleton from '@/components/Skeleton';
 
 let ImagePicker: typeof import('expo-image-picker') | null = null;
@@ -95,36 +96,62 @@ export default function EditProfileScreen() {
         Alert.alert('Permiso necesario', 'Concede acceso a tus fotos.');
         return;
       }
+      // `allowsEditing` desactivado a propósito: el cropper nativo de Android
+      // pinta el botón "Elegir" con contraste bajo en varios OEMs (Samsung,
+      // Xiaomi) y los usuarios no lo veían. Aplicamos un center-crop
+      // determinista dentro de `optimizeImage`, que funciona igual en todos
+      // los dispositivos.
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: target === 'avatar' ? [1, 1] : [16, 9],
         quality: 0.8,
       });
       if (res.canceled) return;
-      await uploadAndApply(target, res.assets[0].uri);
+      const a = res.assets[0];
+      await uploadAndApply(target, a.uri, a.width, a.height);
     } else {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('Permiso necesario', 'Concede acceso a la cámara.');
         return;
       }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: target === 'avatar' ? [1, 1] : [16, 9],
-        quality: 0.8,
-      });
+      const res = await ImagePicker.launchCameraAsync({ quality: 0.8 });
       if (res.canceled) return;
-      await uploadAndApply(target, res.assets[0].uri);
+      const a = res.assets[0];
+      await uploadAndApply(target, a.uri, a.width, a.height);
     }
   };
 
-  const uploadAndApply = async (target: 'avatar' | 'cover', localUri: string) => {
+  const uploadAndApply = async (
+    target: 'avatar' | 'cover',
+    localUri: string,
+    sourceWidth?: number,
+    sourceHeight?: number,
+  ) => {
     setUploading(target);
     try {
-      const url = await uploadImage(localUri);
+      // Avatar sale como 800px máx (nunca se ve más grande en UI); cover como
+      // 1600px (parallax header). El proxy /image del backend acepta hasta
+      // 5 MB, así que la optimización nos deja siempre bajo el cap.
+      // `targetAspect` hace un center-crop determinista y reemplaza al
+      // cropper nativo (cuyo botón "Elegir" era invisible en algunos
+      // Android). 1 para avatar redondo, 16:9 para portada.
+      const optimizedUri = await optimizeImage(localUri, {
+        maxDim: target === 'avatar' ? 800 : 1600,
+        quality: target === 'avatar' ? 0.9 : 0.85,
+        targetAspect: target === 'avatar' ? 1 : 16 / 9,
+        sourceWidth,
+        sourceHeight,
+      });
+      const url = await uploadImage(optimizedUri);
       update_(target === 'avatar' ? { avatar_url: url } : { cover_url: url });
       setRemoved((p) => ({ ...p, [target]: false }));
+
+      // Auto-save: persistir la nueva URL al server sin esperar al botón
+      // Guardar. Los usuarios cambian la foto y muchos vuelven atrás sin
+      // pulsar el botón — el cambio se perdía. `update()` solo manda los
+      // campos del patch, así que no dispara la validación del resto del
+      // formulario ni pisa cambios in-flight en nombre/bio/etc.
+      await persistImage(target, url);
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'No se pudo subir la imagen. Inténtalo de nuevo.');
     } finally {
@@ -132,9 +159,31 @@ export default function EditProfileScreen() {
     }
   };
 
-  const removePhoto = (target: 'avatar' | 'cover') => {
+  const removePhoto = async (target: 'avatar' | 'cover') => {
     update_(target === 'avatar' ? { avatar_url: '' } : { cover_url: '' });
     setRemoved((p) => ({ ...p, [target]: true }));
+    // Persistir el borrado igual que la subida.
+    await persistImage(target, '');
+  };
+
+  /**
+   * Guarda solo el campo de foto correspondiente. Si falla, revierte la
+   * previsualización local para que UI y server no divergan — un cover roto
+   * que "parecía guardado" es peor que un mensaje de error.
+   */
+  const persistImage = async (target: 'avatar' | 'cover', url: string) => {
+    const previous = target === 'avatar' ? profile.avatar_url : profile.cover_url;
+    const res = await update(
+      target === 'avatar' ? { avatar_url: url } : { cover_url: url },
+    );
+    if (!res.ok) {
+      update_(target === 'avatar' ? { avatar_url: previous } : { cover_url: previous });
+      setRemoved((p) => ({ ...p, [target]: false }));
+      Alert.alert(
+        'No se pudo guardar',
+        res.error || 'No se pudo guardar la foto. Inténtalo de nuevo.',
+      );
+    }
   };
 
   const showPhotoPicker = (target: 'avatar' | 'cover') => {
