@@ -534,6 +534,25 @@ export default function PublicUserProfile() {
           </View>
 
           <View style={styles.avatarActions}>
+            {/* v2 Fase 10a.3 — CTA "Ver tienda" para Premium activos.
+                Se muestra a cualquier visitante (incluido el propio dueño)
+                para que discoverable el link a /tienda/[id]. */}
+            {user.plan === 'PREMIUM' &&
+              (!user.planExpiresAt ||
+                new Date(user.planExpiresAt) > new Date()) && (
+                <TouchableOpacity
+                  style={styles.tiendaBtn}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/tienda/[slug]',
+                      params: { slug: userId },
+                    })
+                  }>
+                  <Crown size={14} color="#ffffff" strokeWidth={2} />
+                  <Text style={styles.tiendaBtnText}>Ver tienda</Text>
+                </TouchableOpacity>
+              )}
             {!isOwn && (
               <>
                 <TouchableOpacity
@@ -1478,7 +1497,22 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    avatarActions: { flexDirection: 'row', gap: 8, paddingBottom: 4, alignItems: 'center' },
+    avatarActions: { flexDirection: 'row', gap: 8, paddingBottom: 4, alignItems: 'center', flexWrap: 'wrap' },
+    tiendaBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 20,
+      backgroundColor: '#7C3AED',
+      shadowColor: '#7C3AED',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    tiendaBtnText: { fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' },
     followMainBtn: {
       flexDirection: 'row',
       alignItems: 'center',
