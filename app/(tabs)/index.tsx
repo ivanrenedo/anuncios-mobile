@@ -18,6 +18,7 @@ import { useProductsBySeller } from '@/hooks/useProducts';
 import { useHomeSections, type HomeSection } from '@/hooks/useHomeSections';
 import PromoCarousel from '@/components/PromoCarousel';
 import CategoryScroll from '@/components/CategoryScroll';
+import PremiumStoresRail from '@/components/PremiumStoresRail';
 import ProductRail from '@/components/ProductRail';
 import ProductGrid from '@/components/ProductGrid';
 import NotificationsModal from '@/components/NotificationsModal';
@@ -59,6 +60,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -345,6 +348,10 @@ export default function HomeScreen() {
                 )}
 
                 <SectionRenderer section={section} trackEvent={trackEvent} />
+
+                {/* v2 Fase 7b.2 — Tiendas Premium justo después de las
+                    categorías. Auto-hide si la query no devuelve productos. */}
+                {isAfterCategories && <PremiumStoresRail />}
 
                 {/* Trust bar after first product section */}
                 {isFirstProduct && (

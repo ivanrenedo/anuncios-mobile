@@ -124,6 +124,8 @@ export function toExploreItem(p: any) {
     sellerId: p.seller?.id,
     verified: p.seller?.verified ?? false,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan ?? 'FREE',
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     avatar: p.seller?.avatarUrl || '',
     category: p.category?.label || '',

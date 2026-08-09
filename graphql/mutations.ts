@@ -218,11 +218,42 @@ export const TRACK_HOME_SECTION_EVENT = gql`
 // ─── Verifications ───────────────────────────────────────────────────────────
 
 export const REQUEST_VERIFICATION = gql`
-  mutation RequestVerification {
-    requestVerification {
+  mutation RequestVerification($input: RequestVerificationInput) {
+    requestVerification(input: $input) {
       id
       status
+      docs
       createdAt
+    }
+  }
+`;
+
+// ─── Plans v2 — pinned & auto-bump slots ────────────────────────────────────
+
+export const SET_PINNED_PRODUCTS = gql`
+  mutation SetPinnedProducts($productIds: [String!]!) {
+    setPinnedProducts(productIds: $productIds) {
+      id
+      title
+      price
+      images { id url sortOrder type thumbnailUrl }
+      priceReducedUntil
+    }
+  }
+`;
+
+export const SET_AUTO_BUMP_SLOTS = gql`
+  mutation SetAutoBumpSlots($productIds: [String!]!) {
+    setAutoBumpSlots(productIds: $productIds) {
+      id
+      productId
+      cadence
+      createdAt
+      product {
+        id
+        title
+        images { id url sortOrder type thumbnailUrl }
+      }
     }
   }
 `;

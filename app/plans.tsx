@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,83 +20,110 @@ import {
   Zap,
   ArrowUpCircle,
   ShoppingBag,
-  MessageCircle
+  ShieldCheck,
+  MessageCircle,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
 import RipplePress from '@/components/RipplePress';
 import { useBusinessContact } from '@/hooks/useBusinessContact';
 
+type PlanKey = 'FREE' | 'BASIC' | 'STAR' | 'PREMIUM';
+
 interface PlanDef {
-  key: 'FREE' | 'STAR' | 'PREMIUM';
+  key: PlanKey;
   label: string;
-  price: string;
-  period: string;
+  /** XAF/mes. 0 for FREE. */
+  monthlyPrice: number;
   accent: string;
   icon: React.ElementType;
   description: string;
   features: { label: string; included: boolean }[];
 }
 
+// v2 catalogue — mismos precios y features que el shop web para que la
+// comparación sea idéntica en cualquier device del usuario.
 const PLANS: PlanDef[] = [
   {
     key: 'FREE',
     label: 'Gratis',
-    price: '0',
-    period: '',
+    monthlyPrice: 0,
     accent: '#6B7280',
     icon: ShoppingBag,
-    description: 'Para empezar a vender de forma sencilla',
+    description: 'Para empezar a vender sin coste',
     features: [
       { label: 'Hasta 5 anuncios activos', included: true },
       { label: 'Hasta 4 fotos por anuncio', included: true },
-      { label: 'Perfil público básico', included: true },
       { label: 'Contacto directo con compradores', included: true },
-      { label: 'Insignia de vendedor', included: false },
-      { label: 'Aparición en escaparate de portada', included: false },
-      { label: 'Auto-bump de anuncios', included: false },
-      { label: 'Estadísticas de visitas', included: false },
+      { label: 'Seguir vendedores + notificaciones', included: true },
+      { label: 'Insignia de plan', included: false },
+      { label: 'Destacados incluidos', included: false },
+      { label: 'Auto-bump', included: false },
+      { label: 'Estadísticas', included: false },
+    ],
+  },
+  {
+    key: 'BASIC',
+    label: 'Básico',
+    monthlyPrice: 3_000,
+    accent: '#0EA5E9',
+    icon: ShieldCheck,
+    description: 'Sube el límite y consigue tu primer destacado',
+    features: [
+      { label: 'Hasta 15 anuncios activos', included: true },
+      { label: 'Hasta 4 fotos por anuncio', included: true },
+      { label: '1 destacado incluido al mes', included: true },
+      { label: 'Vistas + favoritos', included: true },
+      { label: 'Insignia de plan', included: false },
+      { label: 'Anuncios fijados en perfil', included: false },
+      { label: 'Auto-bump', included: false },
+      { label: 'Chip "Rebajado hoy"', included: false },
     ],
   },
   {
     key: 'STAR',
     label: 'Estrella',
-    price: '3.000',
-    period: 'XAF/mes',
+    monthlyPrice: 12_000,
     accent: '#F5A623',
     icon: Star,
     description: 'Para vendedores activos que quieren destacar',
     features: [
-      { label: 'Hasta 25 anuncios activos', included: true },
+      { label: 'Hasta 30 anuncios activos', included: true },
       { label: 'Hasta 6 fotos por anuncio', included: true },
-      { label: 'Perfil público completo', included: true },
-      { label: 'Contacto directo con compradores', included: true },
-      { label: 'Insignia ⭐ Estrella', included: true },
-      { label: 'Aparición ocasional en portada', included: true },
-      { label: '1 auto-bump por semana', included: true },
-      { label: 'Estadísticas básicas', included: true },
+      { label: '3 destacados incluidos al mes', included: true },
+      { label: '4 anuncios fijados en tu perfil', included: true },
+      { label: 'Auto-bump semanal (pool 3)', included: true },
+      { label: 'Chip "Rebajado hoy" 48 h', included: true },
+      { label: 'WhatsApp personalizado + contactos', included: true },
+      { label: 'Insignia ⭐', included: true },
     ],
   },
   {
     key: 'PREMIUM',
     label: 'Premium',
-    price: '10.000',
-    period: 'XAF/mes',
+    monthlyPrice: 35_000,
     accent: '#7C3AED',
     icon: Crown,
-    description: 'Para negocios y vendedores profesionales',
+    description: 'Para negocios verificados con tienda propia',
     features: [
-      { label: 'Anuncios ilimitados', included: true },
-      { label: 'Hasta 10 fotos por anuncio', included: true },
-      { label: 'Perfil de negocio', included: true },
-      { label: 'Contacto directo con compradores', included: true },
-      { label: 'Insignia 👑 Premium', included: true },
-      { label: 'Prioridad en escaparate de portada', included: true },
-      { label: 'Auto-bump diario', included: true },
-      { label: 'Estadísticas completas', included: true },
+      { label: 'Hasta 100 anuncios activos', included: true },
+      { label: '8 destacados incluidos al mes (−50 % extra)', included: true },
+      { label: '10 anuncios fijados en tu perfil', included: true },
+      { label: 'Auto-bump diario (pool 5)', included: true },
+      { label: 'Tienda propia /tienda/tu-slug', included: true },
+      { label: 'Carrusel "Tiendas Premium" en portada', included: true },
+      { label: 'Sin anuncios de terceros en tu ficha', included: true },
+      { label: 'Verificación 👑 + analytics completo', included: true },
     ],
   },
 ];
+
+const YEARLY_DISCOUNT = 0.25;
+
+function fmtXaf(n: number): string {
+  // Intl.NumberFormat funciona en RN moderno (Hermes + expo).
+  return new Intl.NumberFormat('es-ES').format(n);
+}
 
 export default function PlansScreen() {
   const insets = useSafeAreaInsets();
@@ -104,24 +132,32 @@ export default function PlansScreen() {
   const styles = useThemedStyles(makeStyles);
   const { profile } = useProfile();
   const { phone: whatsappNumber } = useBusinessContact();
+  const [cycle, setCycle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
 
-  const contactWhatsApp = (plan: string) => {
+  const contactWhatsApp = (planLabel: string) => {
+    const cycleLabel = cycle === 'YEARLY' ? 'anual' : 'mensual';
     const msg = encodeURIComponent(
-      `Hola, me gustaría contratar el plan ${plan} en Bomelh. ¿Cómo puedo activarlo?`,
+      `Hola, quiero contratar el plan ${planLabel} (${cycleLabel}) en Bomelh. ¿Cómo lo activo?`,
     );
     Linking.openURL(`https://wa.me/${whatsappNumber}?text=${msg}`).catch(() =>
       Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
     );
   };
+
   const currentPlan = profile?.plan ?? 'FREE';
   const effectivePlan = profile?.effectivePlan ?? currentPlan;
-  const expiresAt = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
+  const expiresAt = profile?.plan_expires_at
+    ? new Date(profile.plan_expires_at)
+    : null;
   const fmtDate = (d: Date) =>
-    d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    d.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <RipplePress
           style={styles.backBtn}
@@ -137,33 +173,112 @@ export default function PlansScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
-        {/* Hero */}
         <View style={styles.hero}>
           <Zap size={28} color={colors.primary} strokeWidth={1.5} />
           <Text style={styles.heroTitle}>Haz crecer tu negocio</Text>
           <Text style={styles.heroDesc}>
-            Elige el plan que mejor se adapte a ti. Publicar es gratis — los planes te dan
-            más visibilidad, más anuncios y herramientas para vender más rápido.
+            Elige el plan que mejor se adapte. Publicar es gratis — los planes te
+            dan más anuncios, más visibilidad y ventajas exclusivas.
           </Text>
         </View>
 
-        {/* Plan cards */}
+        {/* Monthly / yearly toggle. Yearly aplica −25 % (misma escala que el
+            backend en DISCOUNT_TIERS para que la conversación WA coincida
+            con lo que ve el usuario). */}
+        <View style={styles.toggleWrap}>
+          <View style={styles.toggleTrack}>
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityState={{ selected: cycle === 'MONTHLY' }}
+              onPress={() => setCycle('MONTHLY')}
+              style={[
+                styles.toggleBtn,
+                cycle === 'MONTHLY' && { backgroundColor: colors.primary },
+              ]}>
+              <Text
+                style={[
+                  styles.toggleBtnText,
+                  cycle === 'MONTHLY' && { color: colors.onPrimary },
+                ]}>
+                Mensual
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityState={{ selected: cycle === 'YEARLY' }}
+              onPress={() => setCycle('YEARLY')}
+              style={[
+                styles.toggleBtn,
+                cycle === 'YEARLY' && { backgroundColor: colors.primary },
+              ]}>
+              <Text
+                style={[
+                  styles.toggleBtnText,
+                  cycle === 'YEARLY' && { color: colors.onPrimary },
+                ]}>
+                Anual
+              </Text>
+              <View
+                style={[
+                  styles.toggleBadge,
+                  cycle === 'YEARLY'
+                    ? { backgroundColor: 'rgba(255,255,255,0.28)' }
+                    : { backgroundColor: '#10B981' + '20' },
+                ]}>
+                <Text
+                  style={[
+                    styles.toggleBadgeText,
+                    { color: cycle === 'YEARLY' ? '#ffffff' : '#10B981' },
+                  ]}>
+                  −25 %
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
         {PLANS.map((plan) => {
           const isCurrent = currentPlan === plan.key;
-          // A paid plan whose expiry date passed behaves as FREE server-side.
-          const isExpired = isCurrent && plan.key !== 'FREE' && effectivePlan === 'FREE';
+          const isExpired =
+            isCurrent && plan.key !== 'FREE' && effectivePlan === 'FREE';
           const isUpgrade =
             !isCurrent &&
-            ((effectivePlan === 'FREE' && plan.key !== 'FREE') ||
-              (effectivePlan === 'STAR' && plan.key === 'PREMIUM'));
+            plan.key !== 'FREE' &&
+            planRank(plan.key) > planRank(effectivePlan);
+
+          const yearlyPrice = Math.round(
+            plan.monthlyPrice * 12 * (1 - YEARLY_DISCOUNT),
+          );
+          const displayed = cycle === 'YEARLY' ? yearlyPrice : plan.monthlyPrice;
+          const suffix =
+            plan.monthlyPrice === 0
+              ? ''
+              : cycle === 'YEARLY'
+                ? 'XAF/año'
+                : 'XAF/mes';
+          const highlight = plan.key === 'PREMIUM';
 
           return (
             <View
               key={plan.key}
               style={[
                 styles.planCard,
+                highlight && { borderColor: colors.primary + '55', borderWidth: 1.5 },
                 isCurrent && { borderColor: plan.accent + '66', borderWidth: 1.5 },
               ]}>
+              {highlight && (
+                <View
+                  style={[
+                    styles.recommendedBadge,
+                    { backgroundColor: colors.primary },
+                  ]}>
+                  <Text
+                    style={[styles.recommendedText, { color: colors.onPrimary }]}>
+                    Recomendado
+                  </Text>
+                </View>
+              )}
+
               {isCurrent && (
                 <View
                   style={[
@@ -186,7 +301,7 @@ export default function PlansScreen() {
                     size={22}
                     color={plan.accent}
                     strokeWidth={1.8}
-                    fill={plan.key !== 'FREE' ? plan.accent : 'transparent'}
+                    fill={plan.key === 'PREMIUM' ? plan.accent : 'transparent'}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -195,19 +310,26 @@ export default function PlansScreen() {
                 </View>
               </View>
 
-              {/* Price */}
               <View style={styles.priceRow}>
-                {plan.key === 'FREE' ? (
+                {plan.monthlyPrice === 0 ? (
                   <Text style={styles.priceText}>Gratis</Text>
                 ) : (
                   <>
-                    <Text style={styles.priceText}>{plan.price}</Text>
-                    <Text style={styles.pricePeriod}>{plan.period}</Text>
+                    <Text style={styles.priceText}>{fmtXaf(displayed)}</Text>
+                    <Text style={styles.pricePeriod}>{suffix}</Text>
                   </>
                 )}
               </View>
+              {plan.monthlyPrice > 0 && cycle === 'YEARLY' && (
+                <Text style={styles.yearlyEquiv}>
+                  Equivale a{' '}
+                  <Text style={{ fontFamily: 'Manrope-Bold' }}>
+                    {fmtXaf(Math.round(yearlyPrice / 12))} XAF/mes
+                  </Text>
+                  .
+                </Text>
+              )}
 
-              {/* Features */}
               <View style={styles.featureList}>
                 {plan.features.map((f) => (
                   <View key={f.label} style={styles.featureRow}>
@@ -231,26 +353,16 @@ export default function PlansScreen() {
                 ))}
               </View>
 
-              {/* CTA */}
-              {isUpgrade && (
+              {(isUpgrade || isExpired) && (
                 <RipplePress
                   style={[styles.ctaBtn, { backgroundColor: plan.accent }]}
                   borderRadius={12}
                   rippleColor="rgba(255,255,255,0.25)"
                   onPress={() => contactWhatsApp(plan.label)}>
                   <MessageCircle size={16} color="#ffffff" strokeWidth={2} />
-                  <Text style={styles.ctaBtnText}>Contratar por WhatsApp</Text>
-                </RipplePress>
-              )}
-
-              {isExpired && (
-                <RipplePress
-                  style={[styles.ctaBtn, { backgroundColor: plan.accent }]}
-                  borderRadius={12}
-                  rippleColor="rgba(255,255,255,0.25)"
-                  onPress={() => contactWhatsApp(plan.label)}>
-                  <MessageCircle size={16} color="#ffffff" strokeWidth={2} />
-                  <Text style={styles.ctaBtnText}>Renovar por WhatsApp</Text>
+                  <Text style={styles.ctaBtnText}>
+                    {isExpired ? 'Renovar por WhatsApp' : 'Contratar por WhatsApp'}
+                  </Text>
                 </RipplePress>
               )}
 
@@ -258,7 +370,7 @@ export default function PlansScreen() {
                 <View style={styles.activeInfo}>
                   <Text style={styles.activeInfoText}>
                     {isExpired && expiresAt
-                      ? `Expiró el ${fmtDate(expiresAt)} — renuévalo para recuperar tus ventajas`
+                      ? `Expiró el ${fmtDate(expiresAt)}`
                       : expiresAt
                         ? `Activo hasta el ${fmtDate(expiresAt)}`
                         : 'Plan activo'}
@@ -269,42 +381,29 @@ export default function PlansScreen() {
           );
         })}
 
-        {/* Info section */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>¿Cómo funciona?</Text>
-          <View style={styles.infoStep}>
-            <View style={styles.infoStepNum}>
-              <Text style={styles.infoStepNumText}>1</Text>
+          {[
+            'Elige tu plan y pulsa "Contratar por WhatsApp"',
+            'Realiza el pago por transferencia bancaria o pago móvil',
+            'Envíanos el justificante y activamos tu plan en minutos',
+          ].map((text, i) => (
+            <View style={styles.infoStep} key={i}>
+              <View style={styles.infoStepNum}>
+                <Text style={styles.infoStepNumText}>{i + 1}</Text>
+              </View>
+              <Text style={styles.infoStepText}>{text}</Text>
             </View>
-            <Text style={styles.infoStepText}>
-              Elige tu plan y pulsa "Contratar por WhatsApp"
-            </Text>
-          </View>
-          <View style={styles.infoStep}>
-            <View style={styles.infoStepNum}>
-              <Text style={styles.infoStepNumText}>2</Text>
-            </View>
-            <Text style={styles.infoStepText}>
-              Realiza el pago por transferencia bancaria o pago móvil
-            </Text>
-          </View>
-          <View style={styles.infoStep}>
-            <View style={styles.infoStepNum}>
-              <Text style={styles.infoStepNumText}>3</Text>
-            </View>
-            <Text style={styles.infoStepText}>
-              Envíanos el justificante y activamos tu plan en minutos
-            </Text>
-          </View>
+          ))}
         </View>
 
-        {/* Highlight single ad */}
+        {/* Individual boost purchase — copy con las 3 duraciones v2. */}
         <TouchableOpacity
           style={styles.highlightCard}
           activeOpacity={0.8}
           onPress={() => {
             const msg = encodeURIComponent(
-              'Hola, quiero destacar un anuncio en Bomelh durante 7 días (1.000 XAF). ¿Cómo procedo?',
+              'Hola, quiero destacar un anuncio en Bomelh. ¿Cómo procedo?',
             );
             Linking.openURL(`https://wa.me/${whatsappNumber}?text=${msg}`).catch(() =>
               Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
@@ -312,10 +411,10 @@ export default function PlansScreen() {
           }}>
           <ArrowUpCircle size={22} color={colors.primary} strokeWidth={1.5} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.highlightTitle}>Destacar un anuncio</Text>
+            <Text style={styles.highlightTitle}>Destacar un anuncio suelto</Text>
             <Text style={styles.highlightDesc}>
-              ¿No necesitas un plan? Destaca un anuncio individual por 1.000 XAF durante 7
-              días. Aparecerá en las primeras posiciones de su categoría.
+              ¿No quieres un plan todavía? Destaca un anuncio: 1.000 XAF por 3
+              días, 2.000 XAF por 7 días o 5.000 XAF por 30 días.
             </Text>
             <View style={styles.highlightCta}>
               <MessageCircle size={13} color={colors.primary} strokeWidth={2} />
@@ -330,12 +429,13 @@ export default function PlansScreen() {
   );
 }
 
+function planRank(plan: string): number {
+  return ({ FREE: 0, BASIC: 1, STAR: 2, PREMIUM: 3 } as Record<string, number>)[plan] ?? 0;
+}
+
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: colors.surface,
-    },
+    root: { flex: 1, backgroundColor: colors.surface },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -380,6 +480,35 @@ const makeStyles = (colors: ThemeColors) =>
       lineHeight: 21,
       maxWidth: 320,
     },
+    toggleWrap: { alignItems: 'center', marginBottom: 16 },
+    toggleTrack: {
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceContainerLow,
+      borderRadius: 999,
+      padding: 4,
+    },
+    toggleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
+    toggleBtnText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 14,
+      color: colors.onSurfaceVariant,
+    },
+    toggleBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 999,
+    },
+    toggleBadgeText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 10,
+    },
     planCard: {
       backgroundColor: colors.surfaceContainerLowest,
       borderRadius: 20,
@@ -392,6 +521,21 @@ const makeStyles = (colors: ThemeColors) =>
       shadowOpacity: 0.06,
       shadowRadius: 12,
       elevation: 3,
+      position: 'relative',
+    },
+    recommendedBadge: {
+      position: 'absolute',
+      top: -12,
+      right: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    recommendedText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 11,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     currentBadge: {
       alignSelf: 'flex-start',
@@ -435,7 +579,7 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: 6,
-      marginBottom: 16,
+      marginBottom: 4,
     },
     priceText: {
       fontFamily: 'Manrope-Bold',
@@ -448,9 +592,16 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 14,
       color: colors.onSurfaceVariant,
     },
+    yearlyEquiv: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      marginBottom: 12,
+    },
     featureList: {
       gap: 10,
       marginBottom: 16,
+      marginTop: 12,
     },
     featureRow: {
       flexDirection: 'row',

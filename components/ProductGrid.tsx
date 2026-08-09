@@ -66,6 +66,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,

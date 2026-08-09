@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Heart, MapPin, BadgeCheck, Clock, Star, Crown, Zap } from 'lucide-react-native';
+import { Heart, MapPin, BadgeCheck, Clock, Star, Crown, Zap, Flame } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
 import ProductImage from '@/components/ProductImage';
@@ -26,12 +26,15 @@ export interface ProductCardItem {
   location?: string;
   condition?: string;
   verified?: boolean;
-  sellerPlan?: 'FREE' | 'STAR' | 'PREMIUM';
+  sellerPlan?: 'FREE' | 'BASIC' | 'STAR' | 'PREMIUM';
   isBoosted?: boolean;
   promo?: string;
   promoColor?: string;
   discount?: number;
   priceRaw?: number;
+  /** v2 Fase 7a — server-authoritative 48h chip anchor. Card renders the
+   *  chip only if this is in the future AND sellerPlan ∈ {STAR, PREMIUM}. */
+  priceReducedUntil?: string | null;
   categoryLabel?: string;
   operation?: string;
   offerType?: string;
@@ -79,6 +82,14 @@ function ProductCardImpl({
   const finalPrice = hasDiscount && item.priceRaw
     ? fmtPrice(Math.round(item.priceRaw * (1 - (item.discount ?? 0) / 100)))
     : item.price;
+
+  // v2 Fase 7a — chip "Rebajado" (48h). Gate por plan del vendedor: solo
+  // STAR/PREMIUM lo enseñan aunque el timestamp esté seteado en cualquier
+  // producto rebajado (BASIC/FREE nunca).
+  const showRebajadoChip =
+    !!item.priceReducedUntil &&
+    new Date(item.priceReducedUntil) > new Date() &&
+    (item.sellerPlan === 'STAR' || item.sellerPlan === 'PREMIUM');
 
   const tags: { label: string; bg: string; color: string }[] = [];
   if (item.operation) tags.push({ label: item.operation, bg: '#E1F5EE', color: '#0F6E56' });
@@ -157,15 +168,29 @@ function ProductCardImpl({
             <Text style={styles.priceOriginal}>
               {item.price}
             </Text>
+            {showRebajadoChip && (
+              <View style={styles.rebajadoChip}>
+                <Flame size={9} color="#EA580C" strokeWidth={2.5} />
+                <Text style={styles.rebajadoChipText}>Rebajado</Text>
+              </View>
+            )}
           </View>
         ) : (
-          <Text
-            style={[styles.price, accentColor ? { color: accentColor } : null]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.85}>
-            {item.price}
-          </Text>
+          <View style={styles.priceRow}>
+            <Text
+              style={[styles.price, accentColor ? { color: accentColor } : null]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}>
+              {item.price}
+            </Text>
+            {showRebajadoChip && (
+              <View style={styles.rebajadoChip}>
+                <Flame size={9} color="#EA580C" strokeWidth={2.5} />
+                <Text style={styles.rebajadoChipText}>Rebajado</Text>
+              </View>
+            )}
+          </View>
         ))}
         <Text style={styles.title} numberOfLines={2}>
           {item.title}
@@ -395,6 +420,23 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 11,
     color: colors.onSurfaceVariant + '88',
     textDecorationLine: 'line-through',
+  },
+  rebajadoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#EA580C22',
+  },
+  rebajadoChipText: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 9,
+    color: '#EA580C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    lineHeight: 11,
   },
   locationRow: {
     flexDirection: 'row',

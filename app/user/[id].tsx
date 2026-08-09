@@ -41,7 +41,7 @@ import {
   Crown,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import { GET_USER } from '@/graphql/queries';
+import { GET_USER, PINNED_PRODUCTS } from '@/graphql/queries';
 import { useProductsBySeller } from '@/hooks/useProducts';
 import { useCategoryTree, useCategoryRootMap, withAlpha } from '@/hooks/useCategories';
 import { useReviewsBySeller, useSellerRating, useCreateReview, useUpdateReview, useDeleteReview } from '@/hooks/useReviews';
@@ -126,6 +126,14 @@ export default function PublicUserProfile() {
   const user = data?.user;
 
   const { products, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+  // v2 Fase 7a — pinned products del vendedor. Query pública; devuelve []
+  // para planes sin pinnedProducts (Free/Basic) así que sin plan gate aquí.
+  const { data: pinnedData } = useQuery<any>(PINNED_PRODUCTS, {
+    variables: { userId },
+    skip: !userId,
+    fetchPolicy: 'cache-and-network',
+  });
+  const pinnedProducts: any[] = pinnedData?.pinnedProducts ?? [];
   const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
@@ -272,7 +280,7 @@ export default function PublicUserProfile() {
   const { tree: categoryTree } = useCategoryTree();
   const categoryRootMap = useCategoryRootMap(categoryTree);
 
-  const productItems = products.map((p: any) => {
+  const mapProduct = (p: any) => {
     const img = p.images?.[0]?.url || '';
     const catId = p.category?.id as string | undefined;
     return {
@@ -290,8 +298,18 @@ export default function PublicUserProfile() {
       isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
       postedAgo: timeAgo(p.createdAt),
       categoryRootId: catId ? (categoryRootMap.get(catId) ?? catId) : null,
+      // Chip "Rebajado hoy" gating (v2 Fase 7a).
+      priceReducedUntil: p.priceReducedUntil ?? null,
+      sellerPlan: (user?.plan ?? 'FREE') as 'FREE' | 'BASIC' | 'STAR' | 'PREMIUM',
     };
-  });
+  };
+
+  const pinnedIds = new Set(pinnedProducts.map((p) => p.id));
+  const pinnedItems = pinnedProducts.map(mapProduct);
+  // Drop pinned rows del grid principal para no duplicar.
+  const productItems = products
+    .filter((p: any) => !pinnedIds.has(p.id))
+    .map(mapProduct);
 
   // Only render chips for roots the seller actually has listings in.
   const availableCategoryRoots = (() => {
@@ -663,13 +681,30 @@ export default function PublicUserProfile() {
           productsLoading ? (
             <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
           ) : <View style={styles.grid}>
-            {productItems.length === 0 ? (
+            {productItems.length === 0 && pinnedItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
                 <Text style={styles.emptyText}>Sin anuncios publicados</Text>
               </View>
             ) : (
               <>
+                {pinnedItems.length > 0 && (
+                  <>
+                    <Text style={styles.pinnedHeader}>📌 Anuncios fijados</Text>
+                    {chunk(pinnedItems, 2).map((pair, rowIdx) => (
+                      <View key={`pin-${rowIdx}`} style={styles.gridRow}>
+                        {pair.map((item: any) => (
+                          <ProductCard
+                            key={item.id}
+                            item={item}
+                            onPress={() => router.push({ pathname: '/product/[id]', params: { id: item.id } })}
+                          />
+                        ))}
+                        {pair.length === 1 && <View style={{ flex: 1 }} />}
+                      </View>
+                    ))}
+                  </>
+                )}
                 {chunk(productItems.slice(0, PREVIEW_LIMIT), 2).map((pair, rowIdx) => (
                   <View key={rowIdx} style={styles.gridRow}>
                     {pair.map((item: any) => (
@@ -1554,6 +1589,15 @@ const makeStyles = (colors: ThemeColors) =>
     spinnerWrap: { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' },
     emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
     emptyText: { fontFamily: 'Manrope-Regular', fontSize: 15, color: colors.onSurfaceVariant },
+    pinnedHeader: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 12,
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      paddingHorizontal: 4,
+      paddingBottom: 8,
+    },
     seeAllBottom: {
       flexDirection: 'row',
       alignItems: 'center',

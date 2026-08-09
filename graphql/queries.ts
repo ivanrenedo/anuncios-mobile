@@ -19,8 +19,11 @@ export const ME = gql`
       suspendedReason
       language
       plan
+      planCycle
+      planStartedAt
       planExpiresAt
       effectivePlan
+      businessVerifiedAt
       maxActiveProducts
       maxImagesPerProduct
       notifMessages
@@ -52,6 +55,7 @@ export const GET_PRODUCTS = gql`
       favoritesCount
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       seller {
         id
@@ -132,6 +136,7 @@ export const GET_PRODUCT = gql`
       favoritesCount
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       seller {
         id
@@ -144,6 +149,7 @@ export const GET_PRODUCT = gql`
         bio
         phone
         showPhone
+        businessVerifiedAt
       }
       category {
         id
@@ -216,6 +222,7 @@ export const SEARCH_PRODUCTS = gql`
       favoritesCount
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       seller {
         id
@@ -270,6 +277,7 @@ export const PRODUCTS_BY_CATEGORY = gql`
       favoritesCount
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       seller {
         id
@@ -335,6 +343,7 @@ export const PRODUCTS_BY_SELLER = gql`
       impressions
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       category {
         id
@@ -409,6 +418,7 @@ export const MY_FAVORITES = gql`
         favoritesCount
         bumpedAt
         boostedUntil
+        priceReducedUntil
         createdAt
         seller {
           id
@@ -579,6 +589,7 @@ export const GET_HOME_SECTIONS = gql`
         favoritesCount
         bumpedAt
         boostedUntil
+        priceReducedUntil
         createdAt
         seller {
           id
@@ -641,6 +652,7 @@ export const GET_SECTION_PRODUCTS = gql`
       favoritesCount
       bumpedAt
       boostedUntil
+      priceReducedUntil
       createdAt
       seller {
         id
@@ -717,9 +729,110 @@ export const MY_VERIFICATION_REQUEST = gql`
     myVerificationRequest {
       id
       status
+      docs
       rejectedReason
       reviewedAt
       createdAt
+    }
+  }
+`;
+
+// ─── Plans v2 — pinned, autobump slots, home Premium carousel ────────────────
+
+export const PINNED_PRODUCTS = gql`
+  query PinnedProducts($userId: String!) {
+    pinnedProducts(userId: $userId) {
+      id
+      title
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      bumpedAt
+      boostedUntil
+      priceReducedUntil
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+        plan
+        location
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+        type
+        thumbnailUrl
+      }
+    }
+  }
+`;
+
+export const HOME_CAROUSEL_PREMIUM = gql`
+  query HomeCarouselPremium($take: Int) {
+    homeCarouselPremium(take: $take) {
+      id
+      title
+      price
+      discount
+      condition
+      city
+      status
+      views
+      favoritesCount
+      bumpedAt
+      boostedUntil
+      priceReducedUntil
+      createdAt
+      seller {
+        id
+        name
+        avatarUrl
+        verified
+        plan
+        location
+      }
+      category {
+        id
+        slug
+        label
+        color
+      }
+      images {
+        id
+        url
+        sortOrder
+        type
+        thumbnailUrl
+      }
+    }
+  }
+`;
+
+export const MY_AUTO_BUMP_SLOTS = gql`
+  query MyAutoBumpSlots {
+    myAutoBumpSlots {
+      id
+      productId
+      cadence
+      createdAt
+      product {
+        id
+        title
+        images { id url sortOrder type thumbnailUrl }
+      }
     }
   }
 `;

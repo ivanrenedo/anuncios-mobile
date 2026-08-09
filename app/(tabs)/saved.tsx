@@ -58,6 +58,8 @@ export default function SavedScreen() {
       location: p.city,
       verified: p.seller?.verified,
       sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+      priceReducedUntil: p.priceReducedUntil ?? null,
       avatar: p.seller?.avatarUrl,
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       priceValue: Number(p.price),

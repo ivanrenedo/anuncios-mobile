@@ -74,6 +74,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: resolveImage(p.seller?.avatarUrl),
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -778,7 +780,15 @@ export default function ProductDetailScreen() {
         mode={modal ?? 'tips'}
         onClose={() => setModal(null)}
         phoneNumber={product.seller.phone}
-        whatsappNumber={product.seller.phone?.replace(/[^0-9]/g, '')}
+        // v2 Fase 7a WhatsApp personalizado: Star/Premium con teléfono → chat
+        // directo con el vendedor. Free/Basic (o Star/Premium sin phone) →
+        // número del negocio (useBusinessContact).
+        whatsappNumber={
+          (product.seller.plan === 'STAR' || product.seller.plan === 'PREMIUM') &&
+          product.seller.phone
+            ? product.seller.phone.replace(/[^0-9]/g, '')
+            : (contactNumber ?? '').replace(/[^0-9]/g, '')
+        }
         whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/product/${product.id}`}
       />
 
