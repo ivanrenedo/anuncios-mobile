@@ -304,12 +304,16 @@ export default function PublicUserProfile() {
     };
   };
 
-  const pinnedIds = new Set(pinnedProducts.map((p) => p.id));
-  const pinnedItems = pinnedProducts.map(mapProduct);
-  // Drop pinned rows del grid principal para no duplicar.
-  const productItems = products
-    .filter((p: any) => !pinnedIds.has(p.id))
-    .map(mapProduct);
+  const pinnedIds = new Set<string>(pinnedProducts.map((p) => p.id));
+  // v2 Fase 11.2 — merge: pinned first (con isPinned), luego resto sin badge.
+  // Deja al server el orden dentro de los pinned; los no-pinned mantienen su
+  // orden natural del feed.
+  const productItems = [
+    ...pinnedProducts.map((p: any) => ({ ...mapProduct(p), isPinned: true })),
+    ...products
+      .filter((p: any) => !pinnedIds.has(p.id))
+      .map(mapProduct),
+  ];
 
   // Only render chips for roots the seller actually has listings in.
   const availableCategoryRoots = (() => {
@@ -534,24 +538,22 @@ export default function PublicUserProfile() {
           </View>
 
           <View style={styles.avatarActions}>
-            {/* v2 Fase 10a.3 — CTA "Ver tienda" para Premium activos.
-                Se muestra a cualquier visitante (incluido el propio dueño)
-                para que discoverable el link a /tienda/[id]. */}
+            {/* v2 Fase 11.2 — el perfil ES la tienda para Premium. Chip
+                "Verificado desde" informa el status directamente en el header. */}
             {user.plan === 'PREMIUM' &&
               (!user.planExpiresAt ||
-                new Date(user.planExpiresAt) > new Date()) && (
-                <TouchableOpacity
-                  style={styles.tiendaBtn}
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/tienda/[slug]',
-                      params: { slug: userId },
-                    })
-                  }>
+                new Date(user.planExpiresAt) > new Date()) &&
+              user.businessVerifiedAt && (
+                <View style={styles.tiendaBtn}>
                   <Crown size={14} color="#ffffff" strokeWidth={2} />
-                  <Text style={styles.tiendaBtnText}>Ver tienda</Text>
-                </TouchableOpacity>
+                  <Text style={styles.tiendaBtnText}>
+                    Verificado desde{' '}
+                    {new Date(user.businessVerifiedAt).toLocaleDateString(
+                      'es-ES',
+                      { month: 'short', year: 'numeric' },
+                    )}
+                  </Text>
+                </View>
               )}
             {!isOwn && (
               <>
@@ -700,36 +702,20 @@ export default function PublicUserProfile() {
           productsLoading ? (
             <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
           ) : <View style={styles.grid}>
-            {productItems.length === 0 && pinnedItems.length === 0 ? (
+            {productItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
                 <Text style={styles.emptyText}>Sin anuncios publicados</Text>
               </View>
             ) : (
               <>
-                {pinnedItems.length > 0 && (
-                  <>
-                    <Text style={styles.pinnedHeader}>📌 Anuncios fijados</Text>
-                    {chunk(pinnedItems, 2).map((pair, rowIdx) => (
-                      <View key={`pin-${rowIdx}`} style={styles.gridRow}>
-                        {pair.map((item: any) => (
-                          <ProductCard
-                            key={item.id}
-                            item={item}
-                            onPress={() => router.push({ pathname: '/product/[id]', params: { id: item.id } })}
-                          />
-                        ))}
-                        {pair.length === 1 && <View style={{ flex: 1 }} />}
-                      </View>
-                    ))}
-                  </>
-                )}
                 {chunk(productItems.slice(0, PREVIEW_LIMIT), 2).map((pair, rowIdx) => (
                   <View key={rowIdx} style={styles.gridRow}>
                     {pair.map((item: any) => (
                       <ProductCard
                         key={item.id}
                         item={item}
+                        isPinned={item.isPinned}
                         onPress={() => router.push({ pathname: '/product/[id]', params: { id: item.id } })}
                       />
                     ))}

@@ -115,8 +115,9 @@ export default function VerificationRequestModal({
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Solicitar verificación</Text>
             <Text style={styles.subtitle}>
-              Adjunta DNI, licencia de negocio o selfie con documento. Revisión
-              manual del admin en menos de 48 h.
+              Adjunta fotos: DNI, licencia de negocio o selfie con documento.
+              Solo imágenes — máximo {MAX_DOCS}. Revisión manual en menos de
+              48 h.
             </Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -140,7 +141,7 @@ export default function VerificationRequestModal({
                 {uploading ? 'Subiendo…' : 'Subir documento'}
               </Text>
               <Text style={styles.dropZoneHint}>
-                Imagen · máx {MAX_DOCS} archivos
+                Solo imágenes (JPG · PNG · WEBP) · máx {MAX_DOCS}
               </Text>
             </TouchableOpacity>
           ) : (

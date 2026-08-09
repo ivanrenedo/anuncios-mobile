@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Heart, MapPin, BadgeCheck, Clock, Star, Crown, Zap, Flame } from 'lucide-react-native';
+import { Heart, MapPin, BadgeCheck, Clock, Star, Crown, Zap, Flame, Pin } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import Skeleton from '@/components/Skeleton';
 import ProductImage from '@/components/ProductImage';
@@ -51,6 +51,12 @@ interface Props {
   /** Override the price color (e.g. category accent) */
   accentColor?: string;
   style?: StyleProp<ViewStyle>;
+  /** v2 Fase 11.2 — muestra el badge 📌 en la esquina cuando el producto
+   *  está fijado en el perfil del vendedor. */
+  isPinned?: boolean;
+  /** v2 Fase 11.3 — muestra el badge ⚡ cuando el producto está en el pool
+   *  de auto-bump del vendedor. */
+  isAutoBumped?: boolean;
 }
 
 export function fmtNumber(n: number) {
@@ -70,6 +76,8 @@ function ProductCardImpl({
   width,
   accentColor,
   style,
+  isPinned = false,
+  isAutoBumped = false,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -136,6 +144,21 @@ function ProductCardImpl({
         {item.condition && (
           <View style={styles.conditionBadge}>
             <Text style={styles.conditionText}>{item.condition}</Text>
+          </View>
+        )}
+        {/* v2 Fase 11.2/11.3 — badges pin y auto-bump del owner */}
+        {(isPinned || isAutoBumped) && (
+          <View style={styles.ownerBadgesCol}>
+            {isPinned && (
+              <View style={[styles.ownerBadge, { backgroundColor: colors.primary }]}>
+                <Pin size={11} color="#ffffff" fill="#ffffff" strokeWidth={2.5} />
+              </View>
+            )}
+            {isAutoBumped && (
+              <View style={[styles.ownerBadge, { backgroundColor: '#F5A623' }]}>
+                <Zap size={11} color="#ffffff" fill="#ffffff" strokeWidth={2.5} />
+              </View>
+            )}
           </View>
         )}
         {onLike && ( 
@@ -420,6 +443,25 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 11,
     color: colors.onSurfaceVariant + '88',
     textDecorationLine: 'line-through',
+  },
+  ownerBadgesCol: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    flexDirection: 'column',
+    gap: 4,
+  },
+  ownerBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   rebajadoChip: {
     flexDirection: 'row',

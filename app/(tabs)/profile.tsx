@@ -43,6 +43,7 @@ import {
   ArrowDownUp,
   ChevronDown,
   Crown,
+  Pin,
   Zap,
   CreditCard,
   Eye,
@@ -68,6 +69,9 @@ import { API_URL, resolveImage } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
+import { useQuery, useMutation } from '@apollo/client/react';
+import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS } from '@/graphql/queries';
+import { SET_PINNED_PRODUCTS, SET_AUTO_BUMP_SLOTS } from '@/graphql/mutations';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import ImageViewing from 'react-native-image-viewing';
 
@@ -118,6 +122,45 @@ export default function ProfileScreen() {
   const { isAuthenticated, signOut, user } = useAuth();
   const userId = user?.id || profile?.id || '';
   const { products: myProducts, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+
+  // v2 Fase 11.3 — pin y auto-bump del owner. Skip cuando el plan no lo
+  // permite (Free/Basic) para evitar roundtrips que el server ya rechazaría.
+  const effectivePlanForFeatures = (profile as any)?.effectivePlan ?? (profile as any)?.plan ?? 'FREE';
+  const canPinMobile = effectivePlanForFeatures === 'STAR' || effectivePlanForFeatures === 'PREMIUM';
+  const canAutoBumpMobile = canPinMobile;
+  const { data: pinnedDataProfile, refetch: refetchPinned } = useQuery<any>(PINNED_PRODUCTS, {
+    variables: { userId },
+    skip: !userId || !canPinMobile,
+    fetchPolicy: 'cache-and-network',
+  });
+  const { data: slotsDataProfile, refetch: refetchSlots } = useQuery<any>(MY_AUTO_BUMP_SLOTS, {
+    skip: !canAutoBumpMobile,
+    fetchPolicy: 'cache-and-network',
+  });
+  const pinnedIdsProfile = new Set<string>((pinnedDataProfile?.pinnedProducts ?? []).map((p: any) => p.id));
+  const autoBumpedIdsProfile = new Set<string>((slotsDataProfile?.myAutoBumpSlots ?? []).map((s: any) => s.productId));
+  const [setPinnedMutProfile] = useMutation(SET_PINNED_PRODUCTS, { refetchQueries: ['PinnedProducts'] });
+  const [setSlotsMutProfile] = useMutation(SET_AUTO_BUMP_SLOTS, { refetchQueries: ['MyAutoBumpSlots'] });
+  const togglePinProduct = async (productId: string) => {
+    const current = Array.from(pinnedIdsProfile);
+    const next = current.includes(productId) ? current.filter((x) => x !== productId) : [...current, productId];
+    try {
+      await setPinnedMutProfile({ variables: { productIds: next } });
+      refetchPinned();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo actualizar los anuncios fijados.');
+    }
+  };
+  const toggleAutoBumpProduct = async (productId: string) => {
+    const current = Array.from(autoBumpedIdsProfile);
+    const next = current.includes(productId) ? current.filter((x) => x !== productId) : [...current, productId];
+    try {
+      await setSlotsMutProfile({ variables: { productIds: next } });
+      refetchSlots();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo actualizar el auto-bump.');
+    }
+  };
   const { reviews: myReviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers: myFollowers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
@@ -731,6 +774,8 @@ export default function ProfileScreen() {
                   <View key={item.id} style={styles.cardWrap}>
                     <ProductCard
                       item={item}
+                      isPinned={pinnedIdsProfile.has(item.id)}
+                      isAutoBumped={autoBumpedIdsProfile.has(item.id)}
                       onPress={() =>
                         router.push({ pathname: '/product/[id]', params: { id: item.id } })
                       }
@@ -747,6 +792,39 @@ export default function ProfileScreen() {
                         onPress={() => router.push({ pathname: '/edit-listing/[id]', params: { id: item.id } })}>
                         <Pencil size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
+                      {/* v2 Fase 11.3 — pin y rayo por card en el perfil propio */}
+                      {canPinMobile && (
+                        <TouchableOpacity
+                          style={[
+                            styles.cardActionBtn,
+                            pinnedIdsProfile.has(item.id) && { backgroundColor: colors.primary },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => togglePinProduct(item.id)}>
+                          <Pin
+                            size={13}
+                            color="#ffffff"
+                            strokeWidth={2}
+                            fill={pinnedIdsProfile.has(item.id) ? '#ffffff' : 'transparent'}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      {canAutoBumpMobile && (
+                        <TouchableOpacity
+                          style={[
+                            styles.cardActionBtn,
+                            autoBumpedIdsProfile.has(item.id) && { backgroundColor: '#F5A623' },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => toggleAutoBumpProduct(item.id)}>
+                          <Zap
+                            size={13}
+                            color="#ffffff"
+                            strokeWidth={2}
+                            fill={autoBumpedIdsProfile.has(item.id) ? '#ffffff' : 'transparent'}
+                          />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         style={[styles.cardActionBtn, styles.cardActionDanger]}
                         activeOpacity={0.8}

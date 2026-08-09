@@ -44,7 +44,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductImage from '@/components/ProductImage';
 import SafetyModal, { SafetyModalMode } from '@/components/SafetyModal';
 import ReportSheet from '@/components/ReportSheet';
-import { ArrowUpCircle, MessageCircle, Zap } from 'lucide-react-native';
+import { ArrowUpCircle, MessageCircle, Zap, Flame } from 'lucide-react-native';
 import { useProduct, useViewProduct, useContactProduct, useRelatedProducts } from '@/hooks/useProducts';
 import { useSellerRating } from '@/hooks/useReviews';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
@@ -291,6 +291,9 @@ export default function ProductDetailScreen() {
     views: apiProduct.views ?? 0,
     favorites: apiProduct.favoritesCount ?? 0,
     isBoosted: apiProduct.boostedUntil ? new Date(apiProduct.boostedUntil) > new Date() : false,
+    // v2 Fase 11.1 — para el chip "Rebajado" en la ficha.
+    priceReducedUntil: apiProduct.priceReducedUntil ?? null,
+    sellerPlan: (apiProduct.seller?.effectivePlan ?? apiProduct.seller?.plan ?? 'FREE') as string,
     attributes:
       apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || [],
   };
@@ -445,6 +448,16 @@ export default function ProductDetailScreen() {
                 <Text style={styles.discountText}>{product.discount}</Text>
               </View>
             )}
+            {/* v2 Fase 11.1 — chip "Rebajado" 48h para vendedores Star/Premium */}
+            {product.priceReducedUntil &&
+              new Date(product.priceReducedUntil) > new Date() &&
+              (product.sellerPlan === 'STAR' ||
+                product.sellerPlan === 'PREMIUM') && (
+                <View style={styles.rebajadoChip}>
+                  <Flame size={11} color="#EA580C" strokeWidth={2.5} />
+                  <Text style={styles.rebajadoChipText}>Rebajado</Text>
+                </View>
+              )}
           </View>
           )}
 
@@ -990,6 +1003,23 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       gap: 10,
       marginTop: 10,
+      flexWrap: 'wrap',
+    },
+    rebajadoChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: '#EA580C22',
+    },
+    rebajadoChipText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 10,
+      color: '#EA580C',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     price: {
       fontFamily: 'Manrope-Bold',
