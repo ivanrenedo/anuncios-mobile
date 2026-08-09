@@ -53,6 +53,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
 import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
+import PlanFeaturesPanel from '@/components/PlanFeaturesPanel';
 import Skeleton from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import SettingsModal, { Row, Section } from '@/components/SettingsModal';
@@ -714,6 +715,14 @@ export default function ProfileScreen() {
                 <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
             ))}
+            {/* v2 Fase 10b — panel plan-gateado para gestionar pins y auto-bump */}
+            {profile?.id && (
+              <PlanFeaturesPanel
+                userId={profile.id}
+                effectivePlan={effectivePlan}
+                products={myProducts as any}
+              />
+            )}
             {renderPairs(productItems.slice(0, PREVIEW_LIMIT)).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item: any) => (
