@@ -39,6 +39,7 @@ import {
   ArrowDownUp,
   ChevronDown,
   Crown,
+  MessageCircle,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { GET_USER, PINNED_PRODUCTS } from '@/graphql/queries';
@@ -61,6 +62,7 @@ import RipplePress from '@/components/RipplePress';
 import Skeleton from '@/components/Skeleton';
 import ReportSheet from '@/components/ReportSheet';
 import { useShare } from '@/hooks/useShare';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL, resolveImage } from '@/lib/config';
 import ImageViewing from 'react-native-image-viewing';
@@ -199,6 +201,24 @@ export default function PublicUserProfile() {
   const hasAlreadyReviewed = reviews.some((r: any) => r.author?.id === me?.id);
 
   const { share } = useShare();
+  const { phone: businessPhone } = useBusinessContact();
+
+  // v2 Fase 12 — WhatsApp del perfil, mismo gate que shop web y product page:
+  //   · Star/Premium con phone: chat directo con el vendedor
+  //   · Free/Basic o sin phone: cae al número del negocio
+  const sellerCanPersonalWa =
+    (user?.plan === 'STAR' || user?.plan === 'PREMIUM') && !!user?.phone;
+  const waRawNumber = sellerCanPersonalWa ? user?.phone : businessPhone;
+  const waNumber = waRawNumber ? String(waRawNumber).replace(/[^0-9]/g, '') : '';
+  const onOpenWhatsApp = () => {
+    if (!waNumber) return;
+    const msg = encodeURIComponent(
+      sellerCanPersonalWa
+        ? `Hola, vi tu perfil en Bomelh — ${user?.name ?? ''}`
+        : `Hola, quiero contactar con el vendedor "${user?.name ?? ''}" en Bomelh.`,
+    );
+    Linking.openURL(`https://wa.me/${waNumber}?text=${msg}`).catch(() => {});
+  };
   const onShareProfile = () =>
     share({ type: 'profile', id: userId, name: user?.name ?? 'este vendedor' });
 
@@ -557,6 +577,18 @@ export default function PublicUserProfile() {
               )}
             {!isOwn && (
               <>
+                {/* v2 Fase 12 — WhatsApp: acción primaria de contacto con la
+                    tienda / el vendedor. Verde para diferenciar visualmente
+                    de Seguir (primary) y Denunciar (danger). */}
+                {waNumber !== '' && (
+                  <TouchableOpacity
+                    style={styles.waBtn}
+                    activeOpacity={0.85}
+                    onPress={onOpenWhatsApp}>
+                    <MessageCircle size={14} color="#ffffff" strokeWidth={2} />
+                    <Text style={styles.waBtnText}>WhatsApp</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={[styles.followMainBtn, following && styles.followMainBtnActive]}
                   activeOpacity={0.85}
@@ -1499,6 +1531,21 @@ const makeStyles = (colors: ThemeColors) =>
       elevation: 4,
     },
     tiendaBtnText: { fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' },
+    waBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 20,
+      backgroundColor: '#25D366',
+      shadowColor: '#25D366',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    waBtnText: { fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' },
     followMainBtn: {
       flexDirection: 'row',
       alignItems: 'center',
