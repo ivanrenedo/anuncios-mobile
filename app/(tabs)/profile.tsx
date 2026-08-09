@@ -54,6 +54,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
 import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
 import PlanFeaturesPanel from '@/components/PlanFeaturesPanel';
+import VerificationRequestModal from '@/components/VerificationRequestModal';
 import Skeleton from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import SettingsModal, { Row, Section } from '@/components/SettingsModal';
@@ -125,6 +126,7 @@ export default function ProfileScreen() {
   const { count: followingCountNum, refetch: refetchFollowingCount } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
@@ -1056,24 +1058,10 @@ export default function ProfileScreen() {
                     Alert.alert('Completa tu perfil', `Para verificarte necesitas: ${missing.join(', ')}.`);
                     return;
                   }
-                  Alert.alert(
-                    'Solicitar verificación',
-                    'Tu perfil será revisado por nuestro equipo. Recibirás una notificación con el resultado.',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      {
-                        text: 'Solicitar',
-                        onPress: async () => {
-                          try {
-                            await requestVerification();
-                            Alert.alert('Solicitud enviada', 'Te notificaremos cuando sea revisada.');
-                          } catch (e: any) {
-                            Alert.alert('Error', e?.message || 'No se pudo enviar la solicitud.');
-                          }
-                        },
-                      },
-                    ],
-                  );
+                  // v2 Fase 10c: abre el modal con soporte de docs en lugar
+                  // del Alert simple. requestVerification se llama desde
+                  // dentro del modal con los docs adjuntos.
+                  setVerificationModalOpen(true);
                 }}
                 last
               />
@@ -1776,6 +1764,12 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
       )}
+
+      <VerificationRequestModal
+        visible={verificationModalOpen}
+        onClose={() => setVerificationModalOpen(false)}
+        onSubmitted={() => refetchVerification()}
+      />
     </View>
   );
 }
