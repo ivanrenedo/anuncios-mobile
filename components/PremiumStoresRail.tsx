@@ -48,5 +48,15 @@ export default function PremiumStoresRail({ take = 30 }: { take?: number }) {
 
   if (items.length === 0) return null;
 
-  return <ProductRail title="Tiendas Premium" icon="crown" items={items} />;
+  // Autoplay para dar sensación de escaparate activo. 4s por tile, mismo
+  // default que el shop web y el legacy premium_showcase.
+  return (
+    <ProductRail
+      title="Tiendas Premium"
+      icon="crown"
+      items={items}
+      autoplay
+      autoplayMs={4000}
+    />
+  );
 }
