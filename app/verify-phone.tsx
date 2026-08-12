@@ -226,7 +226,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
     },
     content: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: 28,
       justifyContent: 'center',
       alignItems: 'center',

@@ -134,8 +134,11 @@ export function toExploreItem(p: any) {
     priceNum: Number(p.price),
     createdAt: p.createdAt,
     discount: p.discount,
-    operation: p.propertyDetail?.operation,
+    operation: p.propertyDetail?.operation ?? p.vehicleDetail?.operation,
     offerType: p.serviceDetail?.offerType,
+    propertyDetail: p.propertyDetail ?? null,
+    serviceDetail: p.serviceDetail ?? null,
+    vehicleDetail: p.vehicleDetail ?? null,
     isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
     postedAgo: timeAgo(p.createdAt),
   };

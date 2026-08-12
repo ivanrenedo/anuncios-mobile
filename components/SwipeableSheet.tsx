@@ -5,14 +5,13 @@ import {
   Modal,
   StyleSheet,
   Animated,
-  Dimensions,
   PanResponder,
   TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
 
 interface SwipeableSheetProps {
@@ -30,8 +29,9 @@ export default function SwipeableSheet({
 }: SwipeableSheetProps) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
+  const { height: screenHeight, isLandscape } = useResponsiveLayout();
 
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
 
@@ -54,7 +54,7 @@ export default function SwipeableSheet({
     } else {
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
+          toValue: screenHeight,
           duration: 260,
           useNativeDriver: true,
         }),
@@ -65,12 +65,12 @@ export default function SwipeableSheet({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, screenHeight, dragY, opacityAnim, slideAnim]);
 
   const dismiss = () => {
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
+        toValue: screenHeight,
         duration: 260,
         useNativeDriver: true,
       }),
@@ -107,7 +107,7 @@ export default function SwipeableSheet({
   const backdropOpacity = Animated.multiply(
     opacityAnim,
     dragY.interpolate({
-      inputRange: [0, SCREEN_HEIGHT * 0.5],
+      inputRange: [0, screenHeight * 0.5],
       outputRange: [1, 0],
       extrapolate: 'clamp',
     })
@@ -135,7 +135,7 @@ export default function SwipeableSheet({
           styles.sheet,
           {
             paddingBottom: Math.max(insets.bottom, 16),
-            maxHeight: SCREEN_HEIGHT * 0.7,
+            maxHeight: screenHeight * (isLandscape ? 0.9 : 0.7),
             transform: [{ translateY: Animated.add(slideAnim, dragY) }],
           },
         ]}>

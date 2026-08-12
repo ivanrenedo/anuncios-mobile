@@ -5,6 +5,7 @@ import { useTheme } from '@/constants/theme';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useSheetStyles } from './sheetStyles';
 import { SORT_LABELS, type SortOrder } from '@/lib/exploreUtils';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 interface Props {
   visible: boolean;
@@ -17,10 +18,13 @@ interface Props {
 export default function SortPickerSheet({ visible, value, onChange, onClose }: Props) {
   const { colors } = useTheme();
   const styles = useSheetStyles();
+  const { height, isLandscape } = useResponsiveLayout();
 
   return (
     <SwipeableSheet visible={visible} onClose={onClose} title="Ordenar por">
-      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ maxHeight: height * (isLandscape ? 0.72 : 0.44) }}>
         {(Object.keys(SORT_LABELS) as Exclude<SortOrder, null>[]).map((key) => {
           const active = value === key;
           return (

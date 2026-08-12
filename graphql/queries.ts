@@ -31,9 +31,22 @@ export const ME = gql`
       notifMarketing
       showEmail
       showPhone
+      qrShowPhone
+      qrShowEmail
       themePreference
       createdAt
       updatedAt
+    }
+  }
+`;
+
+export const MY_SELLER_QR_STATS = gql`
+  query MySellerQrStats {
+    mySellerQrStats {
+      total
+      thisMonth
+      last30Days
+      lastScanAt
     }
   }
 `;
@@ -248,6 +261,9 @@ export const SEARCH_PRODUCTS = gql`
       }
       propertyDetail {
         operation
+        bedrooms
+        bathrooms
+        surface
       }
       serviceDetail {
         offerType
@@ -833,6 +849,20 @@ export const MY_AUTO_BUMP_SLOTS = gql`
         title
         images { id url sortOrder type thumbnailUrl }
       }
+    }
+  }
+`;
+
+export const MY_BOOST_QUOTA = gql`
+  query MyBoostQuota {
+    myBoostQuota {
+      plan
+      includedPerMonth
+      usedThisMonth
+      remainingThisMonth
+      extraDiscountPct
+      cycleStartsAt
+      cycleEndsAt
     }
   }
 `;

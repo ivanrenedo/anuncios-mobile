@@ -17,12 +17,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFavorites, useFavoriteToggle } from '@/hooks/useFavorites';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const gridColumns = columnsForContentWidth(contentWidth);
   const { isAuthenticated } = useAuth();
   const { favorites, loading: favsLoading, refetch } = useFavorites();
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
@@ -85,9 +89,9 @@ export default function SavedScreen() {
 
   const TOTAL = savedItems.reduce((sum: number, i: any) => sum + (i.priceValue || 0), 0);
 
-  const pairs: (any | null)[][] = [];
-  for (let i = 0; i < visibleItems.length; i += 2) {
-    pairs.push([visibleItems[i], visibleItems[i + 1] ?? null]);
+  const pairs: any[][] = [];
+  for (let i = 0; i < visibleItems.length; i += gridColumns) {
+    pairs.push(visibleItems.slice(i, i + gridColumns));
   }
 
   if (!isAuthenticated) {
@@ -151,38 +155,34 @@ export default function SavedScreen() {
 
         {/* Product grid */}
         {favsLoading && savedItems.length === 0 ? (
-          <View style={styles.grid}>
+          <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {[0, 1, 2].map((row) => (
               <View key={row} style={styles.gridRow}>
-                <ProductCardSkeleton />
-                <ProductCardSkeleton />
+                {Array.from({ length: gridColumns }).map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
               </View>
             ))}
           </View>
         ) : visibleItems.length > 0 ? (
-          <View style={styles.grid}>
+          <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {pairs.map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
-                {pair[0] && (
+                {pair.map((item) => (
                   <ProductCard
-                    item={pair[0]}
-                    liked={isFavorite(pair[0]!.id)}
-                    onLike={() => toggleFavorite(pair[0]!.id)}
+                    key={item.id}
+                    item={item}
+                    liked={isFavorite(item.id)}
+                    onLike={() => toggleFavorite(item.id)}
                     onPress={() =>
-                      router.push({ pathname: '/product/[id]', params: { id: pair[0]!.id } })
+                      router.push({ pathname: '/product/[id]', params: { id: item.id } })
                     }
                   />
-                )}
-                {pair[1] && (
-                  <ProductCard 
-                    item={pair[1]}
-                    liked={isFavorite(pair[1]!.id)}
-                    onLike={() => toggleFavorite(pair[1]!.id)}
-                    onPress={() =>
-                      router.push({ pathname: '/product/[id]', params: { id: pair[1]!.id } })
-                    }
-                  />
-                )}
+                ))}
+                {pair.length < gridColumns &&
+                  Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                    <View key={i} style={{ flex: 1 }} />
+                  ))}
               </View>
             ))}
           </View>
@@ -292,7 +292,6 @@ const makeStyles = (colors: ThemeColors) =>
     color: '#ffffff',
   },
   grid: {
-    paddingHorizontal: 16,
     gap: 12,
   },
   gridRow: {

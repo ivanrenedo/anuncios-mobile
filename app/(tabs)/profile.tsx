@@ -53,7 +53,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
+import ProductCard, { fmtPrice } from '@/components/ProductCard';
 import PlanFeaturesPanel from '@/components/PlanFeaturesPanel';
 import VerificationRequestModal from '@/components/VerificationRequestModal';
 import Skeleton from '@/components/Skeleton';
@@ -74,6 +74,8 @@ import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS } from '@/graphql/queries';
 import { SET_PINNED_PRODUCTS, SET_AUTO_BUMP_SLOTS } from '@/graphql/mutations';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import ImageViewing from 'react-native-image-viewing';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import { formatNumber } from '@/lib/format';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -119,6 +121,9 @@ export default function ProfileScreen() {
   const { profile, loading, refresh } = useProfile();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const gridColumns = columnsForContentWidth(contentWidth);
   const { isAuthenticated, signOut, user } = useAuth();
   const userId = user?.id || profile?.id || '';
   const { products: myProducts, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
@@ -378,7 +383,8 @@ export default function ProfileScreen() {
 
   const renderPairs = (items: any[]) => {
     const pairs: any[][] = [];
-    for (let i = 0; i < items.length; i += 2) pairs.push(items.slice(i, i + 2));
+    for (let i = 0; i < items.length; i += gridColumns)
+      pairs.push(items.slice(i, i + gridColumns));
     return pairs;
   };
 
@@ -653,10 +659,10 @@ export default function ProfileScreen() {
         {/* Stat tabs */}
         <View style={styles.statTabs}>
           {[
-            { value: fmtNumber(myProducts.length), label: 'Anuncios', isLoading: productsLoading },
+            { value: formatNumber(myProducts.length), label: 'Anuncios', isLoading: productsLoading },
             { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración', isLoading: ratingLoading },
-            { value: fmtNumber(followersCountNum), label: 'Seguidores', isLoading: followersLoading },
-            { value: fmtNumber(followingCountNum), label: 'Siguiendo', isLoading: followingLoading },
+            { value: formatNumber(followersCountNum), label: 'Seguidores', isLoading: followersLoading },
+            { value: formatNumber(followingCountNum), label: 'Siguiendo', isLoading: followingLoading },
           ].map(({ value, label, isLoading }, i) => (
             <TouchableOpacity
               key={label}
@@ -676,7 +682,7 @@ export default function ProfileScreen() {
         {activeTab === 0 ? (
           productsLoading ? (
             <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
-          ) : <View style={styles.grid}>
+          ) : <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {productItems.length > 0 && (hasStatsAccess ? (
               <View style={styles.statsCard}>
                 <View style={styles.statsHeader}>
@@ -686,13 +692,13 @@ export default function ProfileScreen() {
                 <View style={styles.statsRow}>
                   <View style={styles.statsItem}>
                     <Eye size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                    <Text style={styles.statsValue}>{fmtNumber(totalViews)}</Text>
+                    <Text style={styles.statsValue}>{formatNumber(totalViews)}</Text>
                     <Text style={styles.statsLabel}>Visitas</Text>
                   </View>
                   <View style={styles.statsDivider} />
                   <View style={styles.statsItem}>
                     <Heart size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                    <Text style={styles.statsValue}>{fmtNumber(totalFavorites)}</Text>
+                    <Text style={styles.statsValue}>{formatNumber(totalFavorites)}</Text>
                     <Text style={styles.statsLabel}>Favoritos</Text>
                   </View>
                   {hasFullStats && (
@@ -700,13 +706,13 @@ export default function ProfileScreen() {
                       <View style={styles.statsDivider} />
                       <View style={styles.statsItem}>
                         <Phone size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.statsValue}>{fmtNumber(totalContacts)}</Text>
+                        <Text style={styles.statsValue}>{formatNumber(totalContacts)}</Text>
                         <Text style={styles.statsLabel}>Contactos</Text>
                       </View>
                       <View style={styles.statsDivider} />
                       <View style={styles.statsItem}>
                         <Search size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.statsValue}>{fmtNumber(totalImpressions)}</Text>
+                        <Text style={styles.statsValue}>{formatNumber(totalImpressions)}</Text>
                         <Text style={styles.statsLabel}>Búsquedas</Text>
                       </View>
                     </>
@@ -738,7 +744,7 @@ export default function ProfileScreen() {
                   <View style={styles.statsTopRow}>
                     <Text style={styles.statsTopText}>
                       Más visto: <Text style={styles.statsTopName}>{topProduct.title}</Text>
-                      {' '}({fmtNumber(topProduct.views)} visitas)
+                      {' '}({formatNumber(topProduct.views)} visitas)
                     </Text>
                   </View>
                 )}
@@ -774,8 +780,8 @@ export default function ProfileScreen() {
                   <View key={item.id} style={styles.cardWrap}>
                     <ProductCard
                       item={item}
-                      isPinned={pinnedIdsProfile.has(item.id)}
-                      isAutoBumped={autoBumpedIdsProfile.has(item.id)}
+                      /* isPinned={pinnedIdsProfile.has(item.id)}
+                      isAutoBumped={autoBumpedIdsProfile.has(item.id)} */
                       onPress={() =>
                         router.push({ pathname: '/product/[id]', params: { id: item.id } })
                       }
@@ -833,17 +839,12 @@ export default function ProfileScreen() {
                         <Trash2 size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
                     </View>
-                    {hasFullStats && (
-                      <View style={styles.cardStats}>
-                        <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
-                        <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
-                      </View>
-                    )}
                   </View>
                 ))}
-                {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                {pair.length < gridColumns &&
+                  Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                    <View key={i} style={styles.cardPlaceholder} />
+                  ))}
               </View>
             ))}
             {productItems.length > PREVIEW_LIMIT && (
@@ -917,7 +918,7 @@ export default function ProfileScreen() {
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.followersTitle}>{fmtNumber(followersCountNum)} seguidores</Text>
+                <Text style={styles.followersTitle}>{formatNumber(followersCountNum)} seguidores</Text>
                 <Text style={styles.followersMeta}>Personas que confían en este perfil</Text>
               </View>
             </View>
@@ -999,7 +1000,7 @@ export default function ProfileScreen() {
                 <UserCheck size={20} color={colors.primary} strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.followersTitle}>{fmtNumber(followingCountNum)} siguiendo</Text>
+                <Text style={styles.followersTitle}>{formatNumber(followingCountNum)} siguiendo</Text>
                 <Text style={styles.followersMeta}>Personas que sigues</Text>
               </View>
             </View>
@@ -1311,7 +1312,7 @@ export default function ProfileScreen() {
           )}
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={styles.allProductsGrid}
+            contentContainerStyle={[styles.allProductsGrid, { paddingHorizontal: gutter }]}
             showsVerticalScrollIndicator={false}>
             {paginatedProducts.length === 0 ? (
               <View style={styles.emptyState}>
@@ -1363,14 +1364,17 @@ export default function ProfileScreen() {
                         {hasFullStats && (
                           <View style={styles.cardStats}>
                             <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                            <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
+                            <Text style={styles.cardStatsText}>{formatNumber(item.views)}</Text>
                             <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                            <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
+                            <Text style={styles.cardStatsText}>{formatNumber(item.favorites)}</Text>
                           </View>
                         )}
                       </View>
                     ))}
-                    {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                    {pair.length < gridColumns &&
+                      Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                        <View key={i} style={styles.cardPlaceholder} />
+                      ))}
                   </View>
                 ))}
                 {hasMoreProducts && (
@@ -2143,7 +2147,6 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 1,
   },
   grid: {
-    paddingHorizontal: 16,
     gap: 12,
     marginBottom: 24,
   },
@@ -2234,7 +2237,7 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
   },
   allProductsGrid: {
-    padding: 16,
+    paddingVertical: 16,
     gap: 12,
     paddingBottom: 40,
   },

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
-  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,8 +30,7 @@ import Spinner from '@/components/Spinner';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { BRANDS, type CatFilter } from '@/lib/exploreUtils';
 import { useSheetStyles } from './sheetStyles';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 export interface FilterDrawerProps {
   /** Whether the drawer is currently visible. Parent should conditionally
@@ -146,12 +144,14 @@ export default function FilterDrawer(props: FilterDrawerProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const sheetStyles = useSheetStyles();
+  const { width: screenWidth, isLandscape } = useResponsiveLayout();
+  const drawerWidth = isLandscape ? Math.min(460, screenWidth * 0.6) : screenWidth;
   const CatIcon = catFilter.icon;
 
   // Local UI state for the brand picker sheet nested inside the drawer.
   const [picker, setPicker] = useState<null | 'brand'>(null);
 
-  const drawerAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const drawerAnim = useRef(new Animated.Value(drawerWidth)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
   // Play the entrance animation on mount and hook Android hardware back.
@@ -181,7 +181,7 @@ export default function FilterDrawer(props: FilterDrawerProps) {
   const close = () => {
     Animated.parallel([
       Animated.timing(drawerAnim, {
-        toValue: SCREEN_WIDTH,
+        toValue: drawerWidth,
         duration: 260,
         useNativeDriver: true,
       }),
@@ -227,7 +227,10 @@ export default function FilterDrawer(props: FilterDrawerProps) {
       </Animated.View>
 
       <Animated.View
-        style={[styles.drawer, { transform: [{ translateX: drawerAnim }] }]}>
+        style={[
+          styles.drawer,
+          { width: drawerWidth, transform: [{ translateX: drawerAnim }] },
+        ]}>
         {/* Header */}
         <View style={[styles.fdHeader, { paddingTop: insets.top + 12 }]}>
           <Text style={styles.fdTitle}>Filtrar tu búsqueda</Text>
@@ -699,7 +702,6 @@ const makeStyles = (colors: ThemeColors) =>
       top: 0,
       right: 0,
       bottom: 0,
-      width: SCREEN_WIDTH,
       backgroundColor: colors.surface,
       zIndex: 61,
       shadowColor: '#000',

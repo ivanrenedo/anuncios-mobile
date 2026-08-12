@@ -20,7 +20,7 @@ import {
   ChevronDown,
   ArrowUpDown,
 } from 'lucide-react-native';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS } from '@/graphql/queries';
 import { SET_PINNED_PRODUCTS } from '@/graphql/mutations';
 import { API_URL } from '@/lib/config';
@@ -88,6 +88,15 @@ export default function PlanFeaturesPanel({
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Ventajas de tu plan</Text>
       <View style={styles.row}>
+        {pinned.length >= 2 && (
+          <TouchableOpacity
+            style={styles.reorderChip}
+            activeOpacity={0.85}
+            onPress={() => setReorderOpen(true)}>
+            <ArrowUpDown size={11} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.reorderChipText}>Reordenar</Text>
+          </TouchableOpacity>
+        )}
         {limits.pinned > 0 && (
           <View style={styles.item}>
             <Pin size={14} color="#7C3AED" strokeWidth={2} />
@@ -97,15 +106,6 @@ export default function PlanFeaturesPanel({
                 {pinned.length}/{limits.pinned}
               </Text>
             </Text>
-            {pinned.length >= 2 && (
-              <TouchableOpacity
-                style={styles.reorderChip}
-                activeOpacity={0.85}
-                onPress={() => setReorderOpen(true)}>
-                <ArrowUpDown size={11} color="#7C3AED" strokeWidth={2.5} />
-                <Text style={styles.reorderChipText}>Reordenar</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
         {limits.slots > 0 && (
@@ -267,8 +267,6 @@ function ReorderPinsSheet({ visible, onClose, pinned, products }: SheetProps) {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     card: {
-      marginHorizontal: 16,
-      marginTop: 12,
       padding: 12,
       borderRadius: 16,
       backgroundColor: colors.primary + '0A',
@@ -310,12 +308,12 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 999,
-      backgroundColor: colors.surfaceContainerLowest,
+      backgroundColor: "#7C3AED",
     },
     reorderChipText: {
       fontFamily: 'Manrope-Bold',
-      fontSize: 10,
-      color: '#7C3AED',
+      fontSize: 12,
+      color: "#ffffff",
     },
     hint: {
       fontFamily: 'Manrope-Regular',

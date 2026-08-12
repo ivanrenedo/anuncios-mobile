@@ -60,7 +60,6 @@ interface Props {
 }
 
 export function fmtNumber(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} mill`;
   return Math.round(n).toLocaleString('es');
 }
  
@@ -111,7 +110,12 @@ function ProductCardImpl({
 
   return (
     <TouchableOpacity
-      style={[width ? { width } : styles.flex, item.isBoosted && styles.isBoosted, style ]}
+      style={[
+        styles.card,
+        width ? { width } : styles.flex,
+        item.isBoosted && styles.isBoosted,
+        style,
+      ]}
       activeOpacity={0.92}
       onPress={onPress}>
       <View style={styles.imageWrap}>
@@ -147,9 +151,9 @@ function ProductCardImpl({
           </View>
         )}
         {/* v2 Fase 11.2/11.3 — badges pin y auto-bump del owner */}
-        {(isPinned || isAutoBumped) && (
+        {(isPinned || isAutoBumped) && ( 
           <View style={styles.ownerBadgesCol}>
-            {isPinned && (
+            {isPinned && ( 
               <View style={[styles.ownerBadge, { backgroundColor: colors.primary }]}>
                 <Pin size={11} color="#ffffff" fill="#ffffff" strokeWidth={2.5} />
               </View>
@@ -179,68 +183,70 @@ function ProductCardImpl({
         )}
       </View>
       <View style={styles.infoZone}>
-        {showPrice && (hasDiscount ? (
-          <View style={styles.priceRow}>
-            <Text
-              style={[styles.price, { color: colors.error }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}>
-              {finalPrice}
-            </Text>
-            <Text style={styles.priceOriginal}>
-              {item.price}
-            </Text>
-            {showRebajadoChip && (
-              <View style={styles.rebajadoChip}>
-                <Flame size={9} color="#EA580C" strokeWidth={2.5} />
-                <Text style={styles.rebajadoChipText}>Rebajado</Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.priceRow}>
-            <Text
-              style={[styles.price, accentColor ? { color: accentColor } : null]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}>
-              {item.price}
-            </Text>
-            {showRebajadoChip && (
-              <View style={styles.rebajadoChip}>
-                <Flame size={9} color="#EA580C" strokeWidth={2.5} />
-                <Text style={styles.rebajadoChipText}>Rebajado</Text>
-              </View>
-            )}
-          </View>
-        ))}
-        <Text style={styles.title} numberOfLines={2}>
-          {item.title}
-        </Text>
-        {(item.location || item.postedAgo) && (
-          <View style={styles.locationRow}>
-            {item.location && (
-              <>
-                <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-                <Text style={styles.location} numberOfLines={1}>
-                  {item.location}
-                </Text>
-              </>
-            )}
-            {item.location && item.postedAgo && (
-              <Text style={styles.metaDot}>·</Text>
-            )}
-            {item.postedAgo && (
-              <>
-                <Clock size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
-                <Text style={styles.location} numberOfLines={1}>
-                  {item.postedAgo}
-                </Text>
-              </>
-            )}
-          </View>
-        )}
+        <View style={{flex: 1}}>
+          {showPrice && (hasDiscount ? (
+            <View style={styles.priceRow}>
+              <Text
+                style={[styles.price, { color: colors.error }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}>
+                {finalPrice}
+              </Text>
+              <Text style={styles.priceOriginal}>
+                {item.price}
+              </Text>
+              {showRebajadoChip && (
+                <View style={styles.rebajadoChip}>
+                  <Flame size={9} color="#EA580C" strokeWidth={2.5} />
+                  <Text style={styles.rebajadoChipText}>Rebajado</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.priceRow}>
+              <Text
+                style={[styles.price, accentColor ? { color: accentColor } : null]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}>
+                {item.price}
+              </Text>
+              {showRebajadoChip && (
+                <View style={styles.rebajadoChip}>
+                  <Flame size={9} color="#EA580C" strokeWidth={2.5} />
+                  <Text style={styles.rebajadoChipText}>Rebajado</Text>
+                </View>
+              )}
+            </View>
+          ))}
+          <Text style={styles.title} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {(item.location || item.postedAgo) && (
+            <View style={styles.locationRow}>
+              {item.location && (
+                <>
+                  <MapPin size={11} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+                  <Text style={styles.location} numberOfLines={1}>
+                    {item.location}
+                  </Text>
+                </>
+              )}
+              {item.location && item.postedAgo && (
+                <Text style={styles.metaDot}>·</Text>
+              )}
+              {item.postedAgo && (
+                <>
+                  <Clock size={10} color={colors.onSurfaceVariant + '99'} strokeWidth={1.5} />
+                  <Text style={styles.location} numberOfLines={1}>
+                    {item.postedAgo}
+                  </Text>
+                </>
+              )}
+            </View>
+          )}  
+        </View>
         {item.seller && (
           <TouchableOpacity
             style={styles.sellerRow}
@@ -318,15 +324,29 @@ const ProductCard = React.memo(ProductCardImpl, (prev, next) => {
   );
 });
 
-export default ProductCard;
+export default ProductCard; 
 
 /** Loading placeholder matching ProductCard's shape (image + 2 text lines). */
 export function ProductCardSkeleton({ width }: { width?: number }) {
+  const { colors } = useTheme();
   return (
-    <View style={width ? { width } : { flex: 1 }}>
-      <Skeleton style={{ aspectRatio: 1, borderRadius: 16, marginBottom: 8 }} />
-      <Skeleton style={{ height: 16, width: '90%', borderRadius: 6, marginBottom: 6 }} />
-      <Skeleton style={{ height: 16, width: '55%', borderRadius: 6 }} />
+    <View
+      style={[
+        {
+          borderRadius: 16,
+          overflow: 'hidden',
+          borderWidth: 0.5,
+          borderColor: colors.outlineVariant + '4d',
+          backgroundColor: colors.surfaceContainerLowest,
+        },
+        width ? { width } : { flex: 1 },
+      ]}>
+      <Skeleton style={{ width: '100%', aspectRatio: 1, borderRadius: 0 }} />
+      <View style={{ paddingHorizontal: 12, paddingVertical: 12, gap: 6 }}>
+        <Skeleton style={{ height: 18, width: 80, borderRadius: 6 }} />
+        <Skeleton style={{ height: 14, width: '90%', borderRadius: 4 }} />
+        <Skeleton style={{ height: 12, width: '55%', borderRadius: 4 }} />
+      </View>
     </View>
   );
 }
@@ -337,14 +357,16 @@ const makeStyles = (colors: ThemeColors) =>
     flex: 1,
     width: '100%'
   },
-  imageWrap: {
-    width: '100%',
-    aspectRatio: 1,
+  card: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 0.5,
     borderColor: colors.outlineVariant + '4d',
-    marginBottom: 10,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  imageWrap: {
+    width: '100%',
+    aspectRatio: 1,
     position: 'relative',
     backgroundColor: colors.surfaceContainerLow,
   },
@@ -416,10 +438,13 @@ const makeStyles = (colors: ThemeColors) =>
   infoZone: {
     flexGrow: 1,
     gap: 4,
-    paddingHorizontal: 6,
-    paddingBottom: 2
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
   title: {
+    flex: 1,
+    marginVertical: 6,
     fontFamily: 'Manrope-Regular',
     fontSize: 15,
     color: colors.onSurface,
@@ -427,27 +452,27 @@ const makeStyles = (colors: ThemeColors) =>
   },
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: "wrap",
     gap: 4,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
   },
   price: {
     fontFamily: 'Manrope-Bold',
     fontSize: 16,
     color: colors.primary,
-    lineHeight: 22
+    lineHeight: 18,
+    flexShrink: 1,
   },
   priceOriginal: {
     fontFamily: 'Manrope-Regular',
     fontSize: 11,
     color: colors.onSurfaceVariant + '88',
     textDecorationLine: 'line-through',
+    flexShrink: 1,
   },
   ownerBadgesCol: {
     position: 'absolute',
     right: 6,
-    bottom: 6,
+    top: 6,
     flexDirection: 'column',
     gap: 4,
   },
@@ -490,6 +515,7 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-Regular',
     fontSize: 11,
     color: colors.onSurfaceVariant + '99',
+    flexShrink: 1,
   },
   metaDot: {
     fontFamily: 'Manrope-Regular',
@@ -515,7 +541,8 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Manrope-SemiBold',
     fontSize: 11,
     color: colors.onSurfaceVariant,
-    width: 90
+    flex: 1,
+    minWidth: 0,
   },
   badge: {
     position: "absolute",
@@ -576,8 +603,7 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
   },
   isBoosted: {
-    boxShadow: '#7C3AED 0px 1px 1px, #7C3AED 0px 0px 1px 1px',
-    borderRadius: 16,
-    position: 'relative',
+    borderWidth: 2,
+    borderColor: '#7C3AED',
   }
 });

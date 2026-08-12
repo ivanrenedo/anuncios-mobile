@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Modal,
   Animated,
-  Dimensions,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -34,6 +33,7 @@ import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants
 import { resolveImage } from '@/lib/config';
 import Skeleton from '@/components/Skeleton';
 import { useNotifications, useMarkNotificationRead, useMarkAllRead, useDeleteNotification, useDeleteAllNotifications } from '@/hooks/useNotifications';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 type NotifType =
   | 'like'
@@ -78,8 +78,6 @@ const ICON_MAP: Record<NotifType, { icon: React.ElementType; bg: string; color: 
   alert:    { icon: Bell,         bg: colors.primary + '15',  color: colors.primary },
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -90,7 +88,9 @@ export default function NotificationsModal({ visible, onClose }: Props) {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const translateX = useRef(new Animated.Value(-SCREEN_WIDTH)).current;
+  const { width: screenWidth, isLandscape } = useResponsiveLayout();
+  const panelWidth = isLandscape ? Math.min(440, screenWidth * 0.58) : screenWidth;
+  const translateX = useRef(new Animated.Value(-panelWidth)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
   const { notifications: apiNotifs, loading: notifsLoading } = useNotifications();
@@ -133,7 +133,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
     } else {
       Animated.parallel([
         Animated.timing(translateX, {
-          toValue: SCREEN_WIDTH,
+          toValue: -panelWidth,
           duration: 260,
           useNativeDriver: true,
         }),
@@ -144,7 +144,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
         }),
       ]).start(() => setMounted(false));
     }
-  }, [visible]);
+  }, [visible, panelWidth, backdropOpacity, translateX]);
 
   const unreadCount = notifs.filter((n) => !n.read).length;
   const markAllRead = () => { apiMarkAllRead(); };
@@ -243,6 +243,7 @@ export default function NotificationsModal({ visible, onClose }: Props) {
           {
             paddingTop: insets.top,
             paddingBottom: insets.bottom + 16,
+            width: panelWidth,
             transform: [{ translateX }],
           },
         ]}>
@@ -386,7 +387,6 @@ const makeStyles = (colors: ThemeColors) =>
     top: 0,
     bottom: 0,
     left: 0,
-    right: 0,
     backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 8, height: 0 },

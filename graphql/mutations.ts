@@ -39,7 +39,7 @@ export const UPDATE_USER = gql`
     updateUser(input: $input) {
       id name email phone avatarUrl coverUrl bio location
       language notifMessages notifOffers notifMarketing
-      showEmail showPhone themePreference
+      showEmail showPhone qrShowPhone qrShowEmail themePreference
       updatedAt
     }
   }
@@ -80,6 +80,12 @@ export const VIEW_PRODUCT = gql`
 export const CONTACT_PRODUCT = gql`
   mutation ContactProduct($id: String!) {
     contactProduct(id: $id) { id contacts }
+  }
+`;
+
+export const BOOST_MY_PRODUCT = gql`
+  mutation BoostMyProduct($id: String!, $days: Int) {
+    boostMyProduct(id: $id, days: $days) { id boostedUntil bumpedAt }
   }
 `;
 
@@ -255,6 +261,12 @@ export const SET_AUTO_BUMP_SLOTS = gql`
         images { id url sortOrder type thumbnailUrl }
       }
     }
+  }
+`;
+
+export const TRACK_SELLER_QR_SCAN = gql`
+  mutation TrackSellerQrScan($sellerId: String!, $source: String) {
+    trackSellerQrScan(sellerId: $sellerId, source: $source)
   }
 `;
 

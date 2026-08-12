@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Image,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,12 +14,14 @@ import { useAuth } from '@/hooks/useAuth';
 import RipplePress from '@/components/RipplePress';
 import BrandLogo from '@/components/BrandLogo';
 import Spinner from '@/components/Spinner';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { isLandscape } = useResponsiveLayout();
   const { signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
 
@@ -44,19 +47,22 @@ export default function LoginScreen() {
         </RipplePress>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.logoWrap}>
-          <BrandLogo size={92} showWordmark={false} />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}>
+      <View style={[styles.content, isLandscape && styles.contentLandscape]}>
+        <View style={[styles.logoWrap, isLandscape && styles.logoWrapLandscape]}>
+          <BrandLogo size={isLandscape ? 64 : 92} showWordmark={false} />
         </View>
 
         <Text style={styles.title}>
           Bienvenido a bomelh<Text style={{ color: colors.primary }}>.</Text>
         </Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, isLandscape && styles.subtitleLandscape]}>
           Compra y vende entre particulares en Guinea Ecuatorial de forma segura y sencilla.
         </Text>
 
-        <View style={styles.features}>
+        <View style={[styles.features, isLandscape && styles.featuresLandscape]}>
           {[
             'Publica anuncios gratis y sin comisiones',
             'Conecta con compradores y vendedores',
@@ -93,6 +99,7 @@ export default function LoginScreen() {
           Al continuar, aceptas nuestros Términos de servicio y Política de privacidad.
         </Text>
       </View>
+      </ScrollView>
     </View>
   );
 }
@@ -114,14 +121,23 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    scrollContent: {
+      flexGrow: 1,
+    },
     content: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 32,
     },
+    contentLandscape: {
+      paddingVertical: 8,
+    },
     logoWrap: {
       marginBottom: 28,
+    },
+    logoWrapLandscape: {
+      marginBottom: 12,
     },
     title: {
       fontFamily: 'Manrope-Bold',
@@ -140,10 +156,16 @@ const makeStyles = (colors: ThemeColors) =>
       maxWidth: 300,
       marginBottom: 32,
     },
+    subtitleLandscape: {
+      marginBottom: 16,
+    },
     features: {
       gap: 14,
       alignSelf: 'stretch',
       paddingHorizontal: 8,
+    },
+    featuresLandscape: {
+      gap: 8,
     },
     featureRow: {
       flexDirection: 'row',

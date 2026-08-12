@@ -97,6 +97,10 @@ const cache = new InMemoryCache({
         following: { merge: false },
         mySavedSearches: { merge: false },
         myViewsDaily: { merge: false },
+        myAutoBumpSlots: { merge: false },
+        pinnedProducts: { merge: false },
+        homeCarouselPremium: { merge: false },
+        categoryTree: { merge: false },
       },
     },
     ProductModel: {

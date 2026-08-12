@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
-  Dimensions,
 } from 'react-native';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useRouter } from 'expo-router';
@@ -27,8 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile, type Profile } from '@/hooks/useProfile';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 const LANGUAGES: Record<string, string> = {
   es: 'Español',
@@ -61,7 +59,9 @@ export default function SettingsModal({ visible, onClose }: Props) {
 
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const { width: screenWidth, isLandscape } = useResponsiveLayout();
+  const panelWidth = isLandscape ? Math.min(440, screenWidth * 0.58) : screenWidth;
+  const translateX = useRef(new Animated.Value(panelWidth)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
 
@@ -88,7 +88,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
     } else {
       Animated.parallel([
         Animated.timing(translateX, {
-          toValue: SCREEN_WIDTH,
+          toValue: panelWidth,
           duration: 260,
           useNativeDriver: true,
         }),
@@ -103,7 +103,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
         setThemeOpen(false);
       });
     }
-  }, [visible]);
+  }, [visible, panelWidth, backdropOpacity, translateX]);
 
   const onToggle = async (key: keyof Profile, value: boolean) => {
     setPending(key as string);
@@ -150,6 +150,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
           styles.panel,
           {
             paddingTop: insets.top,
+            width: panelWidth,
             transform: [{ translateX }],
           },
         ]}>
@@ -381,7 +382,6 @@ const makeStyles = (colors: ThemeColors) =>
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: 0,
     right: 0,
     backgroundColor: colors.surface,
     shadowColor: '#000',

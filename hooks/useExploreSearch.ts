@@ -19,6 +19,13 @@ export interface ExploreSearchInput {
   /** Only sent when exactly one condition is selected. Multi-select is applied
    *  as a post-filter over the returned rows in the caller. */
   singleCondition: string | undefined;
+  activeEngines: string[];
+  activeTransmissions: string[];
+  operation: string | null;
+  filterOfferType: string | null;
+  filterBedrooms: number;
+  filterBathrooms: number;
+  surfaceMin: string;
   sortOrder: SortOrder;
 }
 
@@ -56,6 +63,7 @@ export function useExploreSearch(input: ExploreSearchInput): ExploreSearchResult
   const debouncedCity = useDebouncedValue(input.city, 500);
   const debouncedPriceMin = useDebouncedValue(input.priceMin, 500);
   const debouncedPriceMax = useDebouncedValue(input.priceMax, 500);
+  const debouncedSurfaceMin = useDebouncedValue(input.surfaceMin, 500);
 
   const searchInput = useMemo(
     () => ({
@@ -63,6 +71,19 @@ export function useExploreSearch(input: ExploreSearchInput): ExploreSearchResult
       categoryId: input.categoryId,
       city: debouncedCity.trim() || undefined,
       condition: input.singleCondition,
+      engines: input.activeEngines.length > 0 ? input.activeEngines : undefined,
+      transmissions:
+        input.activeTransmissions.length > 0
+          ? input.activeTransmissions
+          : undefined,
+      operation: input.operation ?? undefined,
+      offerType: input.filterOfferType ?? undefined,
+      bedroomsMin: input.filterBedrooms > 0 ? input.filterBedrooms : undefined,
+      bathroomsMin:
+        input.filterBathrooms > 0 ? input.filterBathrooms : undefined,
+      surfaceMin: debouncedSurfaceMin
+        ? parseInt(debouncedSurfaceMin, 10)
+        : undefined,
       priceMin: debouncedPriceMin ? parseInt(debouncedPriceMin, 10) : undefined,
       priceMax: debouncedPriceMax ? parseInt(debouncedPriceMax, 10) : undefined,
       sortBy:
@@ -77,6 +98,13 @@ export function useExploreSearch(input: ExploreSearchInput): ExploreSearchResult
       input.categoryId,
       debouncedCity,
       input.singleCondition,
+      input.activeEngines,
+      input.activeTransmissions,
+      input.operation,
+      input.filterOfferType,
+      input.filterBedrooms,
+      input.filterBathrooms,
+      debouncedSurfaceMin,
       debouncedPriceMin,
       debouncedPriceMax,
       input.sortOrder,
