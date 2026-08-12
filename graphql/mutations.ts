@@ -39,7 +39,13 @@ export const UPDATE_USER = gql`
     updateUser(input: $input) {
       id name email phone avatarUrl coverUrl bio location
       language notifMessages notifOffers notifMarketing
-      showEmail showPhone themePreference
+      showEmail showPhone qrShowPhone qrShowEmail themePreference
+      # Include the derived/plan fields so a client that overwrites its
+      # cached profile from this response (see useProfile.update) doesn't
+      # blank out plan-gated state like STAR/PREMIUM access.
+      plan planExpiresAt effectivePlan
+      maxActiveProducts maxImagesPerProduct
+      verified permission suspended
       updatedAt
     }
   }
@@ -224,6 +230,14 @@ export const REQUEST_VERIFICATION = gql`
       status
       createdAt
     }
+  }
+`;
+
+// ─── Seller QR ───────────────────────────────────────────────────────────────
+
+export const TRACK_SELLER_QR_SCAN = gql`
+  mutation TrackSellerQrScan($sellerId: String!, $source: String) {
+    trackSellerQrScan(sellerId: $sellerId, source: $source)
   }
 `;
 

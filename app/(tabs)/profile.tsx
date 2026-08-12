@@ -67,6 +67,7 @@ import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
+import QrShareCard from '@/components/QrShareCard';
 import ImageViewing from 'react-native-image-viewing';
 
 const COVER_HEIGHT = 220;
@@ -714,6 +715,17 @@ export default function ProfileScreen() {
                 <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
             ))}
+            {hasStatsAccess && profile.id && (
+              <QrShareCard
+                sellerId={profile.id}
+                name={profile.name}
+                phone={profile.phone}
+                email={profile.email}
+                effectivePlan={effectivePlan}
+                qrShowPhone={profile.qr_show_phone}
+                qrShowEmail={profile.qr_show_email}
+              />
+            )}
             {renderPairs(productItems.slice(0, PREVIEW_LIMIT)).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item: any) => (

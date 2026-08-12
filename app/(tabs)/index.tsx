@@ -101,11 +101,20 @@ const SectionRenderer = React.memo(function SectionRenderer({
     trackEvent(section.id, 'click');
   }, [section.id, trackEvent]);
 
-  // Recompute only when the underlying products change reference.
-  const items = useMemo(
-    () => (section.products ?? []).map(toCardItem),
-    [section.products],
-  );
+  // Recompute only when the underlying products change reference. Dedup by id
+  // first: the backend sections can overlap (same product matches "recent" and
+  // "hot" filters at once), and React keys must be unique per rail. Keeps the
+  // first occurrence so the visible order is stable.
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    const out: ReturnType<typeof toCardItem>[] = [];
+    for (const p of section.products ?? []) {
+      if (!p?.id || seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push(toCardItem(p));
+    }
+    return out;
+  }, [section.products]);
 
   switch (section.type) {
     case 'banner':

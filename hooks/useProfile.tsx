@@ -32,6 +32,8 @@ export interface Profile {
   notif_marketing: boolean;
   show_email: boolean;
   show_phone: boolean;
+  qr_show_phone: boolean;
+  qr_show_email: boolean;
   dark_mode: boolean;
   theme_preference: 'system' | 'light' | 'dark';
   created_at: string;
@@ -60,6 +62,8 @@ const DEFAULT_PROFILE: Profile = {
   notif_marketing: false,
   show_email: false,
   show_phone: true,
+  qr_show_phone: false,
+  qr_show_email: false,
   dark_mode: false,
   theme_preference: 'system',
   created_at: new Date().toISOString(),
@@ -89,6 +93,8 @@ function apiToProfile(u: any): Profile {
     notif_marketing: u.notifMarketing ?? false,
     show_email: u.showEmail ?? false,
     show_phone: u.showPhone ?? true,
+    qr_show_phone: u.qrShowPhone ?? false,
+    qr_show_email: u.qrShowEmail ?? false,
     dark_mode: false,
     theme_preference: u.themePreference || 'system',
     created_at: u.createdAt || new Date().toISOString(),
@@ -156,6 +162,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     if (patch.notif_marketing !== undefined) input.notifMarketing = patch.notif_marketing;
     if (patch.show_email !== undefined) input.showEmail = patch.show_email;
     if (patch.show_phone !== undefined) input.showPhone = patch.show_phone;
+    if (patch.qr_show_phone !== undefined) input.qrShowPhone = patch.qr_show_phone;
+    if (patch.qr_show_email !== undefined) input.qrShowEmail = patch.qr_show_email;
     if (patch.theme_preference !== undefined) input.themePreference = patch.theme_preference;
 
     try {
@@ -164,9 +172,44 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         variables: { input },
       });
       if (data?.updateUser) {
-        const p = apiToProfile(data.updateUser);
-        setProfile(p);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+        // The mutation returns a partial UserModel — for anything the response
+        // doesn't include (plan, effectivePlan, maxActiveProducts, verified…),
+        // apiToProfile falls back to FREE / 5 / etc, which used to wipe the
+        // seller's real plan whenever they toggled an unrelated field like a
+        // QR preference. Merge instead of replace: only fields the response
+        // actually carried overwrite the previous profile.
+        const raw = data.updateUser;
+        setProfile((prev) => {
+          const incoming = apiToProfile(raw);
+          const merged: Profile = { ...prev };
+          const carries = (k: string) => raw[k] !== undefined && raw[k] !== null;
+          if (carries('name')) merged.name = incoming.name;
+          if (carries('email')) merged.email = incoming.email;
+          if ('phone' in raw) merged.phone = incoming.phone;
+          if ('avatarUrl' in raw) merged.avatar_url = incoming.avatar_url;
+          if ('coverUrl' in raw) merged.cover_url = incoming.cover_url;
+          if ('bio' in raw) merged.bio = incoming.bio;
+          if ('location' in raw) merged.location = incoming.location;
+          if (carries('language')) merged.language = incoming.language;
+          if (carries('notifMessages')) merged.notif_messages = incoming.notif_messages;
+          if (carries('notifOffers')) merged.notif_offers = incoming.notif_offers;
+          if (carries('notifMarketing')) merged.notif_marketing = incoming.notif_marketing;
+          if (carries('showEmail')) merged.show_email = incoming.show_email;
+          if (carries('showPhone')) merged.show_phone = incoming.show_phone;
+          if (carries('qrShowPhone')) merged.qr_show_phone = incoming.qr_show_phone;
+          if (carries('qrShowEmail')) merged.qr_show_email = incoming.qr_show_email;
+          if (carries('themePreference')) merged.theme_preference = incoming.theme_preference;
+          if (carries('verified')) merged.verified = incoming.verified;
+          if (carries('permission')) merged.permission = incoming.permission;
+          if (carries('plan')) merged.plan = incoming.plan;
+          if (carries('effectivePlan')) merged.effectivePlan = incoming.effectivePlan;
+          if ('planExpiresAt' in raw) merged.plan_expires_at = incoming.plan_expires_at;
+          if (carries('maxActiveProducts')) merged.maxActiveProducts = incoming.maxActiveProducts;
+          if (carries('maxImagesPerProduct')) merged.maxImagesPerProduct = incoming.maxImagesPerProduct;
+          if (carries('updatedAt')) merged.updated_at = incoming.updated_at;
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+          return merged;
+        });
       }
       return { ok: true };
     } catch (err: any) {

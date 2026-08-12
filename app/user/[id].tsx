@@ -17,7 +17,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
+import { TRACK_SELLER_QR_SCAN } from '@/graphql/mutations';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -112,8 +113,21 @@ export default function PublicUserProfile() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, src } = useLocalSearchParams<{ id?: string; src?: string }>();
   const userId = id || '';
+
+  // QR-scan tracking. Fired once per mount when the visitor arrives from a
+  // scanned QR (Universal Link with `?src=qr`). Backend silently discards
+  // scans for sellers not on active STAR/PREMIUM plans and dedupes 30 min.
+  const [trackQrScan] = useMutation(TRACK_SELLER_QR_SCAN);
+  const qrTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!userId) return;
+    if (qrTrackedRef.current) return;
+    if (src !== 'qr') return;
+    qrTrackedRef.current = true;
+    trackQrScan({ variables: { sellerId: userId, source: 'qr' } }).catch(() => {});
+  }, [userId, src, trackQrScan]);
 
   const { isAuthenticated, user: me } = useAuth();
   const isOwn = !!me?.id && me.id === userId;

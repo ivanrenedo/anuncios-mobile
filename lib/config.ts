@@ -25,6 +25,13 @@ export const UPLOAD_URL = `${API_URL}/upload`;
 // from the internet). Falls back to the API_URL for local testing.
 export const SHARE_URL = process.env.EXPO_PUBLIC_SHARE_URL;
 
+/** Canonical share URL for a seller's public profile, tagged so the backend
+ *  can attribute the visit to a QR-card scan. */
+export function getQrProfileUrl(sellerId: string): string {
+  const origin = SHARE_URL || 'https://bomelh.com';
+  return `${origin}/user/${sellerId}?src=qr`;
+}
+
 /** Resolve a possibly-relative image URL coming from the backend. */
 export function resolveImage(url?: string | null): string | undefined {
   if (!url) return undefined;
