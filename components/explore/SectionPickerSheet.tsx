@@ -4,6 +4,7 @@ import { Check } from 'lucide-react-native';
 import { useTheme } from '@/constants/theme';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useSheetStyles } from './sheetStyles';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 export interface FilterableSection {
   id: string;
@@ -31,10 +32,13 @@ export default function SectionPickerSheet({
 }: Props) {
   const { colors } = useTheme();
   const styles = useSheetStyles();
+  const { height, isLandscape } = useResponsiveLayout();
 
   return (
     <SwipeableSheet visible={visible} onClose={onClose} title="Filtros">
-      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ maxHeight: height * (isLandscape ? 0.72 : 0.52) }}>
         {sections.length > 0 && (
           <>
             <TouchableOpacity

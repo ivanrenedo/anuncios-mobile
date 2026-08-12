@@ -3,6 +3,7 @@ node_modules/
 docs/
 legal/
 .claude/
+.codex/
 # expo
 .expo/
 dist/

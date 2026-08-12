@@ -18,6 +18,7 @@ import { useProductsBySeller } from '@/hooks/useProducts';
 import { useHomeSections, type HomeSection } from '@/hooks/useHomeSections';
 import PromoCarousel from '@/components/PromoCarousel';
 import CategoryScroll from '@/components/CategoryScroll';
+import PremiumStoresRail from '@/components/PremiumStoresRail';
 import ProductRail from '@/components/ProductRail';
 import ProductGrid from '@/components/ProductGrid';
 import NotificationsModal from '@/components/NotificationsModal';
@@ -30,7 +31,7 @@ import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
 import { ProductCardItem, fmtPrice } from '@/components/ProductCard';
 
-const HEADER_HEIGHT = 56;
+const HEADER_HEIGHT = 96;
 
 function timeAgo(iso?: string): string {
   if (!iso) return '';
@@ -59,6 +60,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -116,19 +119,7 @@ const SectionRenderer = React.memo(function SectionRenderer({
     case 'categories':
       return <CategoryScroll />;
 
-    case 'product_grid': {
-      if (items.length === 0) return null;
-      return (
-        <ProductGrid
-          title={section.title}
-          icon={section.icon}
-          items={items}
-          onSeeAll={section.filter ? handleSeeAll : undefined}
-        />
-      );
-    }
-
-    case 'premium_showcase': {
+      case 'premium_showcase': {
       if (items.length === 0) return null;
       return (
         <ProductRail
@@ -137,6 +128,18 @@ const SectionRenderer = React.memo(function SectionRenderer({
           items={items}
           autoplay
           autoplayMs={4000}
+        />
+      );
+    }
+
+    case 'product_grid': {
+      if (items.length === 0) return null;
+      return (
+        <ProductGrid
+          title={section.title}
+          icon={section.icon}
+          items={items}
+          onSeeAll={section.filter ? handleSeeAll : undefined}
         />
       );
     }
@@ -208,44 +211,56 @@ export default function HomeScreen() {
             height: HEADER_HEIGHT + insets.top,
             shadowOpacity: headerShadow,
           },
-        ]}>
-        <BrandLogo size={28} wordmarkSize={20} />
-        <View style={styles.headerActions}>
-          {isAuthenticated ? (
-            <View style={styles.bellWrap}>
+        ]}
+      >
+        <View style={{flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between'}}>
+          <BrandLogo size={28} wordmarkSize={20} />
+          <View style={styles.headerActions}>
+            {isAuthenticated ? (
+              <View style={styles.bellWrap}>
+                <RipplePress
+                  style={styles.iconBtn}
+                  borderRadius={18}
+                  rippleColor={colors.primary + '22'}
+                  accessibilityLabel="Notificaciones"
+                  onPress={() => setNotifVisible(true)}>
+                  <Bell size={22} color={colors.primary} strokeWidth={1.5} />
+                </RipplePress>
+                {unreadCount > 0 && (
+                  <View style={styles.badge} pointerEvents="none">
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
               <RipplePress
-                style={styles.iconBtn}
-                borderRadius={18}
-                rippleColor={colors.primary + '22'}
-                accessibilityLabel="Notificaciones"
-                onPress={() => setNotifVisible(true)}>
-                <Bell size={22} color={colors.primary} strokeWidth={1.5} />
+                style={styles.loginBtn}
+                borderRadius={20}
+                rippleColor="rgba(255,255,255,0.25)"
+                accessibilityLabel="Iniciar sesión"
+                onPress={() => router.push('/login')}>
+                <LogIn size={15} color="#ffffff" strokeWidth={2} />
+                <Text style={styles.loginBtnText}>Iniciar sesión</Text>
               </RipplePress>
-              {unreadCount > 0 && (
-                <View style={styles.badge} pointerEvents="none">
-                  <Text style={styles.badgeText}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <RipplePress
-              style={styles.loginBtn}
-              borderRadius={20}
-              rippleColor="rgba(255,255,255,0.25)"
-              accessibilityLabel="Iniciar sesión"
-              onPress={() => router.push('/login')}>
-              <LogIn size={15} color="#ffffff" strokeWidth={2} />
-              <Text style={styles.loginBtnText}>Iniciar sesión</Text>
-            </RipplePress>
-          )}
+            )}
+          </View>
         </View>
+        {/* Search bar */}
+        <RipplePress
+          style={styles.searchBar}
+          borderRadius={12}
+          rippleColor={colors.primary + '15'}
+          onPress={() => router.push('/explore')}>
+          <Search size={16} color={colors.onSurfaceVariant + '88'} strokeWidth={1.8} />
+          <Text style={styles.searchPlaceholder}>¿Qué estás buscando?</Text>
+        </RipplePress>
       </Animated.View>
 
       {/* Content */}
       <Animated.ScrollView
-        style={{ flex: 1 }}
+        style={{  width: "100%" }}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingTop: HEADER_HEIGHT + insets.top + 4 },
@@ -264,17 +279,8 @@ export default function HomeScreen() {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
         )}
-        scrollEventThrottle={16}>
-        {/* Search bar */}
-        <RipplePress
-          style={styles.searchBar}
-          borderRadius={12}
-          rippleColor={colors.primary + '15'}
-          onPress={() => router.push('/explore')}>
-          <Search size={16} color={colors.onSurfaceVariant + '88'} strokeWidth={1.8} />
-          <Text style={styles.searchPlaceholder}>¿Qué estás buscando?</Text>
-        </RipplePress>
-
+        scrollEventThrottle={16}
+      >
         {loading && sections.length === 0 ? (
           <View style={styles.skeletonWrap}>
             <Skeleton style={{ height: 180, borderRadius: 16, marginHorizontal: 16, marginBottom: 24 }} />
@@ -344,8 +350,12 @@ export default function HomeScreen() {
                   </View>
                 )}
 
-                <SectionRenderer section={section} trackEvent={trackEvent} />
+                {/* v2 Fase 7b.2 — Tiendas Premium justo después de las
+                    categorías. Auto-hide si la query no devuelve productos. */}
+                {isAfterCategories && <PremiumStoresRail />}
 
+                <SectionRenderer section={section} trackEvent={trackEvent} />
+                
                 {/* Trust bar after first product section */}
                 {isFirstProduct && (
                   <View style={styles.trustBar}>
@@ -397,11 +407,11 @@ const makeStyles = (colors: ThemeColors) =>
     right: 0,
     zIndex: 50,
     backgroundColor: colors.surface + 'cc',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 10,
+    justifyContent: 'flex-start',
+    
+    width: '100%',
     borderBottomWidth: 0.5,
     borderBottomColor: colors.outlineVariant + '4d',
     shadowColor: '#000',
@@ -472,13 +482,12 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginHorizontal: 16,
     marginBottom: 20,
-    marginTop: 4,
+    marginTop: 8,
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 11
   },
   searchPlaceholder: {
     fontFamily: 'Manrope-Regular',

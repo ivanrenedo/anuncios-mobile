@@ -39,7 +39,7 @@ export const UPDATE_USER = gql`
     updateUser(input: $input) {
       id name email phone avatarUrl coverUrl bio location
       language notifMessages notifOffers notifMarketing
-      showEmail showPhone themePreference
+      showEmail showPhone qrShowPhone qrShowEmail themePreference
       updatedAt
     }
   }
@@ -80,6 +80,12 @@ export const VIEW_PRODUCT = gql`
 export const CONTACT_PRODUCT = gql`
   mutation ContactProduct($id: String!) {
     contactProduct(id: $id) { id contacts }
+  }
+`;
+
+export const BOOST_MY_PRODUCT = gql`
+  mutation BoostMyProduct($id: String!, $days: Int) {
+    boostMyProduct(id: $id, days: $days) { id boostedUntil bumpedAt }
   }
 `;
 
@@ -218,12 +224,49 @@ export const TRACK_HOME_SECTION_EVENT = gql`
 // ─── Verifications ───────────────────────────────────────────────────────────
 
 export const REQUEST_VERIFICATION = gql`
-  mutation RequestVerification {
-    requestVerification {
+  mutation RequestVerification($input: RequestVerificationInput) {
+    requestVerification(input: $input) {
       id
       status
+      docs
       createdAt
     }
+  }
+`;
+
+// ─── Plans v2 — pinned & auto-bump slots ────────────────────────────────────
+
+export const SET_PINNED_PRODUCTS = gql`
+  mutation SetPinnedProducts($productIds: [String!]!) {
+    setPinnedProducts(productIds: $productIds) {
+      id
+      title
+      price
+      images { id url sortOrder type thumbnailUrl }
+      priceReducedUntil
+    }
+  }
+`;
+
+export const SET_AUTO_BUMP_SLOTS = gql`
+  mutation SetAutoBumpSlots($productIds: [String!]!) {
+    setAutoBumpSlots(productIds: $productIds) {
+      id
+      productId
+      cadence
+      createdAt
+      product {
+        id
+        title
+        images { id url sortOrder type thumbnailUrl }
+      }
+    }
+  }
+`;
+
+export const TRACK_SELLER_QR_SCAN = gql`
+  mutation TrackSellerQrScan($sellerId: String!, $source: String) {
+    trackSellerQrScan(sellerId: $sellerId, source: $source)
   }
 `;
 

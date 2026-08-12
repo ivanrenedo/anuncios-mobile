@@ -17,7 +17,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
+import { TRACK_SELLER_QR_SCAN } from '@/graphql/mutations';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -39,11 +40,11 @@ import {
   ArrowDownUp,
   ChevronDown,
   Crown,
+  MessageCircle,
 } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
-import { GET_USER } from '@/graphql/queries';
+import { GET_USER, PINNED_PRODUCTS } from '@/graphql/queries';
 import { useProductsBySeller } from '@/hooks/useProducts';
-import { useCategoryTree, useCategoryRootMap, withAlpha } from '@/hooks/useCategories';
 import { useReviewsBySeller, useSellerRating, useCreateReview, useUpdateReview, useDeleteReview } from '@/hooks/useReviews';
 import Spinner from '@/components/Spinner';
 import { getErrorMessage } from '@/lib/errors';
@@ -61,9 +62,12 @@ import RipplePress from '@/components/RipplePress';
 import Skeleton from '@/components/Skeleton';
 import ReportSheet from '@/components/ReportSheet';
 import { useShare } from '@/hooks/useShare';
+import { useBusinessContact } from '@/hooks/useBusinessContact';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL, resolveImage } from '@/lib/config';
 import ImageViewing from 'react-native-image-viewing';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import { formatNumber } from '@/lib/format';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -112,8 +116,24 @@ export default function PublicUserProfile() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { width, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const gridColumns = columnsForContentWidth(contentWidth);
+  const { id, src } = useLocalSearchParams<{ id?: string; src?: string }>();
   const userId = id || '';
+
+  // Fired once per mount when the visitor lands here from a QR scan (Universal
+  // Link with `?src=qr` on it). Backend rejects the record when the seller is
+  // not on an active STAR/PREMIUM plan and dedupes 30 min per visitor.
+  const [trackQrScan] = useMutation(TRACK_SELLER_QR_SCAN);
+  const qrTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!userId) return;
+    if (qrTrackedRef.current) return;
+    if (src !== 'qr') return;
+    qrTrackedRef.current = true;
+    trackQrScan({ variables: { sellerId: userId, source: 'qr' } }).catch(() => {});
+  }, [userId, src, trackQrScan]);
 
   const { isAuthenticated, user: me } = useAuth();
   const isOwn = !!me?.id && me.id === userId;
@@ -126,6 +146,14 @@ export default function PublicUserProfile() {
   const user = data?.user;
 
   const { products, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+  // v2 Fase 7a — pinned products del vendedor. Query pública; devuelve []
+  // para planes sin pinnedProducts (Free/Basic) así que sin plan gate aquí.
+  const { data: pinnedData } = useQuery<any>(PINNED_PRODUCTS, {
+    variables: { userId },
+    skip: !userId,
+    fetchPolicy: 'cache-and-network',
+  });
+  const pinnedProducts: any[] = pinnedData?.pinnedProducts ?? [];
   const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
@@ -191,6 +219,24 @@ export default function PublicUserProfile() {
   const hasAlreadyReviewed = reviews.some((r: any) => r.author?.id === me?.id);
 
   const { share } = useShare();
+  const { phone: businessPhone } = useBusinessContact();
+
+  // v2 Fase 12 — WhatsApp del perfil, mismo gate que shop web y product page:
+  //   · Star/Premium con phone: chat directo con el vendedor
+  //   · Free/Basic o sin phone: cae al número del negocio
+  const sellerCanPersonalWa =
+    (user?.plan === 'STAR' || user?.plan === 'PREMIUM') && !!user?.phone;
+  const waRawNumber = sellerCanPersonalWa ? user?.phone : businessPhone;
+  const waNumber = waRawNumber ? String(waRawNumber).replace(/[^0-9]/g, '') : '';
+  const onOpenWhatsApp = () => {
+    if (!waNumber) return;
+    const msg = encodeURIComponent(
+      sellerCanPersonalWa
+        ? `Hola, vi tu perfil en Bomelh — ${user?.name ?? ''}`
+        : `Hola, quiero contactar con el vendedor "${user?.name ?? ''}" en Bomelh.`,
+    );
+    Linking.openURL(`https://wa.me/${waNumber}?text=${msg}`).catch(() => {});
+  };
   const onShareProfile = () =>
     share({ type: 'profile', id: userId, name: user?.name ?? 'este vendedor' });
 
@@ -269,10 +315,7 @@ export default function PublicUserProfile() {
     setReportOpen(true);
   };
 
-  const { tree: categoryTree } = useCategoryTree();
-  const categoryRootMap = useCategoryRootMap(categoryTree);
-
-  const productItems = products.map((p: any) => {
+  const mapProduct = (p: any) => {
     const img = p.images?.[0]?.url || '';
     const catId = p.category?.id as string | undefined;
     return {
@@ -284,28 +327,49 @@ export default function PublicUserProfile() {
       location: p.city || '',
       image: img.startsWith('/') ? `${API_URL}${img}` : img,
       discount: p.discount,
+      categoryId: catId ?? null,
       categoryLabel: p.category?.label,
       operation: p.propertyDetail?.operation,
       offerType: p.serviceDetail?.offerType,
       isBoosted: p.boostedUntil ? new Date(p.boostedUntil) > new Date() : false,
       postedAgo: timeAgo(p.createdAt),
-      categoryRootId: catId ? (categoryRootMap.get(catId) ?? catId) : null,
+      // Chip "Rebajado hoy" gating (v2 Fase 7a).
+      priceReducedUntil: p.priceReducedUntil ?? null,
+      sellerPlan: (user?.plan ?? 'FREE') as 'FREE' | 'BASIC' | 'STAR' | 'PREMIUM',
     };
-  });
+  };
 
-  // Only render chips for roots the seller actually has listings in.
-  const availableCategoryRoots = (() => {
-    const usedRoots = new Set<string>();
-    for (const p of productItems) {
-      if (p.categoryRootId) usedRoots.add(p.categoryRootId);
+  const pinnedIds = new Set<string>(pinnedProducts.map((p) => p.id));
+  const visibleProducts = products.filter((p: any) => p.status !== 'hide');
+  // v2 Fase 11.2 — merge: pinned first (con isPinned), luego resto sin badge.
+  // Deja al server el orden dentro de los pinned; los no-pinned mantienen su
+  // orden natural del feed.
+  const productItems = [
+    ...pinnedProducts.map((p: any) => ({ ...mapProduct(p), isPinned: true })),
+    ...visibleProducts
+      .filter((p: any) => !pinnedIds.has(p.id))
+      .map(mapProduct),
+  ];
+
+  const isPremiumActive =
+    user?.plan === 'PREMIUM' &&
+    (!user?.planExpiresAt || new Date(user.planExpiresAt) > new Date());
+  const categoryTabs = (() => {
+    if (!isPremiumActive) return [];
+    const map = new Map<string, string>();
+    for (const p of visibleProducts) {
+      if (p.category?.id && p.category?.label) {
+        map.set(p.category.id, p.category.label);
+      }
     }
-    return (categoryTree as any[])
-      .filter((r) => usedRoots.has(r.id))
-      .map((r) => ({ id: r.id, label: r.label as string, color: r.color as string | undefined }));
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   })();
+  const selectedProductItems = productCategoryId
+    ? productItems.filter((p: any) => p.categoryId === productCategoryId)
+    : productItems;
 
   const filteredProducts = productItems.filter((p: any) => {
-    if (productCategoryId && p.categoryRootId !== productCategoryId) return false;
+    if (productCategoryId && p.categoryId !== productCategoryId) return false;
     const q = productSearch.trim().toLowerCase();
     if (q && !p.title.toLowerCase().includes(q)) return false;
     return true;
@@ -516,6 +580,23 @@ export default function PublicUserProfile() {
           </View>
 
           <View style={styles.avatarActions}>
+            {/* v2 Fase 11.2 — el perfil ES la tienda para Premium. Chip
+                "Verificado desde" informa el status directamente en el header. */}
+            {user.plan === 'PREMIUM' &&
+              (!user.planExpiresAt ||
+                new Date(user.planExpiresAt) > new Date()) &&
+              user.businessVerifiedAt && (
+                <View style={styles.tiendaBtn}>
+                  <Crown size={14} color="#ffffff" strokeWidth={2} />
+                  <Text style={styles.tiendaBtnText}>
+                    Verificado desde{' '}
+                    {new Date(user.businessVerifiedAt).toLocaleDateString(
+                      'es-ES',
+                      { month: 'short', year: 'numeric' },
+                    )}
+                  </Text>
+                </View>
+              )}
             {!isOwn && (
               <>
                 <TouchableOpacity
@@ -549,7 +630,6 @@ export default function PublicUserProfile() {
             </RipplePress>
           </View>
         </View>
-
         {/* Name + location */}
         <View style={styles.nameBlock}>
           <View style={styles.nameRow}>
@@ -632,17 +712,29 @@ export default function PublicUserProfile() {
                   <Text style={[styles.contactText, styles.contactTextLink]}>{user.phone}</Text>
                 </TouchableOpacity>
               ) : null}
+              {/* v2 Fase 12 — WhatsApp: acción primaria de contacto con la
+              tienda / el vendedor. Verde para diferenciar visualmente
+              de Seguir (primary) y Denunciar (danger). */}
+              {!isOwn && sellerCanPersonalWa && ( 
+                <TouchableOpacity
+                  style={styles.waBtn}
+                  activeOpacity={0.85}
+                  onPress={onOpenWhatsApp}>
+                  <MessageCircle size={14} color="#ffffff" strokeWidth={2} />
+                  <Text style={styles.waBtnText}>WhatsApp</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
-
+          
         {/* Stat tabs */}
         <View style={styles.statTabs}>
           {[
-            { value: fmtNumber(products.length), label: 'Anuncios', isLoading: productsLoading },
+            { value: formatNumber(visibleProducts.length), label: 'Anuncios', isLoading: productsLoading },
             { value: avgRating > 0 ? avgRating.toFixed(1) : '—', label: 'Valoración', isLoading: ratingLoading },
-            { value: fmtNumber(followersCount), label: 'Seguidores', isLoading: followersLoading },
-            { value: fmtNumber(followingCount), label: 'Siguiendo', isLoading: followingLoading },
+            { value: formatNumber(followersCount), label: 'Seguidores', isLoading: followersLoading },
+            { value: formatNumber(followingCount), label: 'Siguiendo', isLoading: followingLoading },
           ].map(({ value, label, isLoading }, i) => (
             <TouchableOpacity
               key={label}
@@ -662,33 +754,95 @@ export default function PublicUserProfile() {
         {activeTab === 0 ? (
           productsLoading ? (
             <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
-          ) : <View style={styles.grid}>
-            {productItems.length === 0 ? (
+          ) : <View style={[styles.grid, { paddingHorizontal: gutter }]}>
+            {categoryTabs.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={styles.categoryChipsRow}>
+                {(() => {
+                  const allActive = productCategoryId === null;
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => { setProductCategoryId(null); setProductPageSize(10); }}
+                      style={[
+                        styles.categoryChip,
+                        allActive && {
+                          borderColor: colors.primary,
+                          backgroundColor: colors.primary + '14',
+                        },
+                      ]}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.categoryChipText,
+                          allActive && { color: colors.primary, fontFamily: 'Manrope-SemiBold' },
+                        ]}>
+                        Todos ({visibleProducts.length})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+                {categoryTabs.map((cat) => {
+                  const active = productCategoryId === cat.id;
+                  const count = visibleProducts.filter((p: any) => p.category?.id === cat.id).length;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      activeOpacity={0.8}
+                      onPress={() => { setProductCategoryId(cat.id); setProductPageSize(10); }}
+                      style={[
+                        styles.categoryChip,
+                        active && {
+                          borderColor: colors.primary,
+                          backgroundColor: colors.primary + '14',
+                        },
+                      ]}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.categoryChipText,
+                          active && { color: colors.primary, fontFamily: 'Manrope-SemiBold' },
+                        ]}>
+                        {cat.label} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+            {selectedProductItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
-                <Text style={styles.emptyText}>Sin anuncios publicados</Text>
+                <Text style={styles.emptyText}>{productCategoryId ? 'Sin anuncios en esta categoria' : 'Sin anuncios publicados'}</Text>
               </View>
             ) : (
               <>
-                {chunk(productItems.slice(0, PREVIEW_LIMIT), 2).map((pair, rowIdx) => (
+                {chunk(selectedProductItems.slice(0, PREVIEW_LIMIT), gridColumns).map((pair, rowIdx) => (
                   <View key={rowIdx} style={styles.gridRow}>
                     {pair.map((item: any) => (
                       <ProductCard
                         key={item.id}
                         item={item}
+                        isPinned={item.isPinned}
                         onPress={() => router.push({ pathname: '/product/[id]', params: { id: item.id } })}
                       />
                     ))}
-                    {pair.length === 1 && <View style={{ flex: 1 }} />}
+                    {pair.length < gridColumns &&
+                      Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                        <View key={i} style={{ flex: 1 }} />
+                      ))}
                   </View>
                 ))}
-                {productItems.length > PREVIEW_LIMIT && (
+                {selectedProductItems.length > PREVIEW_LIMIT && (
                   <TouchableOpacity
                     style={styles.seeAllBottom}
                     activeOpacity={0.7}
                     onPress={() => setAllProductsOpen(true)}>
                     <Text style={styles.seeAllText}>Ver todos los anuncios</Text>
-                    <Text style={styles.seeAllCount}>({productItems.length})</Text>
+                    <Text style={styles.seeAllCount}>({selectedProductItems.length})</Text>
                     <ChevronRight size={14} color={colors.primary} strokeWidth={2} />
                   </TouchableOpacity>
                 )}
@@ -979,11 +1133,11 @@ export default function PublicUserProfile() {
         visible={allProductsOpen}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); setProductCategoryId(null); }}>
+        onRequestClose={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
         <View style={[styles.modalRoot, { paddingTop: insets.top }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Anuncios ({productItems.length})</Text>
-            <TouchableOpacity style={styles.modalClose} activeOpacity={0.7} onPress={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); setProductCategoryId(null); }}>
+            <Text style={styles.modalTitle}>Anuncios ({selectedProductItems.length})</Text>
+            <TouchableOpacity style={styles.modalClose} activeOpacity={0.7} onPress={() => { setAllProductsOpen(false); setProductSearch(''); setProductPageSize(10); }}>
               <X size={20} color={colors.onSurface} strokeWidth={1.8} />
             </TouchableOpacity>
           </View>
@@ -996,7 +1150,7 @@ export default function PublicUserProfile() {
               </TouchableOpacity>
             )}
           </View>
-          {availableCategoryRoots.length > 0 && (
+          {categoryTabs.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1012,7 +1166,7 @@ export default function PublicUserProfile() {
                       styles.categoryChip,
                       allActive && {
                         borderColor: colors.primary,
-                        backgroundColor: withAlpha(colors.primary, '14'),
+                        backgroundColor: colors.primary + '14',
                       },
                     ]}>
                     <Text
@@ -1021,14 +1175,14 @@ export default function PublicUserProfile() {
                         styles.categoryChipText,
                         allActive && { color: colors.primary, fontFamily: 'Manrope-SemiBold' },
                       ]}>
-                      Todas
+                      Todos ({visibleProducts.length})
                     </Text>
                   </TouchableOpacity>
                 );
               })()}
-              {availableCategoryRoots.map((cat) => {
+              {categoryTabs.map((cat) => {
                 const active = productCategoryId === cat.id;
-                const accent = cat.color || colors.primary;
+                const count = visibleProducts.filter((p: any) => p.category?.id === cat.id).length;
                 return (
                   <TouchableOpacity
                     key={cat.id}
@@ -1037,24 +1191,27 @@ export default function PublicUserProfile() {
                     style={[
                       styles.categoryChip,
                       active && {
-                        borderColor: accent,
-                        backgroundColor: withAlpha(accent, '14'),
+                        borderColor: colors.primary,
+                        backgroundColor: colors.primary + '14',
                       },
                     ]}>
                     <Text
                       numberOfLines={1}
                       style={[
                         styles.categoryChipText,
-                        active && { color: accent, fontFamily: 'Manrope-SemiBold' },
+                        active && { color: colors.primary, fontFamily: 'Manrope-SemiBold' },
                       ]}>
-                      {cat.label}
+                      {cat.label} ({count})
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
           )}
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingHorizontal: gutter, paddingVertical: 16, gap: 12, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}>
             {paginatedProducts.length === 0 ? (
               <View style={styles.emptyState}>
                 <Package size={40} color={colors.outlineVariant} strokeWidth={1} />
@@ -1062,12 +1219,15 @@ export default function PublicUserProfile() {
               </View>
             ) : (
               <>
-                {chunk(paginatedProducts, 2).map((pair, rowIdx) => (
+                {chunk(paginatedProducts, gridColumns).map((pair, rowIdx) => (
                   <View key={rowIdx} style={styles.gridRow}>
                     {pair.map((item: any) => (
                       <ProductCard key={item.id} item={item} onPress={() => { setAllProductsOpen(false); router.push({ pathname: '/product/[id]', params: { id: item.id } }); }} />
                     ))}
-                    {pair.length === 1 && <View style={{ flex: 1 }} />}
+                    {pair.length < gridColumns &&
+                      Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                        <View key={i} style={{ flex: 1 }} />
+                      ))}
                   </View>
                 ))}
                 {hasMoreProducts && (
@@ -1443,7 +1603,38 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    avatarActions: { flexDirection: 'row', gap: 8, paddingBottom: 4, alignItems: 'center' },
+    avatarActions: { flexDirection: 'row', gap: 8, paddingBottom: 4, alignItems: 'center', flexWrap: 'wrap' },
+    tiendaBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 20,
+      backgroundColor: '#7C3AED',
+      shadowColor: '#7C3AED',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    tiendaBtnText: { fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' },
+    waBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 20,
+      backgroundColor: '#25D366',
+      shadowColor: '#25D366',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    waBtnText: { fontFamily: 'Manrope-Bold', fontSize: 13, color: '#ffffff' },
     followMainBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1549,11 +1740,20 @@ const makeStyles = (colors: ThemeColors) =>
     statTabValue: { fontFamily: 'Manrope-Bold', fontSize: 17, color: colors.onSurface, lineHeight: 22 },
     statTabValueActive: { color: colors.primary },
     statTabLabel: { fontFamily: 'Manrope-Regular', fontSize: 10, color: colors.onSurfaceVariant, marginTop: 1 },
-    grid: { paddingHorizontal: 16, gap: 12, marginBottom: 24 },
+    grid: { gap: 12, marginBottom: 24 },
     gridRow: { flexDirection: 'row', gap: 8 },
     spinnerWrap: { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' },
     emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
     emptyText: { fontFamily: 'Manrope-Regular', fontSize: 15, color: colors.onSurfaceVariant },
+    pinnedHeader: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 12,
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      paddingHorizontal: 4,
+      paddingBottom: 8,
+    },
     seeAllBottom: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -43,6 +43,7 @@ import {
   ArrowDownUp,
   ChevronDown,
   Crown,
+  Pin,
   Zap,
   CreditCard,
   Eye,
@@ -52,7 +53,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import RipplePress from '@/components/RipplePress';
-import ProductCard, { fmtPrice, fmtNumber } from '@/components/ProductCard';
+import ProductCard, { fmtPrice } from '@/components/ProductCard';
+import PlanFeaturesPanel from '@/components/PlanFeaturesPanel';
+import VerificationRequestModal from '@/components/VerificationRequestModal';
 import Skeleton from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import SettingsModal, { Row, Section } from '@/components/SettingsModal';
@@ -66,8 +69,13 @@ import { API_URL, resolveImage } from '@/lib/config';
 import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
+import { useQuery, useMutation } from '@apollo/client/react';
+import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS } from '@/graphql/queries';
+import { SET_PINNED_PRODUCTS, SET_AUTO_BUMP_SLOTS } from '@/graphql/mutations';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import ImageViewing from 'react-native-image-viewing';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import { formatNumber } from '@/lib/format';
 
 const COVER_HEIGHT = 220;
 const AVATAR_SIZE = 92;
@@ -113,9 +121,51 @@ export default function ProfileScreen() {
   const { profile, loading, refresh } = useProfile();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const gridColumns = columnsForContentWidth(contentWidth);
   const { isAuthenticated, signOut, user } = useAuth();
   const userId = user?.id || profile?.id || '';
   const { products: myProducts, loading: productsLoading, refetch: refetchProducts } = useProductsBySeller(userId);
+
+  // v2 Fase 11.3 — pin y auto-bump del owner. Skip cuando el plan no lo
+  // permite (Free/Basic) para evitar roundtrips que el server ya rechazaría.
+  const effectivePlanForFeatures = (profile as any)?.effectivePlan ?? (profile as any)?.plan ?? 'FREE';
+  const canPinMobile = effectivePlanForFeatures === 'STAR' || effectivePlanForFeatures === 'PREMIUM';
+  const canAutoBumpMobile = canPinMobile;
+  const { data: pinnedDataProfile, refetch: refetchPinned } = useQuery<any>(PINNED_PRODUCTS, {
+    variables: { userId },
+    skip: !userId || !canPinMobile,
+    fetchPolicy: 'cache-and-network',
+  });
+  const { data: slotsDataProfile, refetch: refetchSlots } = useQuery<any>(MY_AUTO_BUMP_SLOTS, {
+    skip: !canAutoBumpMobile,
+    fetchPolicy: 'cache-and-network',
+  });
+  const pinnedIdsProfile = new Set<string>((pinnedDataProfile?.pinnedProducts ?? []).map((p: any) => p.id));
+  const autoBumpedIdsProfile = new Set<string>((slotsDataProfile?.myAutoBumpSlots ?? []).map((s: any) => s.productId));
+  const [setPinnedMutProfile] = useMutation(SET_PINNED_PRODUCTS, { refetchQueries: ['PinnedProducts'] });
+  const [setSlotsMutProfile] = useMutation(SET_AUTO_BUMP_SLOTS, { refetchQueries: ['MyAutoBumpSlots'] });
+  const togglePinProduct = async (productId: string) => {
+    const current = Array.from(pinnedIdsProfile);
+    const next = current.includes(productId) ? current.filter((x) => x !== productId) : [...current, productId];
+    try {
+      await setPinnedMutProfile({ variables: { productIds: next } });
+      refetchPinned();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo actualizar los anuncios fijados.');
+    }
+  };
+  const toggleAutoBumpProduct = async (productId: string) => {
+    const current = Array.from(autoBumpedIdsProfile);
+    const next = current.includes(productId) ? current.filter((x) => x !== productId) : [...current, productId];
+    try {
+      await setSlotsMutProfile({ variables: { productIds: next } });
+      refetchSlots();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'No se pudo actualizar el auto-bump.');
+    }
+  };
   const { reviews: myReviews, loading: reviewsLoading, refetch: refetchReviews } = useReviewsBySeller(userId);
   const { average: avgRating, count: ratingCount, loading: ratingLoading } = useSellerRating(userId);
   const { followers: myFollowers, loading: followersLoading, refetch: refetchFollowers } = useFollowers(userId);
@@ -124,6 +174,7 @@ export default function ProfileScreen() {
   const { count: followingCountNum, refetch: refetchFollowingCount } = useFollowingCount(userId);
   const [activeTab, setActiveTab] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
@@ -332,7 +383,8 @@ export default function ProfileScreen() {
 
   const renderPairs = (items: any[]) => {
     const pairs: any[][] = [];
-    for (let i = 0; i < items.length; i += 2) pairs.push(items.slice(i, i + 2));
+    for (let i = 0; i < items.length; i += gridColumns)
+      pairs.push(items.slice(i, i + gridColumns));
     return pairs;
   };
 
@@ -607,10 +659,10 @@ export default function ProfileScreen() {
         {/* Stat tabs */}
         <View style={styles.statTabs}>
           {[
-            { value: fmtNumber(myProducts.length), label: 'Anuncios', isLoading: productsLoading },
+            { value: formatNumber(myProducts.length), label: 'Anuncios', isLoading: productsLoading },
             { value: avgRating > 0 ? avgRating.toFixed(1) : '-', label: 'Valoración', isLoading: ratingLoading },
-            { value: fmtNumber(followersCountNum), label: 'Seguidores', isLoading: followersLoading },
-            { value: fmtNumber(followingCountNum), label: 'Siguiendo', isLoading: followingLoading },
+            { value: formatNumber(followersCountNum), label: 'Seguidores', isLoading: followersLoading },
+            { value: formatNumber(followingCountNum), label: 'Siguiendo', isLoading: followingLoading },
           ].map(({ value, label, isLoading }, i) => (
             <TouchableOpacity
               key={label}
@@ -630,7 +682,7 @@ export default function ProfileScreen() {
         {activeTab === 0 ? (
           productsLoading ? (
             <View style={styles.spinnerWrap}><Spinner color={colors.primary} /></View>
-          ) : <View style={styles.grid}>
+          ) : <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {productItems.length > 0 && (hasStatsAccess ? (
               <View style={styles.statsCard}>
                 <View style={styles.statsHeader}>
@@ -640,13 +692,13 @@ export default function ProfileScreen() {
                 <View style={styles.statsRow}>
                   <View style={styles.statsItem}>
                     <Eye size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                    <Text style={styles.statsValue}>{fmtNumber(totalViews)}</Text>
+                    <Text style={styles.statsValue}>{formatNumber(totalViews)}</Text>
                     <Text style={styles.statsLabel}>Visitas</Text>
                   </View>
                   <View style={styles.statsDivider} />
                   <View style={styles.statsItem}>
                     <Heart size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                    <Text style={styles.statsValue}>{fmtNumber(totalFavorites)}</Text>
+                    <Text style={styles.statsValue}>{formatNumber(totalFavorites)}</Text>
                     <Text style={styles.statsLabel}>Favoritos</Text>
                   </View>
                   {hasFullStats && (
@@ -654,13 +706,13 @@ export default function ProfileScreen() {
                       <View style={styles.statsDivider} />
                       <View style={styles.statsItem}>
                         <Phone size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.statsValue}>{fmtNumber(totalContacts)}</Text>
+                        <Text style={styles.statsValue}>{formatNumber(totalContacts)}</Text>
                         <Text style={styles.statsLabel}>Contactos</Text>
                       </View>
                       <View style={styles.statsDivider} />
                       <View style={styles.statsItem}>
                         <Search size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.statsValue}>{fmtNumber(totalImpressions)}</Text>
+                        <Text style={styles.statsValue}>{formatNumber(totalImpressions)}</Text>
                         <Text style={styles.statsLabel}>Búsquedas</Text>
                       </View>
                     </>
@@ -692,7 +744,7 @@ export default function ProfileScreen() {
                   <View style={styles.statsTopRow}>
                     <Text style={styles.statsTopText}>
                       Más visto: <Text style={styles.statsTopName}>{topProduct.title}</Text>
-                      {' '}({fmtNumber(topProduct.views)} visitas)
+                      {' '}({formatNumber(topProduct.views)} visitas)
                     </Text>
                   </View>
                 )}
@@ -714,12 +766,22 @@ export default function ProfileScreen() {
                 <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
             ))}
+            {/* v2 Fase 10b — panel plan-gateado para gestionar pins y auto-bump */}
+            {profile?.id && (
+              <PlanFeaturesPanel
+                userId={profile.id}
+                effectivePlan={effectivePlan}
+                products={myProducts as any}
+              />
+            )}
             {renderPairs(productItems.slice(0, PREVIEW_LIMIT)).map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item: any) => (
                   <View key={item.id} style={styles.cardWrap}>
                     <ProductCard
                       item={item}
+                      /* isPinned={pinnedIdsProfile.has(item.id)}
+                      isAutoBumped={autoBumpedIdsProfile.has(item.id)} */
                       onPress={() =>
                         router.push({ pathname: '/product/[id]', params: { id: item.id } })
                       }
@@ -736,6 +798,39 @@ export default function ProfileScreen() {
                         onPress={() => router.push({ pathname: '/edit-listing/[id]', params: { id: item.id } })}>
                         <Pencil size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
+                      {/* v2 Fase 11.3 — pin y rayo por card en el perfil propio */}
+                      {canPinMobile && (
+                        <TouchableOpacity
+                          style={[
+                            styles.cardActionBtn,
+                            pinnedIdsProfile.has(item.id) && { backgroundColor: colors.primary },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => togglePinProduct(item.id)}>
+                          <Pin
+                            size={13}
+                            color="#ffffff"
+                            strokeWidth={2}
+                            fill={pinnedIdsProfile.has(item.id) ? '#ffffff' : 'transparent'}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      {canAutoBumpMobile && (
+                        <TouchableOpacity
+                          style={[
+                            styles.cardActionBtn,
+                            autoBumpedIdsProfile.has(item.id) && { backgroundColor: '#F5A623' },
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => toggleAutoBumpProduct(item.id)}>
+                          <Zap
+                            size={13}
+                            color="#ffffff"
+                            strokeWidth={2}
+                            fill={autoBumpedIdsProfile.has(item.id) ? '#ffffff' : 'transparent'}
+                          />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         style={[styles.cardActionBtn, styles.cardActionDanger]}
                         activeOpacity={0.8}
@@ -744,17 +839,12 @@ export default function ProfileScreen() {
                         <Trash2 size={13} color="#ffffff" strokeWidth={2} />
                       </TouchableOpacity>
                     </View>
-                    {hasFullStats && (
-                      <View style={styles.cardStats}>
-                        <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
-                        <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                        <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
-                      </View>
-                    )}
                   </View>
                 ))}
-                {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                {pair.length < gridColumns &&
+                  Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                    <View key={i} style={styles.cardPlaceholder} />
+                  ))}
               </View>
             ))}
             {productItems.length > PREVIEW_LIMIT && (
@@ -828,7 +918,7 @@ export default function ProfileScreen() {
                 <Users size={20} color={colors.primary} strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.followersTitle}>{fmtNumber(followersCountNum)} seguidores</Text>
+                <Text style={styles.followersTitle}>{formatNumber(followersCountNum)} seguidores</Text>
                 <Text style={styles.followersMeta}>Personas que confían en este perfil</Text>
               </View>
             </View>
@@ -910,7 +1000,7 @@ export default function ProfileScreen() {
                 <UserCheck size={20} color={colors.primary} strokeWidth={1.8} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.followersTitle}>{fmtNumber(followingCountNum)} siguiendo</Text>
+                <Text style={styles.followersTitle}>{formatNumber(followingCountNum)} siguiendo</Text>
                 <Text style={styles.followersMeta}>Personas que sigues</Text>
               </View>
             </View>
@@ -1047,24 +1137,10 @@ export default function ProfileScreen() {
                     Alert.alert('Completa tu perfil', `Para verificarte necesitas: ${missing.join(', ')}.`);
                     return;
                   }
-                  Alert.alert(
-                    'Solicitar verificación',
-                    'Tu perfil será revisado por nuestro equipo. Recibirás una notificación con el resultado.',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      {
-                        text: 'Solicitar',
-                        onPress: async () => {
-                          try {
-                            await requestVerification();
-                            Alert.alert('Solicitud enviada', 'Te notificaremos cuando sea revisada.');
-                          } catch (e: any) {
-                            Alert.alert('Error', e?.message || 'No se pudo enviar la solicitud.');
-                          }
-                        },
-                      },
-                    ],
-                  );
+                  // v2 Fase 10c: abre el modal con soporte de docs en lugar
+                  // del Alert simple. requestVerification se llama desde
+                  // dentro del modal con los docs adjuntos.
+                  setVerificationModalOpen(true);
                 }}
                 last
               />
@@ -1236,7 +1312,7 @@ export default function ProfileScreen() {
           )}
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={styles.allProductsGrid}
+            contentContainerStyle={[styles.allProductsGrid, { paddingHorizontal: gutter }]}
             showsVerticalScrollIndicator={false}>
             {paginatedProducts.length === 0 ? (
               <View style={styles.emptyState}>
@@ -1288,14 +1364,17 @@ export default function ProfileScreen() {
                         {hasFullStats && (
                           <View style={styles.cardStats}>
                             <Eye size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                            <Text style={styles.cardStatsText}>{fmtNumber(item.views)}</Text>
+                            <Text style={styles.cardStatsText}>{formatNumber(item.views)}</Text>
                             <Heart size={12} color={colors.onSurfaceVariant} strokeWidth={1.5} />
-                            <Text style={styles.cardStatsText}>{fmtNumber(item.favorites)}</Text>
+                            <Text style={styles.cardStatsText}>{formatNumber(item.favorites)}</Text>
                           </View>
                         )}
                       </View>
                     ))}
-                    {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                    {pair.length < gridColumns &&
+                      Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                        <View key={i} style={styles.cardPlaceholder} />
+                      ))}
                   </View>
                 ))}
                 {hasMoreProducts && (
@@ -1767,6 +1846,12 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
       )}
+
+      <VerificationRequestModal
+        visible={verificationModalOpen}
+        onClose={() => setVerificationModalOpen(false)}
+        onSubmitted={() => refetchVerification()}
+      />
     </View>
   );
 }
@@ -2062,7 +2147,6 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 1,
   },
   grid: {
-    paddingHorizontal: 16,
     gap: 12,
     marginBottom: 24,
   },
@@ -2153,7 +2237,7 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
   },
   allProductsGrid: {
-    padding: 16,
+    paddingVertical: 16,
     gap: 12,
     paddingBottom: 40,
   },

@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@apollo/client/react';
+import type { OnQueryUpdated } from '@apollo/client';
 import {
   GET_PRODUCTS,
   GET_PRODUCT,
@@ -20,14 +21,28 @@ import {
 // or edited product show up instantly without remounting the screen. Includes
 // the Home ('HomeSections'/'SectionProducts') so a freshly-posted ad appears in
 // the feed without pull-to-refresh.
-const PRODUCT_LISTS = [
+const PRODUCT_LIST_QUERY_NAMES = new Set([
   'Products',
   'ProductsBySeller',
   'ProductsByCategory',
   'SearchProducts',
   'HomeSections',
   'SectionProducts',
-];
+]);
+const PRODUCT_DETAIL_QUERY_NAMES = new Set([...PRODUCT_LIST_QUERY_NAMES, 'Product']);
+
+function productRefetchOptions(queryNames = PRODUCT_LIST_QUERY_NAMES) {
+  const onQueryUpdated: OnQueryUpdated<Promise<any>> = (observableQuery) => {
+    const queryName = observableQuery.queryName;
+    return queryName && queryNames.has(queryName) ? observableQuery.refetch() : false;
+  };
+
+  return {
+    refetchQueries: 'active' as const,
+    awaitRefetchQueries: true,
+    onQueryUpdated,
+  };
+}
 
 export function useProducts(take = 20, skip = 0) {
   const { data, previousData, loading, error, refetch } = useQuery<any>(GET_PRODUCTS, {
@@ -64,29 +79,20 @@ export function useProductsBySeller(sellerId: string) {
 }
 
 export function useCreateProduct() {
-  const [mutate, { loading, error }] = useMutation(CREATE_PRODUCT, {
-    refetchQueries: PRODUCT_LISTS,
-    awaitRefetchQueries: true,
-  });
+  const [mutate, { loading, error }] = useMutation(CREATE_PRODUCT, productRefetchOptions());
   const create = (input: any) => mutate({ variables: { input } });
   return { create, loading, error };
 }
 
 export function useUpdateProduct() {
-  const [mutate, { loading, error }] = useMutation(UPDATE_PRODUCT, {
-    refetchQueries: [...PRODUCT_LISTS, 'Product'],
-    awaitRefetchQueries: true,
-  });
+  const [mutate, { loading, error }] = useMutation(UPDATE_PRODUCT, productRefetchOptions(PRODUCT_DETAIL_QUERY_NAMES));
   const update = (id: string, input: any) =>
     mutate({ variables: { id, input } });
   return { update, loading, error };
 }
 
 export function useDeleteProduct() {
-  const [mutate, { loading, error }] = useMutation(DELETE_PRODUCT, {
-    refetchQueries: PRODUCT_LISTS,
-    awaitRefetchQueries: true,
-  });
+  const [mutate, { loading, error }] = useMutation(DELETE_PRODUCT, productRefetchOptions());
   const remove = (id: string) => mutate({ variables: { id } });
   return { remove, loading, error };
 }

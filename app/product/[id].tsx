@@ -7,7 +7,6 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
-  Dimensions,
   Linking,
   Alert,
   NativeSyntheticEvent,
@@ -38,13 +37,14 @@ import {
   ExternalLink,
   Eye,
   Clock,
+  Tag,
 } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductImage from '@/components/ProductImage';
 import SafetyModal, { SafetyModalMode } from '@/components/SafetyModal';
 import ReportSheet from '@/components/ReportSheet';
-import { ArrowUpCircle, MessageCircle, Zap } from 'lucide-react-native';
+import { ArrowUpCircle, MessageCircle, Zap, Flame } from 'lucide-react-native';
 import { useProduct, useViewProduct, useContactProduct, useRelatedProducts } from '@/hooks/useProducts';
 import { useSellerRating } from '@/hooks/useReviews';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
@@ -58,8 +58,7 @@ import { fmtPrice, type ProductCardItem } from '@/components/ProductCard';
 import ProductRail from '@/components/ProductRail';
 import { getViewerKey } from '@/lib/viewer';
 import ImageViewing from 'react-native-image-viewing';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 function toCardItem(p: any): ProductCardItem {
   const img = p.images?.[0]?.url || '';
@@ -74,6 +73,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: resolveImage(p.seller?.avatarUrl),
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -139,6 +140,12 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, height, isLandscape, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width, contentMaxWidth ?? width);
+  const galleryWidth = contentWidth;
+  const galleryHeight = isLandscape
+    ? Math.max(220, Math.min(height * 0.72, galleryWidth * 0.56))
+    : galleryWidth * 0.85;
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { product: apiProduct, loading, refetch: refetchProduct } = useProduct(id || '');
   const { trackView } = useViewProduct();
@@ -153,7 +160,7 @@ export default function ProductDetailScreen() {
   };
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const { isAuthenticated, user: me } = useAuth();
-  const { average: sellerAvg, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
+  const { average: sellerAvg, count: sellerRatingCount, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
   const categoryId = apiProduct?.category?.id || '';
   const productTitle = apiProduct?.title || '';
   const { products: relatedRaw, loading: relatedLoading, refetch: refetchRelated } = useRelatedProducts(productTitle, categoryId);
@@ -205,8 +212,8 @@ export default function ProductDetailScreen() {
           <View style={styles.headerBtn} />
         </View>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 44 + insets.top }}>
-          <Skeleton style={{ width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.85, borderRadius: 0 }} />
-          <View style={{ padding: 16, gap: 12 }}>
+          <Skeleton style={{ width: galleryWidth, height: galleryHeight, borderRadius: 0 }} />
+          <View style={{ padding: gutter, gap: 12 }}>
             <Skeleton style={{ height: 24, width: '75%', borderRadius: 8 }} />
             <Skeleton style={{ height: 30, width: '45%', borderRadius: 8 }} />
             <Skeleton style={{ height: 14, width: '30%', borderRadius: 6 }} />
@@ -241,6 +248,7 @@ export default function ProductDetailScreen() {
   }
 
   const sellerId = apiProduct.seller?.id;
+  const isOwner = !!sellerId && !!me?.id && sellerId === me.id;
   const liked = isFavorite(id || '');
 
   const abs = (u?: string | null) =>
@@ -264,37 +272,45 @@ export default function ProductDetailScreen() {
   const priceNum = Number(apiProduct.price);
   const discountPct = apiProduct.discount ?? 0;
   const hasDiscount = priceNum > 0 && discountPct > 0 && discountPct < 100;
+  const finalPrice = hasDiscount
+    ? Math.round(priceNum * (1 - discountPct / 100))
+    : priceNum;
+  const savings = hasDiscount ? priceNum - finalPrice : 0;
   const product = {
     id: apiProduct.id,
     title: apiProduct.title,
     subtitle: apiProduct.category?.label || '',
-    price: hasDiscount
-      ? Math.round(priceNum * (1 - discountPct / 100))
-      : priceNum,
+    price: finalPrice,
     originalPrice: hasDiscount ? fmtNumber(priceNum) : undefined,
     discount: hasDiscount ? `-${discountPct}%` : undefined,
+    savings,
     condition: apiProduct.condition || '',
     description: apiProduct.description || 'Sin descripción.',
     images,
     seller: {
       name: apiProduct.seller?.name || 'Vendedor',
-      avatar: apiProduct.seller?.avatarUrl || undefined,
+      avatar: resolveImage(apiProduct.seller?.avatarUrl) || undefined,
       rating: sellerAvg,
+      ratingCount: sellerRatingCount,
       verified: apiProduct.seller?.verified ?? false,
       plan: apiProduct.seller?.effectivePlan ?? apiProduct.seller?.plan ?? 'FREE',
-      phone: apiProduct.seller?.phone || undefined
+      phone: apiProduct.seller?.phone || undefined,
+      location: apiProduct.seller?.location || '',
     },
     location: apiProduct.city || 'Guinea Ecuatorial',
     postedAgo: timeAgo(apiProduct.createdAt),
     views: apiProduct.views ?? 0,
     favorites: apiProduct.favoritesCount ?? 0,
     isBoosted: apiProduct.boostedUntil ? new Date(apiProduct.boostedUntil) > new Date() : false,
+    // v2 Fase 11.1 — para el chip "Rebajado" en la ficha.
+    priceReducedUntil: apiProduct.priceReducedUntil ?? null,
+    sellerPlan: (apiProduct.seller?.effectivePlan ?? apiProduct.seller?.plan ?? 'FREE') as string,
     attributes:
       apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || [],
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / galleryWidth);
     setActiveImage(index);
   };
 
@@ -307,6 +323,14 @@ export default function ProductDetailScreen() {
   const { share } = useShare();
   const onShare = () =>
     share({ type: 'product', id: product.id, title: product.title, price: fmtNumber(product.price) });
+  const openBoostRequest = () => {
+    const msg = encodeURIComponent(
+      `Hola, quiero destacar mi anuncio "${product.title}" (${SHARE_URL}/product/${product.id}) durante 7 días.`,
+    );
+    Linking.openURL(`https://wa.me/${contactNumber}?text=${msg}`).catch(() =>
+      Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
+    );
+  };
 
   return (
     <View style={styles.root}>
@@ -328,10 +352,14 @@ export default function ProductDetailScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 44 + insets.top, paddingBottom: 100 + insets.bottom }}
+        contentContainerStyle={{
+          paddingTop: 44 + insets.top,
+          paddingBottom: 100 + insets.bottom,
+          alignItems: contentMaxWidth ? 'center' : 'stretch',
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Gallery */}
-        <View style={styles.galleryContainer}>
+        <View style={[styles.galleryContainer, { width: galleryWidth, height: galleryHeight }]}>
           <ScrollView
             horizontal
             pagingEnabled
@@ -355,7 +383,10 @@ export default function ProductDetailScreen() {
                       setGalleryOpen(true);
                     }
                   }}>
-                  <Image source={{ uri: m.uri }} style={styles.galleryImage} />
+                  <Image
+                    source={{ uri: m.uri }}
+                    style={[styles.galleryImage, { width: galleryWidth, height: galleryHeight }]}
+                  />
                   {m.type === 'video' && (
                     <View style={styles.videoPlayOverlay} pointerEvents="none">
                       <View style={styles.videoPlayCircle}>
@@ -366,7 +397,11 @@ export default function ProductDetailScreen() {
                 </TouchableOpacity>
               ))
             ) : (
-              <ProductImage uri={null} style={styles.galleryImage} iconSize={48} />
+              <ProductImage
+                uri={null}
+                style={[styles.galleryImage, { width: galleryWidth, height: galleryHeight }]}
+                iconSize={48}
+              />
             )}
           </ScrollView>
 
@@ -400,7 +435,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* Product info */}
-        <View style={styles.section}>
+        <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
           {product.isBoosted && (
             <View style={styles.boostedPill}>
               <Zap size={12} color="#7C3AED" fill="#7C3AED" strokeWidth={2} />
@@ -443,6 +478,24 @@ export default function ProductDetailScreen() {
                 <Text style={styles.discountText}>{product.discount}</Text>
               </View>
             )}
+            {/* v2 Fase 11.1 — chip "Rebajado" 48h para vendedores Star/Premium */}
+            {product.priceReducedUntil &&
+              new Date(product.priceReducedUntil) > new Date() &&
+              (product.sellerPlan === 'STAR' ||
+                product.sellerPlan === 'PREMIUM') && (
+                <View style={styles.rebajadoChip}>
+                  <Flame size={11} color="#EA580C" strokeWidth={2.5} />
+                  <Text style={styles.rebajadoChipText}>Rebajado</Text>
+                </View>
+              )}
+            {hasDiscount && product.savings > 0 && (
+              <View style={styles.savingsChip}>
+                <Tag size={14} color="#047857" strokeWidth={2} />
+                <Text style={styles.savingsText} numberOfLines={1}>
+                  Ahorras {fmtNumber(product.savings)}
+                </Text>
+              </View>
+            )}
           </View>
           )}
 
@@ -468,9 +521,9 @@ export default function ProductDetailScreen() {
           </View>
 
           {/* Seller mini */}
-          {sellerId !== me?.id && (
+          {!isOwner && (
             <TouchableOpacity
-              style={styles.sellerMini}
+              style={styles.sellerCard}
               activeOpacity={0.7}
               disabled={!sellerId}
               onPress={() =>
@@ -478,7 +531,15 @@ export default function ProductDetailScreen() {
                 router.push({ pathname: '/user/[id]', params: { id: sellerId } })
               }>
               <View style={styles.sellerMiniAvatarWrap}>
-                <Image source={{ uri: product.seller.avatar }} style={styles.sellerMiniAvatar} />
+                {product.seller.avatar ? (
+                  <Image source={{ uri: product.seller.avatar }} style={styles.sellerMiniAvatar} />
+                ) : (
+                  <View style={[styles.sellerMiniAvatar, styles.sellerAvatarFallback]}>
+                    <Text style={styles.sellerAvatarInitial}>
+                      {product.seller.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 {product.seller.verified && (
                   <View style={styles.sellerMiniVerified}>
                     <BadgeCheck size={11} color="#ffffff" fill={colors.primary} />
@@ -487,7 +548,9 @@ export default function ProductDetailScreen() {
               </View>
               <View style={styles.sellerMiniInfo}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={styles.sellerMiniName}>{product.seller.name}</Text>
+                  <Text style={styles.sellerMiniName} numberOfLines={1}>
+                    {product.seller.name}
+                  </Text>
                   {product.seller.plan === 'PREMIUM' && (
                     <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' }}>
                       <Crown size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
@@ -500,8 +563,38 @@ export default function ProductDetailScreen() {
                   )}
                 </View>
                 <View style={styles.sellerMiniRatingRow}>
-                  <Star size={11} color={colors.tertiaryContainer} fill={colors.tertiaryContainer} strokeWidth={0} />
-                  <Text style={styles.sellerMiniRating}>{product.seller.rating.toFixed(1)}</Text>
+                  <View style={styles.sellerStars}>
+                    {[1, 2, 3, 4, 5].map((i) => {
+                      const active = product.seller.ratingCount > 0 && i <= Math.round(product.seller.rating);
+                      return (
+                        <Star
+                          key={i}
+                          size={12}
+                          color={active ? '#F59E0B' : colors.outlineVariant}
+                          fill={active ? '#F59E0B' : colors.outlineVariant + '66'}
+                          strokeWidth={active ? 0 : 1.2}
+                        />
+                      );
+                    })}
+                  </View>
+                  {product.seller.ratingCount > 0 ? (
+                    <>
+                      <Text style={styles.sellerMiniRating}>{product.seller.rating.toFixed(1)}</Text>
+                      <Text style={styles.sellerMiniMeta}>
+                        ({product.seller.ratingCount.toLocaleString('es')} valoraci{product.seller.ratingCount === 1 ? 'ón' : 'ones'})
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={styles.sellerMiniMeta}>Sin valoraciones aún</Text>
+                  )}
+                  {product.seller.location ? (
+                    <>
+                      <Text style={styles.sellerMiniMeta}>·</Text>
+                      <Text style={styles.sellerMiniMeta} numberOfLines={1}>
+                        {product.seller.location}
+                      </Text>
+                    </>
+                  ) : null}
                 </View>
               </View>
               <ChevronRight size={16} color={colors.onSurfaceVariant + '88'} strokeWidth={1.8} />
@@ -511,7 +604,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* Description */}
-        <View style={styles.section}>
+        <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
           <Text style={styles.sectionTitle}>Descripción</Text>
           <Text
             style={styles.description}
@@ -544,7 +637,7 @@ export default function ProductDetailScreen() {
 
         {/* ── Marketplace detail ── */}
         {mkt && (mkt.brand || mkt.model || (mkt.colors && mkt.colors.length > 0)) && (
-          <View style={styles.section}>
+          <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
             <Text style={styles.sectionTitle}>Detalles del producto</Text>
             <View style={styles.specGrid}>
               {mkt.brand ? (
@@ -568,7 +661,7 @@ export default function ProductDetailScreen() {
 
         {/* ── Vehicle detail ── */}
         {veh && (
-          <View style={styles.section}>
+          <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
             <Text style={styles.sectionTitle}>Ficha técnica</Text>
             <View style={styles.specGrid}>
               {veh.year != null && (
@@ -632,7 +725,7 @@ export default function ProductDetailScreen() {
 
         {/* ── Property detail ── */}
         {prop && (
-          <View style={styles.section}>
+          <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
             <Text style={styles.sectionTitle}>Características</Text>
             <View style={styles.specGrid}>
               {prop.bedrooms > 0 && (
@@ -687,36 +780,31 @@ export default function ProductDetailScreen() {
         )}
 
         {/* Destacar anuncio — CTA para el propietario */}
-        {sellerId === me?.id && (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.boostCard}
-              activeOpacity={0.8}
-              onPress={() => {
-                const msg = encodeURIComponent(
-                  `Hola, quiero destacar mi anuncio "${product.title}" (${SHARE_URL}/product/${product.id}) durante 7 días.`,
-                );
-                Linking.openURL(`https://wa.me/${contactNumber}?text=${msg}`).catch(() =>
-                  Alert.alert('Error', 'No se pudo abrir WhatsApp.'),
-                );
-              }}>
-              <View style={styles.boostIconWrap}>
-                <ArrowUpCircle size={20} color="#7C3AED" strokeWidth={1.8} />
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.boostCard}
+            activeOpacity={0.8}
+            onPress={openBoostRequest}>
+            <View style={styles.boostIconWrap}>
+              <ArrowUpCircle size={20} color="#7C3AED" strokeWidth={1.8} />
+            </View>
+            <View style={styles.boostTextWrap}>
+              <Text style={styles.boostTitle}>Destacar un anuncio suelto</Text>
+              <Text style={styles.boostDesc}>
+                ¿No quieres un plan todavía? Destaca un anuncio individual: 1.000 XAF por 3 días, 2.000 XAF por 7 días o 5.000 XAF por 30 días. 
+                Aparecerá en las primeras posiciones de su categoría.
+              </Text>
+              <View style={styles.boostWhatsappRow}>
+                <MessageCircle size={13} color="#7C3AED" strokeWidth={2} />
+                <Text style={styles.boostWhatsappText}>Solicitar por WhatsApp</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.boostTitle}>Destacar este anuncio</Text>
-                <Text style={styles.boostDesc}>
-                  Aparece en las primeras posiciones durante 7 días por solo 1.000 XAF
-                </Text>
-              </View>
-              <MessageCircle size={16} color="#7C3AED" strokeWidth={1.8} />
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* Reportar anuncio */}
-        {sellerId !== me?.id && (
-          <View style={styles.section}>
+        {!isOwner && (
+          <View style={[styles.section, { paddingHorizontal: gutter, width: galleryWidth }]}>
             <TouchableOpacity
               style={{
                 flexDirection: 'row',
@@ -749,7 +837,7 @@ export default function ProductDetailScreen() {
               icon="tag"
               items={relatedItems}
               loading={relatedLoading}
-              cardWidth={160}
+              cardWidth={220}
             />
           </View>
         )}
@@ -778,7 +866,15 @@ export default function ProductDetailScreen() {
         mode={modal ?? 'tips'}
         onClose={() => setModal(null)}
         phoneNumber={product.seller.phone}
-        whatsappNumber={product.seller.phone?.replace(/[^0-9]/g, '')}
+        // v2 Fase 7a WhatsApp personalizado: Star/Premium con teléfono → chat
+        // directo con el vendedor. Free/Basic (o Star/Premium sin phone) →
+        // número del negocio (useBusinessContact).
+        whatsappNumber={
+          (product.seller.plan === 'STAR' || product.seller.plan === 'PREMIUM') &&
+          product.seller.phone
+            ? product.seller.phone.replace(/[^0-9]/g, '')
+            : (contactNumber ?? '').replace(/[^0-9]/g, '')
+        }
         whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/product/${product.id}`}
       />
 
@@ -877,7 +973,6 @@ const makeStyles = (colors: ThemeColors) =>
     },
     galleryContainer: {
       width: '100%',
-      aspectRatio: 1,
       backgroundColor: colors.surfaceContainer,
       position: 'relative',
     },
@@ -885,8 +980,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     galleryImage: {
-      width: SCREEN_WIDTH,
-      aspectRatio: 1,
+      resizeMode: 'cover',
     },
     videoPlayOverlay: {
       position: 'absolute',
@@ -944,7 +1038,6 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: 'rgba(255,255,255,0.4)',
     },
     section: {
-      paddingHorizontal: 16,
       paddingTop: 24,
     },
     tagLine: {
@@ -979,7 +1072,29 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      marginTop: 10,
+      marginTop: 14,
+      flexWrap: 'wrap',
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 0.5,
+      borderColor: colors.outlineVariant + '4d',
+      backgroundColor: colors.surfaceContainerLowest,
+    },
+    rebajadoChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: '#EA580C22',
+    },
+    rebajadoChipText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 10,
+      color: '#EA580C',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     price: {
       fontFamily: 'Manrope-Bold',
@@ -1004,12 +1119,30 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 12,
       color: colors.error,
     },
+    savingsChip: {
+      width: '100%',
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 9,
+      backgroundColor: '#ECFDF5',
+    },
+    savingsText: {
+      flexShrink: 1,
+      fontFamily: 'Manrope-SemiBold',
+      fontSize: 13,
+      color: '#047857',
+    },
     metaInlineRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
       gap: 12,
-      marginTop: 4,
+      marginTop: 16,
     },
     metaInlineItem: {
       flexDirection: 'row',
@@ -1027,23 +1160,44 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 10,
       marginTop: 12,
     },
+    sellerCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 14,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 0.5,
+      borderColor: colors.outlineVariant + '66',
+      backgroundColor: colors.surfaceContainerLowest,
+    },
     sellerMiniAvatarWrap: {
       position: 'relative',
     },
     sellerMiniAvatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       borderWidth: 0.5,
       borderColor: colors.outlineVariant + '33',
+    },
+    sellerAvatarFallback: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary + '18',
+    },
+    sellerAvatarInitial: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 18,
+      color: colors.primary,
     },
     sellerMiniVerified: {
       position: 'absolute',
       bottom: -1,
       right: -1,
-      width: 14,
-      height: 14,
-      borderRadius: 7,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1052,20 +1206,31 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     sellerMiniName: {
+      flexShrink: 1,
       fontFamily: 'Manrope-SemiBold',
-      fontSize: 13,
+      fontSize: 15,
       color: colors.onSurface,
     },
     sellerMiniRatingRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      marginTop: 1,
+      gap: 5,
+      marginTop: 4,
+      flexWrap: 'wrap',
+    },
+    sellerStars: {
+      flexDirection: 'row',
+      gap: 1,
     },
     sellerMiniRating: {
       fontFamily: 'Manrope-SemiBold',
-      fontSize: 11,
-      color: colors.tertiary,
+      fontSize: 12,
+      color: colors.onSurface,
+    },
+    sellerMiniMeta: {
+      fontFamily: 'Manrope-Regular',
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
     },
     sectionTitle: {
       fontFamily: 'Manrope-SemiBold',
@@ -1214,33 +1379,49 @@ const makeStyles = (colors: ThemeColors) =>
     },
     boostCard: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: 12,
-      backgroundColor: '#7C3AED' + '0a',
-      borderRadius: 14,
+      backgroundColor: '#7C3AED' + '0F',
+      borderRadius: 16,
       padding: 16,
-      borderWidth: 0.5,
-      borderColor: '#7C3AED' + '22',
+      borderWidth: 1,
+      borderColor: '#7C3AED' + '33',
+      margin: 16
     },
     boostIconWrap: {
       width: 40,
       height: 40,
       borderRadius: 12,
-      backgroundColor: '#7C3AED' + '18',
+      backgroundColor: '#7C3AED' + '26',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    boostTextWrap: {
+      flex: 1,
+      minWidth: 0,
     },
     boostTitle: {
       fontFamily: 'Manrope-Bold',
       fontSize: 14,
       color: colors.onSurface,
-      marginBottom: 2,
     },
     boostDesc: {
       fontFamily: 'Manrope-Regular',
-      fontSize: 12,
+      fontSize: 13,
       color: colors.onSurfaceVariant,
-      lineHeight: 17,
+      lineHeight: 19,
+      marginTop: 4,
+    },
+    boostWhatsappRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+    },
+    boostWhatsappText: {
+      fontFamily: 'Manrope-Bold',
+      fontSize: 14,
+      color: '#7C3AED',
     },
     jobLink: {
       flexDirection: 'row',
