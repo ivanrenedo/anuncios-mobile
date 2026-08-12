@@ -37,7 +37,7 @@ function RootNavigator() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.surface },
-          
+          orientation: 'default',
         }}>
         <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
         <Stack.Screen

@@ -6,16 +6,16 @@ import {
   Modal,
   StyleSheet,
   Animated,
-  Dimensions,
   PanResponder,
   Linking,
+  ScrollView,
 } from 'react-native';
 import { ShieldCheck, Banknote, MapPin, ScanSearch, Phone } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
 
 export type SafetyModalMode = 'tips' | 'whatsapp' | 'call';
@@ -82,7 +82,8 @@ export default function SafetyModal({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const { height: screenHeight, isLandscape } = useResponsiveLayout();
+  const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
 
@@ -105,7 +106,7 @@ export default function SafetyModal({
     } else {
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
+          toValue: screenHeight,
           duration: 260,
           useNativeDriver: true,
         }),
@@ -116,11 +117,11 @@ export default function SafetyModal({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, screenHeight, dragY, opacityAnim, slideAnim]);
 
   const dismiss = () => {
     Animated.parallel([
-      Animated.timing(slideAnim, { toValue: SCREEN_HEIGHT, duration: 260, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: screenHeight, duration: 260, useNativeDriver: true }),
       Animated.timing(opacityAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(() => onClose());
   };
@@ -150,7 +151,7 @@ export default function SafetyModal({
   const backdropOpacity = Animated.multiply(
     opacityAnim,
     dragY.interpolate({
-      inputRange: [0, SCREEN_HEIGHT * 0.5],
+      inputRange: [0, screenHeight * 0.5],
       outputRange: [1, 0],
       extrapolate: 'clamp',
     })
@@ -186,7 +187,10 @@ export default function SafetyModal({
       <Animated.View
         style={[
           styles.sheet,
-          { paddingBottom: Math.max(insets.bottom, 24) },
+          {
+            paddingBottom: Math.max(insets.bottom, 24),
+            maxHeight: screenHeight * (isLandscape ? 0.92 : 0.86),
+          },
           { transform: [{ translateY: Animated.add(slideAnim, dragY) }] },
         ]}>
         {/* Drag handle — gesture zone */}
@@ -194,42 +198,44 @@ export default function SafetyModal({
           <View style={styles.handle} />
         </View>
 
-        {/* Header */}
-        <View style={styles.header} {...panResponder.panHandlers}>
-          <View style={styles.iconCircle}>
-            <ShieldCheck size={32} color={colors.primary} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.title}>Consejos de Seguridad</Text>
-          <Text style={styles.subtitle}>
-            Protege tu dinero y tu seguridad en transacciones P2P.
-          </Text>
-        </View>
-
-        {/* Tips */}
-        <View style={styles.tipsList} {...panResponder.panHandlers}>
-          {tips.map(({ icon: Icon, title, desc }) => (
-            <View key={title} style={styles.tip}>
-              <View style={styles.tipIcon}>
-                <Icon size={22} color={colors.primary} strokeWidth={1.5} />
-              </View>
-              <View style={styles.tipText}>
-                <Text style={styles.tipTitle}>{title}</Text>
-                <Text style={styles.tipDesc}>{desc}</Text>
-              </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={[styles.header, isLandscape && styles.headerLandscape]} {...panResponder.panHandlers}>
+            <View style={[styles.iconCircle, isLandscape && styles.iconCircleCompact]}>
+              <ShieldCheck size={isLandscape ? 26 : 32} color={colors.primary} strokeWidth={1.5} />
             </View>
-          ))}
-        </View>
+            <Text style={styles.title}>Consejos de Seguridad</Text>
+            <Text style={styles.subtitle}>
+              Protege tu dinero y tu seguridad en transacciones P2P.
+            </Text>
+          </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.ctaBtn} onPress={handleContinue} activeOpacity={0.88}>
-            {config.ctaIcon && <View>{config.ctaIcon}</View>}
-            <Text style={styles.ctaBtnText}>{config.ctaLabel}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={styles.linkBtnText}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Tips */}
+          <View style={[styles.tipsList, isLandscape && styles.tipsListCompact]} {...panResponder.panHandlers}>
+            {tips.map(({ icon: Icon, title, desc }) => (
+              <View key={title} style={styles.tip}>
+                <View style={styles.tipIcon}>
+                  <Icon size={22} color={colors.primary} strokeWidth={1.5} />
+                </View>
+                <View style={styles.tipText}>
+                  <Text style={styles.tipTitle}>{title}</Text>
+                  <Text style={styles.tipDesc}>{desc}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.ctaBtn} onPress={handleContinue} activeOpacity={0.88}>
+              {config.ctaIcon && <View>{config.ctaIcon}</View>}
+              <Text style={styles.ctaBtnText}>{config.ctaLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.linkBtn} onPress={onClose} activeOpacity={0.7}>
+              <Text style={styles.linkBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </Animated.View>
     </Modal>
   );
@@ -273,6 +279,9 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 28,
     gap: 8,
   },
+  headerLandscape: {
+    marginBottom: 16,
+  },
   iconCircle: {
     width: 64,
     height: 64,
@@ -281,6 +290,11 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+  },
+  iconCircleCompact: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   title: {
     fontFamily: 'Manrope-Bold',
@@ -299,6 +313,10 @@ const makeStyles = (colors: ThemeColors) =>
   tipsList: {
     gap: 20,
     marginBottom: 32,
+  },
+  tipsListCompact: {
+    gap: 12,
+    marginBottom: 18,
   },
   tip: {
     flexDirection: 'row',

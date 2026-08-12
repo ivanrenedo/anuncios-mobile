@@ -1,10 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Animated,
-  Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
   StyleSheet,
@@ -16,13 +15,10 @@ import { useRouter } from 'expo-router';
 import { colors } from '@/constants/theme';
 import { resolveImage } from '@/lib/config';
 import { useAutoplayScroll } from '@/hooks/useAutoplayScroll';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SLIDE_WIDTH = SCREEN_WIDTH - 32;
 const SLIDE_GAP = 16;
-const ITEM_WIDTH = SLIDE_WIDTH + SLIDE_GAP;
 const AUTOPLAY_MS = 4500;
-const IMAGE_OVERFLOW = SLIDE_WIDTH * 0.18;
 
 interface Slide {
   id: string;
@@ -46,6 +42,13 @@ interface PromoCarouselProps {
 function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
   const router = useRouter();
   const slides: Slide[] = (config?.slides as Slide[] | undefined) ?? [];
+  const { width, height, gutter, isLandscape, contentMaxWidth } = useResponsiveLayout();
+  const slideWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const slideHeight = isLandscape
+    ? Math.max(156, Math.min(204, height * 0.46))
+    : 224;
+  const itemWidth = slideWidth + SLIDE_GAP;
+  const imageOverflow = slideWidth * 0.18;
 
   const handleSlidePress = (slide: Slide) => {
     const value = slide.linkValue?.trim();
@@ -71,9 +74,15 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
 
   const autoplayHandlers = useAutoplayScroll(scrollRef, {
     itemCount: slides.length,
-    pitch: ITEM_WIDTH,
+    pitch: itemWidth,
     intervalMs: AUTOPLAY_MS,
   });
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+    scrollX.setValue(0);
+    setActiveIndex(0);
+  }, [itemWidth, scrollX]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     autoplayHandlers.onMomentumScrollEnd(e);
@@ -86,12 +95,19 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
   if (slides.length === 0) return null;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          width: slideWidth,
+          alignSelf: 'center',
+        },
+      ]}>
       <Animated.ScrollView
         ref={scrollRef as any}
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={ITEM_WIDTH}
+        snapToInterval={itemWidth}
         decelerationRate="fast"
         contentContainerStyle={styles.scrollContent}
         onScroll={Animated.event(
@@ -105,9 +121,9 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
         {(slides.length > 1 ? [...slides, slides[0]] : slides).map((slide, i) => {
           const isClone = slides.length > 1 && i === slides.length;
           const inputRange = [
-            (i - 1) * ITEM_WIDTH,
-            i * ITEM_WIDTH,
-            (i + 1) * ITEM_WIDTH,
+            (i - 1) * itemWidth,
+            i * itemWidth,
+            (i + 1) * itemWidth,
           ];
           const scale = scrollX.interpolate({
             inputRange,
@@ -121,12 +137,12 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
           });
           const imageTranslateX = scrollX.interpolate({
             inputRange,
-            outputRange: [-IMAGE_OVERFLOW, 0, IMAGE_OVERFLOW],
+            outputRange: [-imageOverflow, 0, imageOverflow],
             extrapolate: 'clamp',
           });
           const contentTranslateX = scrollX.interpolate({
             inputRange,
-            outputRange: [SLIDE_WIDTH * 0.15, 0, -SLIDE_WIDTH * 0.15],
+            outputRange: [slideWidth * 0.15, 0, -slideWidth * 0.15],
             extrapolate: 'clamp',
           });
           const contentOpacity = scrollX.interpolate({
@@ -137,12 +153,19 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
           return (
             <Animated.View
               key={isClone ? `${slide.id}-clone` : slide.id}
-              style={[styles.slide, { transform: [{ scale }], opacity }]}>
+              style={[
+                styles.slide,
+                { width: slideWidth, height: slideHeight, transform: [{ scale }], opacity },
+              ]}>
               <Animated.Image
                 source={{ uri: resolveImage(slide.image) }}
                 style={[
                   styles.image,
-                  { transform: [{ translateX: imageTranslateX }] },
+                  {
+                    left: -imageOverflow,
+                    width: slideWidth + imageOverflow * 2,
+                    transform: [{ translateX: imageTranslateX }],
+                  },
                 ]}
                 resizeMode="cover"
               />
@@ -184,9 +207,9 @@ function PromoCarousel({ config, onSlidePress }: PromoCarouselProps = {}) {
       <View style={styles.dots}>
         {slides.map((_, i) => {
           const inputRange = [
-            (i - 1) * ITEM_WIDTH,
-            i * ITEM_WIDTH,
-            (i + 1) * ITEM_WIDTH,
+            (i - 1) * itemWidth,
+            i * itemWidth,
+            (i + 1) * itemWidth,
           ];
           const width = scrollX.interpolate({
             inputRange,
@@ -220,15 +243,12 @@ export default React.memo(PromoCarousel);
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
     marginBottom: 8,
   },
   scrollContent: {
     gap: SLIDE_GAP,
   },
   slide: {
-    width: SLIDE_WIDTH,
-    height: 224,
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#0d0f12',
@@ -237,8 +257,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: -IMAGE_OVERFLOW,
-    width: SLIDE_WIDTH + IMAGE_OVERFLOW * 2,
     height: '100%',
   },
   content: {

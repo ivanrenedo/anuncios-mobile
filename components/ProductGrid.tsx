@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,11 @@ import ProductCard, { ProductCardItem, ProductCardSkeleton, fmtPrice } from '@/c
 import { useFavoriteToggle } from '@/hooks/useFavorites';
 import { useProducts } from '@/hooks/useProducts';
 import { API_URL } from '@/lib/config';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
-const PAGE_SIZE = 4;
-
+// Breakpoints — mirror the web tailwind config (sm=640, md=768, lg=1024) so
+// tablets and larger screens fill the extra width with more columns instead
+// of stretching two cards across the viewport.
 const ICON_MAP: Record<string, any> = {
   flame: Flame, clock: Clock, tag: Tag, star: Star,
   'trending-up': TrendingUp, heart: Heart,crown: Crown
@@ -66,6 +68,8 @@ function toCardItem(p: any): ProductCardItem {
     avatar: p.seller?.avatarUrl,
     verified: p.seller?.verified,
     sellerPlan: p.seller?.effectivePlan ?? p.seller?.plan,
+
+    priceReducedUntil: p.priceReducedUntil ?? null,
     image: img.startsWith('/') ? `${API_URL}${img}` : img,
     condition: p.condition,
     discount: p.discount,
@@ -94,12 +98,22 @@ function ProductGrid({
 }: Props) {
   const router = useRouter();
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
-  const [count, setCount] = useState(PAGE_SIZE);
+  const { width: winWidth, gutter, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(winWidth - gutter * 2, contentMaxWidth ?? winWidth);
+  const columns = columnsForContentWidth(contentWidth);
+  const pageSize = columns * 2;
+  const [count, setCount] = useState(pageSize);
   const [loadingMore, setLoadingMore] = useState(false);
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const Icon = getIcon(icon);
   const iconColor = getIconColor(icon);
+
+  // Reajusta el "cargar más" cuando el número de columnas cambia (rotación /
+  // resize) para que la primera vista sean siempre 2 filas completas.
+  useEffect(() => {
+    setCount(pageSize);
+  }, [pageSize]);
 
   const { products: apiProducts, loading: apiLoading } = useProducts(
     externalItems ? 0 : 20,
@@ -121,28 +135,30 @@ function ProductGrid({
   const visible = pool.slice(0, count);
   const hasMore = count < pool.length;
 
-  const pairs = useMemo(() => {
+  const rows = useMemo(() => {
     const out: ProductCardItem[][] = [];
-    for (let i = 0; i < visible.length; i += 2) out.push(visible.slice(i, i + 2));
+    for (let i = 0; i < visible.length; i += columns)
+      out.push(visible.slice(i, i + columns));
     return out;
-  }, [visible]);
+  }, [visible, columns]);
 
   const loadMore = () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     setTimeout(() => {
-      setCount((c) => Math.min(c + PAGE_SIZE, pool.length));
+      setCount((c) => Math.min(c + pageSize, pool.length));
       setLoadingMore(false);
     }, 300);
   };
 
   if (loading && pool.length === 0) {
     return (
-      <View style={styles.section}>
+      <View style={[styles.section, { paddingHorizontal: gutter }]}>
         {[0, 1, 2].map((row) => (
           <View key={row} style={styles.row}>
-            <ProductCardSkeleton />
-            <ProductCardSkeleton />
+            {Array.from({ length: columns }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </View>
         ))}
       </View>
@@ -152,7 +168,7 @@ function ProductGrid({
   if (pool.length === 0) return null;
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, { paddingHorizontal: gutter }]}>
       <View style={styles.header}>
         <View style={styles.contentTitle}>
           <View style={[styles.iconTitle, { backgroundColor: iconColor + '18' }]}>
@@ -173,9 +189,9 @@ function ProductGrid({
         )}
       </View>
 
-      {pairs.map((pair, rowIdx) => (
+      {rows.map((row, rowIdx) => (
         <View key={rowIdx} style={styles.row}>
-          {pair.map((item) => (
+          {row.map((item) => (
             <ProductCard
               key={item.id}
               item={item}
@@ -186,7 +202,10 @@ function ProductGrid({
               }
             />
           ))}
-          {pair.length === 1 && <View style={styles.placeholder} />}
+          {row.length < columns &&
+            Array.from({ length: columns - row.length }).map((_, i) => (
+              <View key={`ph-${i}`} style={styles.placeholder} />
+            ))}
         </View>
       ))}
 
@@ -219,7 +238,6 @@ export default React.memo(ProductGrid);
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     section: {
-      paddingHorizontal: 16,
       marginBottom: 12,
     },
     header: {
@@ -243,7 +261,7 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 17,
       color: colors.onSurface,
       lineHeight: 22,
-      letterSpacing: -0.2,
+      flexShrink: 1,
     },
     seeAll: {
       flexDirection: 'row',
@@ -257,8 +275,8 @@ const makeStyles = (colors: ThemeColors) =>
     },
     row: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 20,
+      gap: 8,
+      marginBottom: 12,
     },
     placeholder: {
       flex: 1,

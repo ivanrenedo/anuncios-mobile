@@ -4,6 +4,7 @@ import { Check, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/constants/theme';
 import SwipeableSheet from '@/components/SwipeableSheet';
 import { useSheetStyles } from './sheetStyles';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 interface CategoryNode {
   id: string;
@@ -33,6 +34,7 @@ export default function CategoryPickerSheet({
 }: Props) {
   const { colors } = useTheme();
   const styles = useSheetStyles();
+  const { height, isLandscape } = useResponsiveLayout();
   const [root, setRoot] = useState<CategoryNode | null>(null);
 
   const close = () => {
@@ -49,7 +51,9 @@ export default function CategoryPickerSheet({
       visible={visible}
       onClose={close}
       title={root ? root.label : 'Categoría'}>
-      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ maxHeight: height * (isLandscape ? 0.72 : 0.58) }}>
         {!root ? (
           <>
             <TouchableOpacity

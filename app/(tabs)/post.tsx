@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Platform,
   Alert,
-  Dimensions,
   BackHandler,
   Modal,
   Animated,
@@ -57,6 +56,7 @@ import Spinner from '@/components/Spinner';
 import ColorPicker from '@/components/ColorPicker';
 import { fmtPrice as fmtPriceCompact } from '@/components/ProductCard';
 import { getErrorMessage } from '@/lib/errors';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 const MAX_PHOTOS = 4;
 // Videos still get a real cap — we don't transcode them client-side, so a
@@ -74,8 +74,6 @@ try {
 } catch {
   ImagePicker = null;
 }
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Domain config
@@ -107,7 +105,7 @@ const KIND_META: Record<
   },
   servicios: {
     label: 'Servicios',
-    subtitle: 'Ofrece tu trabajo o profesionalidad o busca servicios',
+    subtitle: 'Ofrece tu trabajo, profesionalidad o busca servicios',
     Icon: Wrench,
     color: colors.secondary,
   },
@@ -641,6 +639,7 @@ function CategoryField({ form, setField, kind, showErrors }: FormProps & { kind:
   const { tree } = useCategoryTree();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { height, isLandscape } = useResponsiveLayout();
   const [open, setOpen] = useState(false);
   const [root, setRoot] = useState<any>(null);
 
@@ -673,7 +672,7 @@ function CategoryField({ form, setField, kind, showErrors }: FormProps & { kind:
       <SwipeableSheet visible={open} onClose={close} title={root ? root.label : 'Categoría'}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          style={{ maxHeight: SCREEN_HEIGHT * 0.55 }}>
+          style={{ maxHeight: height * (isLandscape ? 0.78 : 0.55) }}>
           {!root
             ? filtered.map((r: any) => (
                 <TouchableOpacity
@@ -1257,8 +1256,6 @@ function getPreviewFields(kind: Kind, form: FormState): PreviewField[] {
   return out;
 }
 
-const PHOTO_WIDTH = Dimensions.get('window').width;
-
 function PreviewModal({
   visible,
   kind,
@@ -1281,13 +1278,18 @@ function PreviewModal({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const { width, height, isLandscape, contentMaxWidth } = useResponsiveLayout();
+  const photoWidth = Math.min(width, contentMaxWidth ?? width);
+  const photoHeight = isLandscape
+    ? Math.max(190, Math.min(height * 0.62, photoWidth * 0.56))
+    : 280;
+  const slideAnim = useRef(new Animated.Value(height)).current;
   const [activePhoto, setActivePhoto] = useState(0);
 
   useEffect(() => {
     if (visible) {
       setActivePhoto(0);
-      slideAnim.setValue(SCREEN_HEIGHT);
+      slideAnim.setValue(height);
       Animated.spring(slideAnim, {
         toValue: 0,
         damping: 22,
@@ -1295,11 +1297,11 @@ function PreviewModal({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, height, slideAnim]);
 
   const dismiss = () => {
     Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
+      toValue: height,
       duration: 280,
       useNativeDriver: true,
     }).start(() => onClose());
@@ -1352,7 +1354,7 @@ function PreviewModal({
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => {
                   const idx = Math.round(
-                    e.nativeEvent.contentOffset.x / PHOTO_WIDTH
+                    e.nativeEvent.contentOffset.x / photoWidth
                   );
                   setActivePhoto(idx);
                 }}
@@ -1365,7 +1367,7 @@ function PreviewModal({
                     <View>
                       <Image
                         source={{ uri: previewUri }}
-                        style={styles.pvPhoto}
+                        style={[styles.pvPhoto, { width: photoWidth, height: photoHeight }]}
                         resizeMode="cover"
                       />
                       {item.type === 'video' && (
@@ -1392,7 +1394,7 @@ function PreviewModal({
               )}
             </View>
           ) : (
-            <View style={styles.pvNoPhoto}>
+            <View style={[styles.pvNoPhoto, { height: Math.min(photoHeight, 220) }]}>
               <ImageIcon
                 size={40}
                 color={colors.onSurfaceVariant + '44'}
@@ -1618,6 +1620,7 @@ function Select({
   const [open, setOpen] = useState(false);
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { height, isLandscape } = useResponsiveLayout();
   return (
     <>
       <TouchableOpacity
@@ -1642,7 +1645,7 @@ function Select({
       <SwipeableSheet visible={open} onClose={() => setOpen(false)} title={title}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          style={{ maxHeight: SCREEN_HEIGHT * 0.55 }}>
+          style={{ maxHeight: height * (isLandscape ? 0.78 : 0.55) }}>
           {options.map((opt) => {
             const active = value === opt;
             return (
@@ -2365,8 +2368,6 @@ const makeStyles = (colors: ThemeColors) =>
     letterSpacing: -0.3,
   },
   pvPhoto: {
-    width: Dimensions.get('window').width,
-    height: 280,
     backgroundColor: colors.surfaceContainerLow,
   },
   pvDots: {

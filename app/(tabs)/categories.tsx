@@ -6,9 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Animated,
-  Dimensions,
   Image,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -19,19 +17,16 @@ import { useCategoryTree } from '@/hooks/useCategories';
 import { useProducts } from '@/hooks/useProducts';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { API_URL } from '@/lib/config';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SIDEBAR_WIDTH = 120;
-const RIGHT_WIDTH = SCREEN_WIDTH - SIDEBAR_WIDTH;
 const TILE_GAP = 12;
-const TILE_WIDTH = (RIGHT_WIDTH - 16 * 2 - TILE_GAP * 2) / 3;
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 84 : 64;
 
 export default function CategoriesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, gutter, isLandscape, tabBarHeight } = useResponsiveLayout();
   const paneAnim = useRef(new Animated.Value(1)).current;
   const rightScrollRef = useRef<ScrollView>(null);
   const { tree, loading, refetch: refetchTree } = useCategoryTree();
@@ -57,6 +52,12 @@ export default function CategoriesScreen() {
 
   const active = tree.find((c: any) => c.slug === activeSlug) ?? tree[0];
   const subs: any[] = active?.children ?? [];
+  const sidebarWidth = isLandscape ? 170 : 120;
+  const detailContentWidth = Math.max(200, width - sidebarWidth - gutter * 2);
+  const tileColumns =
+    detailContentWidth >= 560 ? 5 : detailContentWidth >= 420 ? 4 : 3;
+  const tileWidth =
+    (detailContentWidth - TILE_GAP * (tileColumns - 1)) / tileColumns;
 
   const selectCategory = (slug: string) => {
     if (active && slug === active.slug) return;
@@ -107,10 +108,10 @@ export default function CategoriesScreen() {
       ) : (
         <View style={styles.body}>
           {/* Left sidebar (text only, no icons) */}
-          <View style={styles.sidebar}>
+          <View style={[styles.sidebar, { width: sidebarWidth }]}>
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 24 }}>
+              contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }}>
               {tree.map((cat: any) => {
                 const isActive = cat.slug === active.slug;
                 return (
@@ -152,7 +153,8 @@ export default function CategoriesScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 padding: 16,
-                paddingBottom: TAB_BAR_HEIGHT + 24,
+                paddingHorizontal: gutter,
+                paddingBottom: tabBarHeight + 24,
               }}>
               <Text style={styles.detailTitle}>{active.label}</Text>
 
@@ -165,10 +167,18 @@ export default function CategoriesScreen() {
                     return (
                       <TouchableOpacity
                         key={sub.id}
-                        style={styles.tile}
+                        style={[styles.tile, { width: tileWidth }]}
                         activeOpacity={0.8}
                         onPress={() => goSearch(sub.label)}>
-                        <View style={styles.tileImageWrap}>
+                        <View
+                          style={[
+                            styles.tileImageWrap,
+                            {
+                              width: tileWidth,
+                              height: tileWidth,
+                              borderRadius: tileWidth / 2,
+                            },
+                          ]}>
                           {img ? (
                             <Image source={{ uri: img }} style={styles.tileImage} />
                           ) : (
@@ -188,10 +198,19 @@ export default function CategoriesScreen() {
 
                   {/* Ver todo tile → search by category name */}
                   <TouchableOpacity
-                    style={styles.tile}
+                    style={[styles.tile, { width: tileWidth }]}
                     activeOpacity={0.8}
                     onPress={() => goSearch(active.label)}>
-                    <View style={[styles.tileImageWrap, styles.tileAllWrap]}>
+                    <View
+                      style={[
+                        styles.tileImageWrap,
+                        styles.tileAllWrap,
+                        {
+                          width: tileWidth,
+                          height: tileWidth,
+                          borderRadius: tileWidth / 2,
+                        },
+                      ]}>
                       <LayoutGrid
                         size={26}
                         color={active.color || colors.primary}
@@ -270,7 +289,6 @@ const makeStyles = (colors: ThemeColors) =>
   },
   // Sidebar
   sidebar: {
-    width: SIDEBAR_WIDTH,
     backgroundColor: colors.surfaceContainerLow,
   },
   sideItem: {
@@ -315,14 +333,10 @@ const makeStyles = (colors: ThemeColors) =>
     gap: TILE_GAP,
   },
   tile: {
-    width: TILE_WIDTH,
     alignItems: 'center',
     gap: 6,
   },
   tileImageWrap: {
-    width: TILE_WIDTH,
-    height: TILE_WIDTH,
-    borderRadius: TILE_WIDTH / 2,
     overflow: 'hidden',
     backgroundColor: colors.surfaceContainerLow,
     borderWidth: 0.5,

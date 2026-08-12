@@ -44,12 +44,18 @@ import {
   toExploreItem,
   type SortOrder,
 } from '@/lib/exploreUtils';
+import { columnsForContentWidth, useResponsiveLayout } from '@/hooks/useResponsiveLayout';
+import SectionPickerSheet from '@/components/explore/SectionPickerSheet';
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { width, gutter, isLandscape, contentMaxWidth } = useResponsiveLayout();
+  const contentWidth = Math.min(width - gutter * 2, contentMaxWidth ?? width);
+  const gridColumns = columnsForContentWidth(contentWidth);
+  const headerHeight = isLandscape ? 88 : 100;
   const { q, filterCat, sectionId: paramSectionId } = useLocalSearchParams<{
     q?: string;
     filterCat?: string;
@@ -178,6 +184,13 @@ export default function ExploreScreen() {
     priceMax,
     singleCondition:
       activeConditions.length === 1 ? activeConditions[0] : undefined,
+    activeEngines,
+    activeTransmissions,
+    operation,
+    filterOfferType,
+    filterBedrooms,
+    filterBathrooms,
+    surfaceMin,
     sortOrder,
   });
 
@@ -224,7 +237,109 @@ export default function ExploreScreen() {
     }
   };
 
+  const exitSectionMode = () => {
+    setActiveSectionId((prev) => (prev ? null : prev));
+  };
+
+  const updateQuery = (value: string) => {
+    exitSectionMode();
+    setQuery(value);
+  };
+
+  const updateCityFilter = (value: string) => {
+    exitSectionMode();
+    setCityFilter(value);
+  };
+
+  const updatePriceMin = (value: string) => {
+    exitSectionMode();
+    setPriceMin(value);
+  };
+
+  const updatePriceMax = (value: string) => {
+    exitSectionMode();
+    setPriceMax(value);
+  };
+
+  const updateActiveCategory = (value: string) => {
+    exitSectionMode();
+    setActiveCategory(value);
+  };
+
+  const updateActiveConditions: React.Dispatch<React.SetStateAction<string[]>> = (
+    value,
+  ) => {
+    exitSectionMode();
+    setActiveConditions(value);
+  };
+
+  const updateWithPriceOnly = (value: boolean) => {
+    exitSectionMode();
+    setWithPriceOnly(value);
+  };
+
+  const updateOperation = (value: string | null) => {
+    exitSectionMode();
+    setOperation(value);
+  };
+
+  const updateBrandModelQuery = (value: string) => {
+    exitSectionMode();
+    setBrandModelQuery(value);
+  };
+
+  const updateActiveEngines: React.Dispatch<React.SetStateAction<string[]>> = (
+    value,
+  ) => {
+    exitSectionMode();
+    setActiveEngines(value);
+  };
+
+  const updateActiveTransmissions: React.Dispatch<React.SetStateAction<string[]>> = (
+    value,
+  ) => {
+    exitSectionMode();
+    setActiveTransmissions(value);
+  };
+
+  const updateFilterOfferType = (value: string | null) => {
+    exitSectionMode();
+    setFilterOfferType(value);
+  };
+
+  const updateFilterBedrooms: React.Dispatch<React.SetStateAction<number>> = (
+    value,
+  ) => {
+    exitSectionMode();
+    setFilterBedrooms(value);
+  };
+
+  const updateFilterBathrooms: React.Dispatch<React.SetStateAction<number>> = (
+    value,
+  ) => {
+    exitSectionMode();
+    setFilterBathrooms(value);
+  };
+
+  const updateSurfaceMin = (value: string) => {
+    exitSectionMode();
+    setSurfaceMin(value);
+  };
+
+  const updateBrand = (value: string | null) => {
+    exitSectionMode();
+    setBrand(value);
+  };
+
+  const updateSellerType = (
+    value: 'particulares' | 'profesionales' | null,
+  ) => {
+    exitSectionMode();
+    setSellerType(value);
+  };
+
   const applySavedSearch = (s: any) => {
+    exitSectionMode();
     setQuery(s.query ?? '');
     setCityFilter(s.city ?? '');
     setPriceMin(s.priceMin != null ? String(Math.trunc(Number(s.priceMin))) : '');
@@ -275,21 +390,22 @@ export default function ExploreScreen() {
   // Sync incoming ?sectionId= (coming from home "Ver todo")
   useEffect(() => {
     const incoming = typeof paramSectionId === 'string' ? paramSectionId : '';
-    if (incoming) setActiveSectionId(incoming);
+    setActiveSectionId(incoming || null);
   }, [paramSectionId]);
 
   const clearSearch = () => {
+    exitSectionMode();
     setQuery('');
     setRelated([]);
   };
 
-  const applySuggestion = (term: string) => setQuery(term);
+  const applySuggestion = (term: string) => updateQuery(term);
 
   // Server handles: query, categoryId, city, condition, price, sortBy.
   // Post-filters for what the backend doesn't support yet. Memoized so the
   // filter/sort chain doesn't re-run on unrelated state changes.
   const visibleProducts = useMemo(() => {
-    let list = sectionProducts ? sectionProducts : searchResults;
+    let list = sectionProducts ?? searchResults;
 
     if (sellerType === 'profesionales')
       list = list.filter((p: any) => p.verified);
@@ -305,6 +421,39 @@ export default function ExploreScreen() {
       list = list.filter((p: any) =>
         p.title.toLowerCase().includes(brandModelQuery.trim().toLowerCase()),
       );
+    if (activeEngines.length > 0)
+      list = list.filter((p: any) =>
+        activeEngines.includes(p.vehicleDetail?.engine ?? ''),
+      );
+    if (activeTransmissions.length > 0)
+      list = list.filter((p: any) =>
+        activeTransmissions.includes(p.vehicleDetail?.transmission ?? ''),
+      );
+    if (operation)
+      list = list.filter(
+        (p: any) =>
+          p.propertyDetail?.operation === operation ||
+          p.vehicleDetail?.operation === operation ||
+          p.operation === operation,
+      );
+    if (filterOfferType)
+      list = list.filter(
+        (p: any) =>
+          p.serviceDetail?.offerType === filterOfferType ||
+          p.offerType === filterOfferType,
+      );
+    if (filterBedrooms > 0)
+      list = list.filter(
+        (p: any) => (p.propertyDetail?.bedrooms ?? 0) >= filterBedrooms,
+      );
+    if (filterBathrooms > 0)
+      list = list.filter(
+        (p: any) => (p.propertyDetail?.bathrooms ?? 0) >= filterBathrooms,
+      );
+    if (surfaceMin) {
+      const min = Number(surfaceMin);
+      list = list.filter((p: any) => (p.propertyDetail?.surface ?? 0) >= min);
+    }
 
     if (sortOrder === 'az')
       list = [...list].sort((a: any, b: any) => a.title.localeCompare(b.title));
@@ -323,15 +472,22 @@ export default function ExploreScreen() {
     withPriceOnly,
     activeConditions,
     brandModelQuery,
+    activeEngines,
+    activeTransmissions,
+    operation,
+    filterOfferType,
+    filterBedrooms,
+    filterBathrooms,
+    surfaceMin,
     sortOrder,
   ]);
 
   const pairs = useMemo(() => {
     const out: any[][] = [];
-    for (let i = 0; i < visibleProducts.length; i += 2)
-      out.push(visibleProducts.slice(i, i + 2));
+    for (let i = 0; i < visibleProducts.length; i += gridColumns)
+      out.push(visibleProducts.slice(i, i + gridColumns));
     return out;
-  }, [visibleProducts]);
+  }, [visibleProducts, gridColumns]);
 
   const catFilter = CATEGORY_FILTERS[activeCategory.toLowerCase()] ?? CATEGORY_FILTERS.todos;
 
@@ -385,7 +541,7 @@ export default function ExploreScreen() {
   return (
     <View style={styles.root}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top, height: 100 + insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top, height: headerHeight + insets.top }]}>
         {/* Row 1: back + search + filter */}
         <View style={styles.searchRow}>
           <RipplePress onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} style={styles.backBtn} borderRadius={18} rippleColor={colors.primary + '22'}>
@@ -396,7 +552,7 @@ export default function ExploreScreen() {
             <TextInput
               style={styles.searchInput}
               value={query}
-              onChangeText={setQuery}
+              onChangeText={updateQuery}
               placeholder="Buscar en Bomelh"
               placeholderTextColor={colors.onSurfaceVariant + '99'}
               returnKeyType="search"
@@ -468,7 +624,7 @@ export default function ExploreScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 100 + insets.top, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingTop: headerHeight + insets.top, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {/* Category pills — stage 1 */}
         {pillsReady && (
@@ -478,7 +634,7 @@ export default function ExploreScreen() {
               <RipplePress
                 key={cat}
                 style={[styles.pill, activeCategory === cat && styles.pillActive]}
-                onPress={() => setActiveCategory(cat)}
+                onPress={() => updateActiveCategory(cat)}
                 borderRadius={999}
                 rippleColor={activeCategory === cat ? 'rgba(255,255,255,0.2)' : colors.primary + '18'}>
                 <Text style={[styles.pillText, activeCategory === cat && styles.pillTextActive]}>
@@ -575,16 +731,17 @@ export default function ExploreScreen() {
 
         {/* Product grid */}
         {productsLoading && visibleProducts.length === 0 || sectionProductsLoading ? (
-          <View style={styles.grid}>
+          <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {[0, 1, 2].map((row) => (
               <View key={row} style={styles.gridRow}>
-                <ProductCardSkeleton />
-                <ProductCardSkeleton />
+                {Array.from({ length: gridColumns }).map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
               </View>
             ))}
           </View>
         ) : visibleProducts.length > 0 ? (
-          <View style={styles.grid}>
+          <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {pairs.map((pair, rowIdx) => (
               <View key={rowIdx} style={styles.gridRow}>
                 {pair.map((item) => (
@@ -598,16 +755,20 @@ export default function ExploreScreen() {
                     }
                   />
                 ))}
-                {pair.length === 1 && <View style={styles.cardPlaceholder} />}
+                {pair.length < gridColumns &&
+                  Array.from({ length: gridColumns - pair.length }).map((_, i) => (
+                    <View key={i} style={styles.cardPlaceholder} />
+                  ))}
               </View>
             ))}
           </View>
         ) : productsLoading ? (
-          <View style={styles.grid}>
+          <View style={[styles.grid, { paddingHorizontal: gutter }]}>
             {[0, 1, 2].map((row) => (
               <View key={row} style={styles.gridRow}>
-                <ProductCardSkeleton />
-                <ProductCardSkeleton />
+                {Array.from({ length: gridColumns }).map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
               </View>
             ))}
           </View>
@@ -626,7 +787,7 @@ export default function ExploreScreen() {
         ) : null}
 
         {/* Load more */}
-        {!productsLoading && visibleProducts.length > 0 && (hasMore || loadingMore) && (
+        {!productsLoading && !activeSectionId && visibleProducts.length > 0 && (hasMore || loadingMore) && (
           <View style={styles.loadMoreWrap}>
             <RipplePress
               style={styles.loadMoreBtn}
@@ -659,41 +820,52 @@ export default function ExploreScreen() {
           catFilter={catFilter}
           onOpenCategoryPicker={() => setCategoryPickerOpen(true)}
           query={query}
-          setQuery={setQuery}
+          setQuery={updateQuery}
           clearSearch={clearSearch}
           cityFilter={cityFilter}
-          setCityFilter={setCityFilter}
+          setCityFilter={updateCityFilter}
           priceMin={priceMin}
-          setPriceMin={setPriceMin}
+          setPriceMin={updatePriceMin}
           priceMax={priceMax}
-          setPriceMax={setPriceMax}
+          setPriceMax={updatePriceMax}
           withPriceOnly={withPriceOnly}
-          setWithPriceOnly={setWithPriceOnly}
+          setWithPriceOnly={updateWithPriceOnly}
           operation={operation}
-          setOperation={setOperation}
+          setOperation={updateOperation}
           brandModelQuery={brandModelQuery}
-          setBrandModelQuery={setBrandModelQuery}
+          setBrandModelQuery={updateBrandModelQuery}
           activeConditions={activeConditions}
-          setActiveConditions={setActiveConditions}
+          setActiveConditions={updateActiveConditions}
           activeEngines={activeEngines}
-          setActiveEngines={setActiveEngines}
+          setActiveEngines={updateActiveEngines}
           activeTransmissions={activeTransmissions}
-          setActiveTransmissions={setActiveTransmissions}
+          setActiveTransmissions={updateActiveTransmissions}
           filterOfferType={filterOfferType}
-          setFilterOfferType={setFilterOfferType}
+          setFilterOfferType={updateFilterOfferType}
           filterBedrooms={filterBedrooms}
-          setFilterBedrooms={setFilterBedrooms}
+          setFilterBedrooms={updateFilterBedrooms}
           filterBathrooms={filterBathrooms}
-          setFilterBathrooms={setFilterBathrooms}
+          setFilterBathrooms={updateFilterBathrooms}
           surfaceMin={surfaceMin}
-          setSurfaceMin={setSurfaceMin}
+          setSurfaceMin={updateSurfaceMin}
           brand={brand}
-          setBrand={setBrand}
+          setBrand={updateBrand}
           sellerType={sellerType}
-          setSellerType={setSellerType}
+          setSellerType={updateSellerType}
           resultCount={visibleProducts.length}
           productsLoading={productsLoading}
           clearFilters={clearFilters}
+        />
+      )}
+
+      {/* Section picker sheet — server-configured curated filters. */}
+      {sectionPickerOpen && (
+        <SectionPickerSheet
+          visible={sectionPickerOpen}
+          sections={filterableSections}
+          activeId={activeSectionId}
+          onChange={setActiveSectionId}
+          onClose={() => setSectionPickerOpen(false)}
         />
       )}
 
@@ -717,9 +889,9 @@ export default function ExploreScreen() {
           tree={tree}
           active={activeCategory}
           onChange={(label) => {
-            setActiveCategory(label);
-            setBrand(null);
-            setActiveConditions([]);
+            updateActiveCategory(label);
+            updateBrand(null);
+            updateActiveConditions([]);
           }}
           onClose={() => setCategoryPickerOpen(false)}
         />
@@ -963,7 +1135,6 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 20,
   },
   grid: {
-    paddingHorizontal: 16,
     gap: 12,
   },
   gridRow: {

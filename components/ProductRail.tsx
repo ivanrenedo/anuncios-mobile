@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import ProductCard, { ProductCardItem, ProductCardSkeleton } from '@/components/ProductCard';
 import { useFavoriteToggle } from '@/hooks/useFavorites';
 import { useAutoplayScroll } from '@/hooks/useAutoplayScroll';
+import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 
 const RAIL_GAP = 12;
 
@@ -54,7 +55,7 @@ function ProductRail({
   title,
   icon,
   items,
-  cardWidth = 180,
+  cardWidth,
   onSeeAll,
   loading,
   autoplay,
@@ -65,14 +66,24 @@ function ProductRail({
 
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const { isWide, gutter, contentMaxWidth } = useResponsiveLayout();
+  const actualCardWidth = cardWidth ?? (isWide ? 220 : 210);
   const Icon = getIcon(icon);
   const iconColor = getIconColor(icon);
+  const railItems = useMemo(() => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [items]);
 
   const scrollRef = useRef<ScrollView>(null);
-  const pitch = cardWidth + RAIL_GAP;
+  const pitch = actualCardWidth + RAIL_GAP;
 
   const autoplayHandlers = useAutoplayScroll(scrollRef, {
-    itemCount: items.length,
+    itemCount: railItems.length,
     pitch,
     enabled: !!autoplay,
     intervalMs: autoplayMs,
@@ -84,7 +95,7 @@ function ProductRail({
 
   return (
     <View style={styles.section}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingHorizontal: gutter }]}>
         <View style={styles.contentTitle}>
           <View style={[styles.iconTitle, { backgroundColor: iconColor + '18' }]}>
             <Icon size={17} color={iconColor} strokeWidth={2.2}
@@ -108,17 +119,20 @@ function ProductRail({
         ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingHorizontal: gutter, maxWidth: contentMaxWidth },
+        ]}
         onScrollBeginDrag={autoplayHandlers.onScrollBeginDrag}
         onScrollEndDrag={autoplayHandlers.onScrollEndDrag}
         onMomentumScrollEnd={autoplayHandlers.onMomentumScrollEnd}
         onContentSizeChange={autoplayHandlers.onContentSizeChange}
         onLayout={autoplayHandlers.onLayout}>
-        {loading && items.length === 0
+        {loading && railItems.length === 0
           ? [0, 1, 2, 3].map((i) => (
-              <ProductCardSkeleton key={i} width={cardWidth} />
+              <ProductCardSkeleton key={i} width={actualCardWidth} />
             ))
-          : items.map((item) => (
+          : railItems.map((item) => (
               <ProductCard
                 key={item.id}
                 item={item}
@@ -127,7 +141,7 @@ function ProductRail({
                 onPress={() =>
                   router.push({ pathname: '/product/[id]', params: { id: item.id } })
                 }
-                width={cardWidth}
+                width={actualCardWidth}
               />
             ))}
       </ScrollView>
@@ -146,7 +160,6 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
   },
   contentTitle: {
     display: 'flex',
@@ -179,7 +192,6 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.primary,
   },
   scrollContent: {
-    paddingHorizontal: 16,
     marginVertical: 16,
     gap: RAIL_GAP,
   },
