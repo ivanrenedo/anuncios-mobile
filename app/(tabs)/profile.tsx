@@ -49,6 +49,7 @@ import {
   Eye,
   Heart,
   TrendingUp,
+  QrCode,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
@@ -70,7 +71,7 @@ import { useShare } from '@/hooks/useShare';
 import { useVerificationRequest, useRequestVerification } from '@/hooks/useVerification';
 import { useRefetchOnFocus } from '@/hooks/useRefetchOnFocus';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS } from '@/graphql/queries';
+import { PINNED_PRODUCTS, MY_AUTO_BUMP_SLOTS, MY_SELLER_QR_STATS } from '@/graphql/queries';
 import { SET_PINNED_PRODUCTS, SET_AUTO_BUMP_SLOTS } from '@/graphql/mutations';
 import CenterSafetyModal from '@/components/CenterSafetyModal';
 import QrShareCard from '@/components/QrShareCard';
@@ -176,6 +177,7 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [centerSafetyOpen, setcenterSafetyOpen] = useState(false);
@@ -288,6 +290,12 @@ export default function ProfileScreen() {
   // "Estadísticas completas" (top product + per-listing stats) is PREMIUM-only;
   // STAR gets the aggregate totals.
   const hasFullStats = effectivePlan === 'PREMIUM';
+  const { data: qrStatsData, refetch: refetchQrStats } = useQuery<any>(MY_SELLER_QR_STATS, {
+    skip: !hasStatsAccess || !isAuthenticated,
+    fetchPolicy: 'cache-and-network',
+  });
+  const monthlyQrScans = Number(qrStatsData?.mySellerQrStats?.thisMonth) || 0;
+  useRefetchOnFocus([refetchQrStats]);
   const totalViews = productItems.reduce((s: number, p: any) => s + p.views, 0);
   const totalFavorites = productItems.reduce((s: number, p: any) => s + p.favorites, 0);
   const totalContacts = productItems.reduce((s: number, p: any) => s + p.contacts, 0);
@@ -702,6 +710,12 @@ export default function ProfileScreen() {
                     <Text style={styles.statsValue}>{formatNumber(totalFavorites)}</Text>
                     <Text style={styles.statsLabel}>Favoritos</Text>
                   </View>
+                  <View style={styles.statsDivider} />
+                  <View style={styles.statsItem}>
+                    <QrCode size={16} color={colors.onSurfaceVariant} strokeWidth={1.5} />
+                    <Text style={styles.statsValue}>{formatNumber(monthlyQrScans)}</Text>
+                    <Text style={styles.statsLabel}>Visitas QR</Text>
+                  </View>
                   {hasFullStats && (
                     <>
                       <View style={styles.statsDivider} />
@@ -719,6 +733,20 @@ export default function ProfileScreen() {
                     </>
                   )}
                 </View>
+                <TouchableOpacity
+                  style={styles.qrStatsCta}
+                  activeOpacity={0.82}
+                  onPress={() => setQrModalOpen(true)}>
+                  <View style={styles.qrStatsIcon}>
+                    <QrCode size={18} color={colors.primary} strokeWidth={1.8} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.qrStatsTitle}>Mi tarjeta QR</Text>
+                    <Text style={styles.qrStatsDesc}>Comparte tu perfil con clientes</Text>
+                  </View>
+                  <Text style={styles.qrStatsAction}>Ver QR</Text>
+                  <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
+                </TouchableOpacity>
                 {hasFullStats && viewsDaily.length > 0 && (
                   <View style={styles.statsChart}>
                     <Text style={styles.statsChartTitle}>Visitas últimos 7 días</Text>
@@ -767,17 +795,6 @@ export default function ProfileScreen() {
                 <ChevronRight size={16} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
             ))}
-            {hasStatsAccess && profile.id && (
-              <QrShareCard
-                sellerId={profile.id}
-                name={profile.name}
-                phone={profile.phone}
-                email={profile.email}
-                effectivePlan={effectivePlan}
-                qrShowPhone={profile.qr_show_phone}
-                qrShowEmail={profile.qr_show_email}
-              />
-            )}
             {/* v2 Fase 10b — panel plan-gateado para gestionar pins y auto-bump */}
             {profile?.id && (
               <PlanFeaturesPanel
@@ -1229,6 +1246,40 @@ export default function ProfileScreen() {
         )}
       />
 
+      {qrModalOpen && profile?.id && (
+        <Modal
+          visible={qrModalOpen}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setQrModalOpen(false)}>
+          <View style={[styles.qrModalRoot, { paddingTop: insets.top }]}>
+            <View style={styles.allProductsHeader}>
+              <Text style={styles.allProductsTitle}>Mi tarjeta QR</Text>
+              <TouchableOpacity
+                style={styles.allProductsClose}
+                activeOpacity={0.7}
+                onPress={() => setQrModalOpen(false)}>
+                <X size={20} color={colors.onSurface} strokeWidth={1.8} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.qrModalContent}
+              showsVerticalScrollIndicator={false}>
+              <QrShareCard
+                sellerId={profile.id}
+                name={profile.name}
+                phone={profile.phone}
+                email={profile.email}
+                effectivePlan={effectivePlan}
+                qrShowPhone={profile.qr_show_phone}
+                qrShowEmail={profile.qr_show_email}
+                compact
+              />
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
 
       {/* All products modal */}
       {allProductsOpen && (
@@ -2865,17 +2916,65 @@ const makeStyles = (colors: ThemeColors) =>
   },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    gap: 10,
   },
   statsItem: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 86,
     alignItems: 'center',
     gap: 4,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
   statsDivider: {
-    width: 0.5,
-    height: 36,
-    backgroundColor: colors.outlineVariant + '55',
+    display: 'none',
+  },
+  qrStatsCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.outlineVariant + '33',
+    paddingTop: 12,
+  },
+  qrStatsIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.primary + '14',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrStatsTitle: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 14,
+    color: colors.onSurface,
+    letterSpacing: -0.1,
+  },
+  qrStatsDesc: {
+    fontFamily: 'Manrope-Regular',
+    fontSize: 12,
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  qrStatsAction: {
+    fontFamily: 'Manrope-Bold',
+    fontSize: 12,
+    color: colors.primary,
+  },
+  qrModalRoot: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  qrModalContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 40,
   },
   statsValue: {
     fontFamily: 'Manrope-Bold',

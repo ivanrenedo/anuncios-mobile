@@ -10,7 +10,6 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useQuery } from '@apollo/client/react';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -18,7 +17,6 @@ import * as Clipboard from 'expo-clipboard';
 import { Copy, Crown, Share2, Star, Image as ImageIcon } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
-import { MY_SELLER_QR_STATS } from '@/graphql/queries';
 import { getQrProfileUrl } from '@/lib/config';
 
 interface Props {
@@ -29,6 +27,7 @@ interface Props {
   effectivePlan: string;
   qrShowPhone: boolean;
   qrShowEmail: boolean;
+  compact?: boolean;
 }
 
 /**
@@ -48,6 +47,7 @@ export default function QrShareCard({
   effectivePlan,
   qrShowPhone,
   qrShowEmail,
+  compact = false,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -58,10 +58,10 @@ export default function QrShareCard({
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { data } = useQuery<any>(MY_SELLER_QR_STATS, {
+/*   const { data } = useQuery<any>(MY_SELLER_QR_STATS, {
     fetchPolicy: 'cache-and-network',
   });
-  const monthlyScans: number = data?.mySellerQrStats?.thisMonth ?? 0;
+  const monthlyScans: number = data?.mySellerQrStats?.thisMonth ?? 0; */
 
   const planLabel = effectivePlan === 'PREMIUM' ? 'Premium' : effectivePlan === 'STAR' ? 'Star' : null;
 
@@ -132,11 +132,11 @@ export default function QrShareCard({
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, compact && styles.wrapCompact]}>
       <View style={styles.header}>
         <Text style={styles.title}>Tu tarjeta QR</Text>
         <Text style={styles.subtitle}>
-          Compartila o imprimila; cada escaneo suma a tus estadísticas.
+          Comparte, descarga o imprime este QR — los escaneos suman a tus estadísticas.
         </Text>
       </View>
 
@@ -154,11 +154,14 @@ export default function QrShareCard({
           </View>
         )}
         <View style={styles.qrWrap}>
-          <QRCode value={url} size={200} backgroundColor="#ffffff" color="#000000" />
+          <QRCode 
+            value={url}  
+            size={200} 
+            logo={require('../assets/images/icon.png')}
+          />
         </View>
         {showPhoneRow && <Text style={styles.contact}>{phone}</Text>}
         {showEmailRow && <Text style={styles.contact}>{email}</Text>}
-        <Text style={styles.url}>{url.replace(/^https?:\/\//, '')}</Text>
       </ViewShot>
 
       <View style={styles.actions}>
@@ -198,9 +201,9 @@ export default function QrShareCard({
         />
       </View>
 
-      <Text style={styles.stat}>
+      {/* <Text style={styles.stat}>
         {monthlyScans.toLocaleString('es-ES')} visita{monthlyScans === 1 ? '' : 's'} desde tu QR este mes
-      </Text>
+      </Text> */}
     </View>
   );
 }
@@ -271,6 +274,10 @@ const makeStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderColor: colors.outlineVariant,
     },
+    wrapCompact: {
+      marginHorizontal: 0,
+      marginBottom: 0,
+    },
     header: {
       marginBottom: 12,
     },
@@ -295,13 +302,13 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 20,
       borderWidth: 1,
       borderColor: '#e5e7eb',
-      gap: 6,
+      gap: 4,
       minWidth: 260,
     },
     brand: {
       fontSize: 24,
       fontWeight: '800',
-      color: '#0f172a',
+      color: colors.primary,
       letterSpacing: -0.3,
     },
     name: {
@@ -318,12 +325,12 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 999,
       marginBottom: 4,
     },
-    pillPremium: { backgroundColor: '#fef3c7' },
-    pillStar: { backgroundColor: '#ede9fe' },
+    pillPremium: { backgroundColor: '#7C3AED' },
+    pillStar: { backgroundColor: '#F5A623' }, 
     pillText: {
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '800',
-      color: '#0f172a',
+      color: '#ffffff',
     },
     qrWrap: {
       padding: 8,
@@ -332,15 +339,8 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 4,
     },
     contact: {
-      marginTop: 6,
       fontSize: 13,
       color: '#374151',
-    },
-    url: {
-      marginTop: 6,
-      fontSize: 11,
-      color: '#6b7280',
-      textAlign: 'center',
     },
     actions: {
       flexDirection: 'row',
