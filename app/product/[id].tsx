@@ -866,15 +866,9 @@ export default function ProductDetailScreen() {
         mode={modal ?? 'tips'}
         onClose={() => setModal(null)}
         phoneNumber={product.seller.phone}
-        // v2 Fase 7a WhatsApp personalizado: Star/Premium con teléfono → chat
-        // directo con el vendedor. Free/Basic (o Star/Premium sin phone) →
-        // número del negocio (useBusinessContact).
-        whatsappNumber={
-          (product.seller.plan === 'STAR' || product.seller.plan === 'PREMIUM') &&
-          product.seller.phone
-            ? product.seller.phone.replace(/[^0-9]/g, '')
-            : (contactNumber ?? '').replace(/[^0-9]/g, '')
-        }
+        // WhatsApp va al vendedor cuando tenga teléfono; si no, cae al
+        // contacto del negocio como intermediario.
+        whatsappNumber={(product.seller.phone).replace(/[^0-9]/g, '')}
         whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/product/${product.id}`}
       />
 

@@ -96,7 +96,15 @@ export default function LoginScreen() {
         </RipplePress>
 
         <Text style={styles.terms}>
-          Al continuar, aceptas nuestros Términos de servicio y Política de privacidad.
+          Al continuar, aceptas nuestros{' '}
+          <Text style={styles.termsLink} onPress={() => router.push('/terms' as any)}>
+            Términos de servicio
+          </Text>
+          {' '}y{' '}
+          <Text style={styles.termsLink} onPress={() => router.push('/privacy' as any)}>
+            Política de privacidad
+          </Text>
+          .
         </Text>
       </View>
       </ScrollView>
@@ -218,5 +226,10 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.onSurfaceVariant + '99',
       textAlign: 'center',
       lineHeight: 18,
+    },
+    termsLink: {
+      fontFamily: 'Manrope-Bold',
+      color: colors.primary,
+      textDecorationLine: 'underline',
     },
   });
