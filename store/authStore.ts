@@ -36,6 +36,21 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+function getGoogleNativeErrorMessage(err: any): string {
+  const code = err?.code ? String(err.code) : '';
+  const message = err?.message ?? String(err);
+
+  if (code === '10' || message.includes('DEVELOPER_ERROR')) {
+    return (
+      'Google rechazó esta APK porque la firma Android no está registrada. ' +
+      'Añade en Firebase/Google Cloud la SHA-1 de la keystore que firma esta APK ' +
+      'para el paquete com.bomelh.app, descarga el nuevo google-services.json y recompila.'
+    );
+  }
+
+  return `${code ? `[${code}] ` : ''}${message}`;
+}
+
 GoogleSignin.configure({
   webClientId: GOOGLE_WEB_CLIENT_ID,
   scopes: ['profile', 'email'],
@@ -205,7 +220,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (err?.code === statusCodes.SIGN_IN_CANCELLED) return;
       Alert.alert(
         'No se pudo iniciar sesión',
-        `${err?.code ? `[${err.code}] ` : ''}${err?.message ?? String(err)}`,
+        getGoogleNativeErrorMessage(err),
       );
     }
   },
