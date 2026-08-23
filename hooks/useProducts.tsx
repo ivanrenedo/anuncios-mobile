@@ -31,6 +31,23 @@ const PRODUCT_LIST_QUERY_NAMES = new Set([
 ]);
 const PRODUCT_DETAIL_QUERY_NAMES = new Set([...PRODUCT_LIST_QUERY_NAMES, 'Product']);
 
+function isAbortError(error: unknown) {
+  const err = error as { name?: string; message?: string } | undefined;
+  return (
+    err?.name === 'AbortError' ||
+    err?.message?.toLowerCase().includes('aborted') === true
+  );
+}
+
+async function ignoreAbort<T>(promise: Promise<T>) {
+  try {
+    return await promise;
+  } catch (error) {
+    if (isAbortError(error)) return undefined;
+    throw error;
+  }
+}
+
 function productRefetchOptions(queryNames = PRODUCT_LIST_QUERY_NAMES) {
   const onQueryUpdated: OnQueryUpdated<Promise<any>> = (observableQuery) => {
     const queryName = observableQuery.queryName;
@@ -121,7 +138,12 @@ export function useRelatedProducts(title: string, categoryId: string) {
     if (!merged.some((m: any) => m.id === p.id)) merged.push(p);
   }
 
-  const refetch = async () => { await Promise.all([r1(), r2()]); };
+  const refetch = async () => {
+    const tasks: Promise<unknown>[] = [];
+    if (categoryId) tasks.push(ignoreAbort(r1()));
+    if (keywords) tasks.push(ignoreAbort(r2()));
+    await Promise.all(tasks);
+  };
   return { products: merged, loading: l1 || l2, refetch };
 }
 

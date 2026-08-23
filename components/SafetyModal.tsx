@@ -160,11 +160,13 @@ export default function SafetyModal({
   const handleContinue = () => {
     onClose();
     if (mode === 'whatsapp') {
+      if (!whatsappNumber) return;
       const waUrl = whatsappMessage
         ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
         : `https://wa.me/${whatsappNumber}`;
       setTimeout(() => Linking.openURL(waUrl), 300);
     } else if (mode === 'call') {
+      if (!phoneNumber) return;
       setTimeout(() => Linking.openURL(`tel:${phoneNumber}`), 300);
     }
   };

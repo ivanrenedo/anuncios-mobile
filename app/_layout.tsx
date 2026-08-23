@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { LogBox, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,6 +25,12 @@ import { usePhoneGate } from '@/hooks/usePhoneGate';
 import { ThemeProvider, useTheme } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+// Dev-only: expo-keep-awake's useKeepAwake (used internally by Expo's
+// withDevTools wrapper) doesn't .catch() its activate call, so a race with
+// ReactActivity.onResume during cold start surfaces as an unhandled
+// "Unable to activate keep awake" rejection. Harmless — dev only.
+LogBox.ignoreLogs(['Unable to activate keep awake']);
 
 function RootNavigator() {
   const { colors, isDark } = useTheme();

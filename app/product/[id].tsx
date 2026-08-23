@@ -160,6 +160,7 @@ export default function ProductDetailScreen() {
   };
   const { isFavorite, toggleFavorite } = useFavoriteToggle();
   const { isAuthenticated, user: me } = useAuth();
+  const { share } = useShare();
   const { average: sellerAvg, count: sellerRatingCount, refetch: refetchRating } = useSellerRating(apiProduct?.seller?.id || '');
   const categoryId = apiProduct?.category?.id || '';
   const productTitle = apiProduct?.title || '';
@@ -308,6 +309,10 @@ export default function ProductDetailScreen() {
     attributes:
       apiProduct.attributes?.map((a: any) => ({ label: a.label, value: a.value })) || [],
   };
+  const sellerPhone = product.seller.phone?.trim();
+  const fallbackPhone = contactNumber?.trim();
+  const contactPhone = sellerPhone || fallbackPhone;
+  const whatsappNumber = contactPhone?.replace(/[^0-9]/g, '') || undefined;
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / galleryWidth);
@@ -320,7 +325,6 @@ export default function ProductDetailScreen() {
     setRefreshing(false);
   };
 
-  const { share } = useShare();
   const onShare = () =>
     share({ type: 'product', id: product.id, title: product.title, price: fmtNumber(product.price) });
   const openBoostRequest = () => {
@@ -865,10 +869,10 @@ export default function ProductDetailScreen() {
         visible={modal !== null}
         mode={modal ?? 'tips'}
         onClose={() => setModal(null)}
-        phoneNumber={product.seller.phone}
+        phoneNumber={contactPhone}
         // WhatsApp va al vendedor cuando tenga teléfono; si no, cae al
         // contacto del negocio como intermediario.
-        whatsappNumber={(product.seller.phone).replace(/[^0-9]/g, '')}
+        whatsappNumber={whatsappNumber}
         whatsappMessage={`Hola, me interesa tu anuncio: ${product.title} — ${SHARE_URL}/product/${product.id}`}
       />
 

@@ -10,7 +10,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.guslift.com",
+      "bundleIdentifier": "com.bomelh.app",
       "supportsTablet": true,
       "associatedDomains": [
         "applinks:bomelh.com"
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#006b5e"
       },
-      "package": "com.guslift.com",
+      "package": "com.bomelh.app",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.NOTIFICATIONS",
